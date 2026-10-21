@@ -34,7 +34,8 @@ def test_the_base_and_the_decorator_are_seared_s_renamed(name, original):
     assert getattr(parsed, name) is getattr(seared, original)
 
 
-_REEXPORTED = sorted(set(parsed.__all__) - set(_RENAMED) - {'__version__'})
+# seared's names, as parsed exports them; parsed's own (`Command`, `Effect`, …) aren't re-exports.
+_REEXPORTED = sorted(set(parsed.__all__) & set(seared.__all__) - {'__version__'})
 
 
 @pytest.mark.parametrize('name', _REEXPORTED)

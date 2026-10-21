@@ -59,6 +59,9 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 ## Docs
 
 - [`docs/parsed.md`](docs/parsed.md): the package root, and what it re-exports.
+- [`docs/command.md`](docs/command.md): commands, and what they declare.
+- [`docs/effect.md`](docs/effect.md): what running a command does.
+- [`docs/errors.md`](docs/errors.md): what can go wrong.
 - [`docs/overview/architecture.md`](docs/overview/architecture.md): how parsed sits in the family.
 - [`CHANGELOG.md`](CHANGELOG.md): each version, newest first.
 

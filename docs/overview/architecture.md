@@ -17,8 +17,14 @@ seared  <-  zeared
   parsed, so tooling (the family's [tooled](https://github.com/bwiswell/tooled), for agents) can read them
   without the app's runtime.
 
-## What 0.1.0 holds
+## What it holds
 
-Only the package root ([`../parsed.md`](../parsed.md)): seared's declaration surface, re-exported. The commands,
-the tree that reads a line, and the docs a command describes itself with arrive in the 0.1.x releases that follow,
-each adding its part here.
+- **The package root** ([`../parsed.md`](../parsed.md)): seared's declaration surface, re-exported, and parsed's
+  own names.
+- **Commands** ([`../command.md`](../command.md)): `Command`, the base of every command; the constants a command
+  declares; and `declaration`, which reads and checks them, keeping the result on the class.
+- **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
+- **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
+
+The tree that reads a line, and the docs a command describes itself with, arrive in the releases that follow, each
+adding its part here.
