@@ -36,6 +36,10 @@ lines as it lands, and the entry is dated when that version is released.
 - **`parsed.Effect` and `parsed.effect_of`:** zeared's vocabulary, value for value, ordered `READ < WRITE < ACTION`.
 - **`parsed.ParsedError`,** the base of every error parsed raises, and **`parsed.DeclarationError`,** a `TypeError`
   too.
+- **A benchmark,** which ships with the repo, not the package (`python -m bench`). Its first suite times declaring a
+  generated tree of 263 commands: creating and decorating them, as importing them does, then each first
+  `declaration`, then a re-read. Every number in `docs/overview/benchmarks.md` is generated from the committed
+  `bench/results.json`, and a hook checks that the two agree.
 
 ## 0.1.0 — 2026-10-21
 

@@ -32,6 +32,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["parsed"]
 
+# The bench ships with the repo, not the package.
+[tool.hatch.build.targets.sdist]
+exclude = ["/bench"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py314"
@@ -67,6 +71,10 @@ inline-quotes = "single"
 # `PT012`: testing declaration-time checks means declaring a command inside the
 # `pytest.raises` block, which is more than one statement by nature.
 "tests/**/*.py" = ["S", "SLF", "ANN", "D", "INP", "ARG", "PLR", "PT012"]
+# The bench's product *is* stdout. `PLR2004`: the generated tree's proportions
+# (one command in seven, in six…) are its numbers, not magic ones.
+"bench/**/*.py" = ["T201"]
+"bench/tree.py" = ["T201", "PLR2004"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -77,8 +85,9 @@ quote-style = "single"
 exclude = ["tests"]
 
 [tool.pytest.ini_options]
-# The repo root too, so tests can import the repo-only `bench` package once it
-# lands (`tests/` has no `__init__.py`, so pytest adds only `tests/` itself).
+# The repo root too, so the tests of `bench/` can import the repo-only `bench`
+# package. Keep those tests flat in `tests/`: with `tests` on the path, a
+# `tests/bench/` package would shadow the real one.
 pythonpath = ["tests", "."]
 # importlib mode lets test modules of the same name in different directories
 # (one per source module, in the matching directory) coexist.

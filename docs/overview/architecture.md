@@ -31,4 +31,4 @@ seared  <-  zeared
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
 
 The tree that reads a line, and the docs a command describes itself with, arrive in the releases that follow, each
-adding its part here.
+adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).

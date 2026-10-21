@@ -63,6 +63,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/kinds.md`](docs/kinds.md): how a field's words are read.
 - [`docs/effect.md`](docs/effect.md): what running a command does.
 - [`docs/errors.md`](docs/errors.md): what can go wrong.
+- [`docs/overview/benchmarks.md`](docs/overview/benchmarks.md): what a command line built on parsed costs.
 - [`docs/overview/architecture.md`](docs/overview/architecture.md): how parsed sits in the family.
 - [`CHANGELOG.md`](CHANGELOG.md): each version, newest first.
 
@@ -73,24 +74,34 @@ uv sync
 uv run pytest tests/
 ```
 
-Five checks gate every commit, wired as `prek` hooks — run `uv run prek install` once per clone:
+Six checks gate every commit, wired as `prek` hooks — run `uv run prek install` once per clone:
 
 ```sh
-uv run ruff check                    # lint
-uv run ruff format                   # format
-uv run deptry .                      # dependency hygiene
-uv run ty check                      # type check
+uv run ruff check                        # lint
+uv run ruff format                       # format
+uv run deptry .                          # dependency hygiene
+uv run ty check                          # type check
+uv run python -m bench.tables --check    # benchmark numbers match bench/results.json
 ```
 
-The fifth refuses any commit on `master`.
+The sixth refuses any commit on `master`.
 
 **Branches and releases.**
 - **`master` holds released commits only,** and moves only by merge.
 - **A release is a `version/x.y.z` branch** off `master`.
 - **Work on it happens in `feat/…` and `fix/…` branches,** each a pull request squash-merged into the version
   branch. Each adds its own lines to the `unreleased` entry at the top of `CHANGELOG.md`.
-- **Once those are all in, a `chore: version bump` commit** bumps the version, in `pyproject.toml` and
-  `parsed/__init__.py` together (a test checks that they agree), refreshes the lockfile, and dates the changelog
-  entry.
+- **Once those are all in, a `chore/version-bump-and-benches` branch** makes two commits:
+  1. it bumps the version, in `pyproject.toml` and `parsed/__init__.py` together (a test checks that they agree),
+     refreshes the lockfile, and dates the changelog entry;
+  2. it re-records the benchmarks.
 - **The version branch then merges into `master`.** There, the `Release Tag` workflow
   (`.github/workflows/release-tag.yml`) tags it `v<version>` and publishes a GitHub release.
+
+The benchmarks are repo-only, in [`bench/`](bench/). Every benchmark number in
+[`docs/overview/benchmarks.md`](docs/overview/benchmarks.md) is generated from the committed `bench/results.json`,
+as the median of its runs; recording a run re-renders them:
+
+```sh
+uv run python -m bench --runs 3          # how the committed artifact is recorded
+```
