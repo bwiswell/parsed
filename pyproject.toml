@@ -6,7 +6,9 @@ authors = [
     { name = "Benj Wiswell", email = "benjwiswell@gmail.com" },
 ]
 requires-python = ">=3.14,<4.0"
-dependencies = []
+dependencies = [
+    "seared>=0.4.4,<0.5.0",
+]
 
 [dependency-groups]
 dev = [
@@ -16,6 +18,12 @@ dev = [
     "ruff",
     "ty",
 ]
+
+[tool.uv.sources]
+# uv doesn't check the range above against a git source, so the tag is what
+# pins seared. Moving to a new seared release means moving the tag, then
+# `uv lock --upgrade-package seared`.
+seared = { git = "https://github.com/bwiswell/seared", tag = "v0.4.4" }
 
 [build-system]
 requires = ["hatchling"]
