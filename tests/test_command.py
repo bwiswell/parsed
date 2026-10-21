@@ -42,6 +42,7 @@ class TestDefaults:
             instead=None,
             reply=None,
             kinds=MappingProxyType({}),
+            field_kinds=MappingProxyType({}),
             phrases=(),
             flags=(),
         )
@@ -105,9 +106,9 @@ class TestInheritance:
 
 
 class TestKinds:
-    FLEET = object()
-    DETACHMENT = object()
-    SHIP = object()
+    FLEET = parsed.Name('fleet')
+    DETACHMENT = parsed.Name('detachment')
+    SHIP = parsed.Name('ship')
 
     def test_merged_along_the_mro(self):
         class Base(Command):
@@ -130,7 +131,7 @@ class TestKinds:
         }
 
     def test_a_subclass_s_entry_wins(self):
-        other = object()
+        other = parsed.Name('flagship')
 
         class Base(Command):
             KINDS: ClassVar[dict[object, object]] = {'fleet': TestKinds.FLEET}
@@ -339,3 +340,121 @@ class TestARequestInherited:
         found = declaration(rio.HandheldConnect)
         assert found.is_command
         assert found.effect is Effect.WRITE
+
+
+class TestFieldKinds:
+    def test_every_field_has_one_its_entry_or_its_type_s(self):
+        assert dict(declaration(farlandia.FleetMine).field_kinds) == {
+            'fleet': parsed.Name('fleet'),  # from its base's KINDS
+            'for_': parsed.kinds.Duration(),  # a TimeDelta's default
+        }
+        assert declaration(farlandia.FleetDock).field_kinds['station'] == parsed.Name('station', scope='fleet')
+        assert declaration(farlandia.Log).field_kinds['n'] == parsed.kinds.Number()
+        assert declaration(farlandia.Say).field_kinds['message'] == parsed.kinds.Word()
+
+    def test_a_slot_reads_by_its_field_s_kind_or_its_own_when_renamed(self):
+        found = declaration(farlandia.FleetMine)
+        (fleet,) = found.phrases[0].places
+        (detachment,) = found.phrases[1].places
+        assert found.kind_of(fleet) == parsed.Name('fleet')
+        assert found.kind_of(detachment) == parsed.Name('detachment')
+
+    def test_a_base_has_none(self):
+        assert dict(declaration(farlandia.FleetCommand).field_kinds) == {}
+
+    def test_a_field_with_no_word_form_is_refused(self):
+        @seared.seared
+        class Inner(seared.Seared):
+            x: int = seared.Int(default=0)
+
+        @parsed.parsed
+        class Configure(Command):
+            PHRASE = 'configure'
+
+            settings: Inner | None = parsed.T(Inner, default=None)
+
+        with pytest.raises(DeclarationError, match=r'Configure\.settings is a T field, which has no word form'):
+            declaration(Configure)
+
+    def test_given_a_kind_it_s_fine(self):
+        @seared.seared
+        class Inner(seared.Seared):
+            x: int = seared.Int(default=0)
+
+        @parsed.parsed
+        class Configure(Command):
+            PHRASE = 'configure'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'settings': parsed.Name('preset')}
+
+            settings: Inner | None = parsed.T(Inner, default=None)
+
+        assert declaration(Configure).field_kinds['settings'] == parsed.Name('preset')
+
+    def test_a_keyed_field_has_no_word_form_yet(self):
+        @parsed.parsed
+        class Set(Command):
+            PHRASE = 'set'
+
+            values: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        with pytest.raises(DeclarationError, match=r'Set\.values is a Str field, which has no word form'):
+            declaration(Set)
+
+    def test_an_entry_that_isn_t_a_kind_is_refused_naming_where_it_s_declared(self):
+        class Base(Command):
+            KINDS: ClassVar[dict[str, object]] = {'fleet': 'fleet'}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'mine {fleet}'
+
+            fleet: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r"Base\.KINDS\['fleet'\] = 'fleet': a kind, such as parsed\.Name"):
+            declaration(Mine)
+
+
+class TestScopes:
+    def test_a_scope_names_another_field(self):
+        assert declaration(farlandia.FleetDock).field_kinds['station'].scope == 'fleet'
+
+    @pytest.mark.parametrize('scope', ['system', 'station'])
+    def test_no_other_field_is_refused(self, scope):
+        @parsed.parsed
+        class Dock(Command):
+            PHRASE = 'dock {fleet} {station}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope=scope)}
+
+            fleet: str = parsed.Str(required=True)
+            station: str = parsed.Str(required=True)
+
+        with pytest.raises(
+            DeclarationError, match=rf"'station' is read as a station scoped by '{scope}', which is no other field"
+        ):
+            declaration(Dock)
+
+    def test_a_renamed_slot_s_scope_too(self):
+        class Base(Command):
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment', scope='system')}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'fleet {fleet} mine'
+            EXTRA_PHRASES = ('detachment {detachment} mine',)
+
+            fleet: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r"'detachment' is read as a detachment scoped by 'system'"):
+            declaration(Mine)
+
+    def test_a_base_s_unused_entry_isn_t_held_to_it(self):
+        class Base(Command):
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='system')}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'mine {fleet}'
+
+            fleet: str = parsed.Str(required=True)
+
+        assert 'station' not in declaration(Mine).field_kinds

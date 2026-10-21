@@ -25,6 +25,8 @@ seared  <-  zeared
   declares; and `declaration`, which reads and checks them, keeping the result on the class.
 - **Phrases** ([`../_phrase/index.md`](../_phrase/index.md)): a phrase's grammar, and how a command's phrases
   bind to its fields, for `declaration` to check.
+- **Kinds** ([`../kinds.md`](../kinds.md)): how a field's words are read, as plain data: a `Name` for an app's
+  names, and a default for each seared type that has a word form.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
 

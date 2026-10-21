@@ -183,7 +183,7 @@ class TestRenaming:
 
     def test_it_keeps_phrase_s_slots(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, object]] = {'detachment': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
 
         @parsed.parsed
         class Transfer(Base):
@@ -198,7 +198,7 @@ class TestRenaming:
 
     def test_in_phrase_s_order(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, object]] = {'detachment': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
 
         @parsed.parsed
         class Transfer(Base):
@@ -213,7 +213,7 @@ class TestRenaming:
 
     def test_with_the_others_kept_in_place(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, object]] = {'detachment': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
 
         @parsed.parsed
         class Transfer(Base):
@@ -245,7 +245,7 @@ class TestPolymorphic:
 
     def test_false_refuses_one(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, object]] = {'detachment': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
 
         @parsed.parsed
         class Mine(Base):
@@ -267,7 +267,7 @@ class TestOwnKinds:
         @parsed.parsed
         class Mine(Command):
             PHRASE = 'fleet {fleet} mine'
-            KINDS: ClassVar[dict[str, object]] = {'flet': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'flet': parsed.Name('fleet')}
 
             fleet: str = parsed.Str(required=True)
 
@@ -285,7 +285,7 @@ class TestOwnKinds:
         @parsed.parsed
         class Mine(Command):
             PHRASE = 'mine'
-            KINDS: ClassVar[dict[str, object]] = {'hours': object()}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'hours': parsed.kinds.Number()}
 
             hours: float = parsed.Float(default=1.0)
 

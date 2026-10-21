@@ -24,7 +24,8 @@ subclasses' all count, a subclass's winning where they name the same field.
 
 :func:`declaration` reads a class's constants once, checks each, and returns its :class:`Declaration`, with each
 phrase bound to the fields it fills (:mod:`parsed._phrase`): a field a slot of ``PHRASE`` names is a positional, and
-every other field a flag.
+every other field a flag. Every field has a kind (:mod:`parsed.kinds`): its ``KINDS`` entry, or its seared type's
+default.
 """
 
 from __future__ import annotations
@@ -37,9 +38,10 @@ from typing import ClassVar
 from seared import Field, Seared
 from seared.doc import is_seared_class
 
-from ._phrase import Binding, Bound, bind
+from ._phrase import Binding, Bound, Place, bind
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
+from .kinds import Kind, Name, default_kind
 
 _CACHE = '__parsed_declaration__'
 
@@ -60,7 +62,7 @@ class Command(Seared):
     POLYMORPHIC: ClassVar[bool | None] = None
     INSTEAD: ClassVar[type[Command] | None] = None
     REPLY: ClassVar[type[Seared] | None] = None
-    KINDS: ClassVar[Mapping[str, object]] = MappingProxyType({})
+    KINDS: ClassVar[Mapping[str, Kind]] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +80,8 @@ class Declaration:
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
+        field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
+            base.
         phrases: ``PHRASE`` and then each of ``EXTRA_PHRASES``, bound to the fields they fill; empty for a base.
         flags: The fields no slot of ``PHRASE`` names, in their declared order; empty for a base.
     """
@@ -91,7 +95,8 @@ class Declaration:
     polymorphic: bool | None
     instead: type[Command] | None
     reply: type[Seared] | None
-    kinds: Mapping[str, object]
+    kinds: Mapping[str, Kind]
+    field_kinds: Mapping[str, Kind]
     phrases: tuple[Bound, ...]
     flags: tuple[str, ...]
 
@@ -99,6 +104,10 @@ class Declaration:
     def is_command(self) -> bool:
         """Whether the class is a command, rather than a base: whether it has a ``PHRASE``."""
         return self.phrase is not None
+
+    def kind_of(self, place: Place) -> Kind:
+        """The kind a slot's words are read by: a renamed slot's own ``KINDS`` entry, else its field's kind."""
+        return self.kinds[place.slot] if place.renamed else self.field_kinds[place.field]
 
 
 def declaration(cls: type) -> Declaration:
@@ -108,8 +117,8 @@ def declaration(cls: type) -> Declaration:
 
     Raises:
         DeclarationError: ``cls`` isn't a command class, one of its bases declares fields but isn't decorated, a
-            constant is of the wrong kind, or a phrase doesn't read or doesn't bind. The message names the class and
-            the constant, and how to put it right.
+            constant is of the wrong kind, a phrase doesn't read or doesn't bind, or a field has no kind. The
+            message names the class and the constant, and how to put it right.
     """
     found = cls.__dict__.get(_CACHE) if isinstance(cls, type) else None
     if found is None:
@@ -130,6 +139,7 @@ def _read(cls: type) -> Declaration:
     polymorphic = _polymorphic(cls, name)
     kinds = _kinds(cls)
     binding = _bind(cls, name, phrase=phrase, extra=extra, kinds=kinds, polymorphic=polymorphic)
+    field_kinds = _field_kinds(cls, name, kinds, binding) if phrase is not None else MappingProxyType({})
     return Declaration(
         cls=cls,
         phrase=phrase,
@@ -141,6 +151,7 @@ def _read(cls: type) -> Declaration:
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
         kinds=kinds,
+        field_kinds=field_kinds,
         phrases=binding.phrases,
         flags=binding.flags,
     )
@@ -257,8 +268,39 @@ def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrase
     return bind(fields, name, phrase=phrase, extra_phrases=extra, kinds=kinds, own_kinds=own, polymorphic=polymorphic)
 
 
-def _kinds(cls: type[Command]) -> Mapping[str, object]:
-    merged: dict[str, object] = {}
+def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], binding: Binding) -> Mapping[str, Kind]:
+    """Each field's kind, and a check that every ``Name`` the command reads by is scoped by another of its fields."""
+    found: dict[str, Kind] = {}
+    for spec in cls.__seared_fields__:
+        kind = kinds.get(spec.attr) or default_kind(spec.field)
+        if kind is None:
+            what = type(spec.field).__name__
+            msg = (
+                f'{name}.{spec.attr} is a {what} field, which has no word form: give it a kind in KINDS, or say it '
+                f'another way'
+            )
+            raise DeclarationError(msg)
+        found[spec.attr] = kind
+    # What reads by a kind: each field, and each renamed slot (by its own entry, for the field it fills).
+    read: list[tuple[str, str, Kind]] = [(attr, attr, kind) for attr, kind in found.items()]
+    read += [
+        (place.slot, place.field, kinds[place.slot])
+        for bound in binding.phrases
+        for place in bound.places
+        if place.renamed
+    ]
+    for said, field, kind in read:
+        if isinstance(kind, Name) and kind.scope is not None and (kind.scope not in found or kind.scope == field):
+            msg = (
+                f'{name}: {said!r} is read as a {kind.category} scoped by {kind.scope!r}, which is no other field '
+                f'of {name}'
+            )
+            raise DeclarationError(msg)
+    return MappingProxyType(found)
+
+
+def _kinds(cls: type[Command]) -> Mapping[str, Kind]:
+    merged: dict[str, Kind] = {}
     for base in reversed(cls.__mro__):
         own = vars(base).get('KINDS')
         if own is None:
@@ -270,6 +312,9 @@ def _kinds(cls: type[Command]) -> Mapping[str, object]:
         for key, kind in own.items():
             if not isinstance(key, str) or not key.isidentifier():
                 msg = f'{where}: {key!r} is not a field name'
+                raise DeclarationError(msg)
+            if not isinstance(kind, Kind):
+                msg = f"{where}[{key!r}] = {kind!r}: a kind, such as parsed.Name('{key}')"
                 raise DeclarationError(msg)
             merged[key] = kind
     return MappingProxyType(merged)

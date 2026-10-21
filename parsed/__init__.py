@@ -9,6 +9,8 @@ parsed's own surface:
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.
 - ``errors.py``: :class:`ParsedError`, the base of parsed's errors, and :class:`DeclarationError`.
+- ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
+  kinds stay ``parsed.kinds.*``.
 """
 
 from seared import (
@@ -45,6 +47,7 @@ from seared import (
 from .command import Command
 from .effect import Effect, effect_of
 from .errors import DeclarationError, ParsedError
+from .kinds import Kind, Name
 
 __version__ = '0.1.0'
 
@@ -62,7 +65,9 @@ __all__ = [
     'Enum',
     'Float',
     'Int',
+    'Kind',
     'NDArray',
+    'Name',
     'PandasFrame',
     'Parsed',
     'ParsedError',

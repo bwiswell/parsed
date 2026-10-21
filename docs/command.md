@@ -38,7 +38,7 @@ class FleetMine(FleetCommand):
 | `POLYMORPHIC` | `None` | whether its extra phrases rename a slot; when declared, it's checked |
 | `INSTEAD` | `None` | on an interactive command, the command an agent says in its place |
 | `REPLY` | `None` | the seared class its handler returns |
-| `KINDS` | empty | how a field's words are read, by field name |
+| `KINDS` | empty | how a field's words are read, by field name ([`kinds.md`](kinds.md)) |
 
 - **Every constant but `PHRASE` is optional, and none is inferred.** A command declares what it knows; nothing is
   required for one tool or another's sake.
@@ -105,11 +105,12 @@ class HandheldConnect(parsed.Command, HandheldEndpoint):   # HandheldEndpoint: t
 
 - the class, its phrase (`None` for a base) and its extra phrases;
 - its effect (a name normalised to its member), `asks`, `interactive`, `polymorphic`, `instead` and `reply`;
-- its merged `kinds`, read-only;
+- its merged `kinds`, read-only, and `field_kinds`: each field's kind, its entry or its type's default;
 - `phrases`: `PHRASE` and each extra phrase, bound, each slot to the field it fills;
 - `flags`: the fields no slot of `PHRASE` names.
 
-`is_command` says whether it has a phrase. The result is kept on the class itself, so there's no registry beside
+`is_command` says whether it has a phrase, and `kind_of(place)` the kind a slot reads by: a renamed slot's own
+entry, else its field's. The result is kept on the class itself, so there's no registry beside
 it.
 
 What's wrong is a `DeclarationError`, a `ParsedError` and a `TypeError`, naming the class, the constant and how to
@@ -135,3 +136,6 @@ put it right:
 | a renamed slot with no `KINDS` entry by its name, a renaming phrase with fewer slots than `PHRASE`, or its others out of order | |
 | `POLYMORPHIC = True` and nothing renamed, or `False` and something renamed | |
 | an entry of a command's own `KINDS` that names no field and no renamed slot | a typo; a base's entries may go unused |
+| a `KINDS` value that isn't a kind | it names the class that declared it |
+| a field whose type has no word form, and no `KINDS` entry | it couldn't be said on a line |
+| a `Name` whose `scope` is no other field of the command | |

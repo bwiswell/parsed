@@ -2,7 +2,7 @@
 
 It grows with each release that needs more of it. So far, the declarations alone:
 
-- a base carrying a field, an effect and kinds for the commands beneath it;
+- a base carrying a field, an effect and kinds for the commands beneath it, and names read as the app's own;
 - a fleet's command that a detachment says too, its slot renamed (`fleet {fleet} mine`, `detachment {detachment}
   mine`);
 - a station that may be left out (`dock {station}` beside `dock nearest`);
@@ -17,9 +17,8 @@ from typing import ClassVar
 
 import parsed
 
-# Stand-ins for the kinds, which become data of their own with the kinds' declarations.
-FLEET = 'fleet'
-DETACHMENT = 'detachment'
+FLEET = parsed.Name('fleet')
+DETACHMENT = parsed.Name('detachment')
 
 
 @parsed.parsed
@@ -35,7 +34,7 @@ class FleetCommand(parsed.Command):
     """A base: the fleet every command beneath it acts on, their effect, and how a fleet or a detachment is read."""
 
     EFFECT = parsed.Effect.WRITE
-    KINDS: ClassVar[dict[str, object]] = {'fleet': FLEET, 'detachment': DETACHMENT}
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET, 'detachment': DETACHMENT}
 
     fleet: str = parsed.Str(required=True, doc='the fleet')
 
@@ -57,6 +56,7 @@ class FleetDock(FleetCommand):
 
     PHRASE = 'fleet {fleet} dock {station}'
     EXTRA_PHRASES = ('fleet {fleet} dock nearest',)
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet')}
 
     station: str | None = parsed.Str(default=None, doc='the station; left out, the nearest')
 
@@ -66,6 +66,7 @@ class FleetSell(FleetCommand):
     """Sell goods from the hold."""
 
     PHRASE = 'fleet {fleet} sell {goods}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'goods': parsed.Name('good')}
 
     goods: list[str] = parsed.Str(many=True, required=True, doc='the goods to sell')
 
@@ -97,6 +98,7 @@ class FleetBuyShip(FleetCommand):
     PHRASE = 'fleet {fleet} buy ship {hull}'
     EFFECT = parsed.Effect.ACTION
     ASKS = True
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'hull': parsed.Name('hull')}
 
     hull: str = parsed.Str(required=True, doc='the hull to buy')
 
@@ -108,6 +110,7 @@ class FleetsShow(parsed.Command):
     PHRASE = 'fleets show {fleet}'
     EFFECT = parsed.Effect.READ
     REPLY = FleetView
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET}
 
     fleet: str = parsed.Str(required=True, doc='the fleet')
 
@@ -118,6 +121,7 @@ class ShipsMakeAdd(parsed.Command):
 
     PHRASE = 'ships make {ship} add {part}'
     EFFECT = parsed.Effect.WRITE
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'ship': parsed.Name('ship'), 'part': parsed.Name('part')}
 
     ship: str = parsed.Str(required=True, doc='the ship')
     part: str = parsed.Str(required=True, doc='the part to fit')
@@ -130,5 +134,6 @@ class ShipFit(parsed.Command):
     PHRASE = 'ship {ship} fit'
     INTERACTIVE = True
     INSTEAD = ShipsMakeAdd
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'ship': parsed.Name('ship')}
 
     ship: str = parsed.Str(required=True, doc='the ship')

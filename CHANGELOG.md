@@ -28,6 +28,11 @@ lines as it lands, and the entry is dated when that version is released.
 - **`EXTRA_PHRASES`:** an alias takes `PHRASE`'s slots and may leave one out, its field keeping its default. A twin
   renames a slot, which fills the field at its place in `PHRASE` and is read by the `KINDS` entry its name keys.
   `POLYMORPHIC`, when declared, is checked both ways. `declaration` holds each phrase bound, and the flags.
+- **Kinds** (`parsed.kinds`): how a field's words are read, as plain data. `parsed.Name(category, scope=…)` is one
+  of an app's names, read by what the app gives for its category, a scope naming another field that narrows the
+  lookup. Every other field takes its seared type's default (`Word`, `Number`, `Switch`, `Choice`, `Duration`,
+  `Moment`); a type with no word form needs a `KINDS` entry, or the command is refused. `declaration` holds each
+  field's kind, and `kind_of` gives a slot's.
 - **`parsed.Effect` and `parsed.effect_of`:** zeared's vocabulary, value for value, ordered `READ < WRITE < ACTION`.
 - **`parsed.ParsedError`,** the base of every error parsed raises, and **`parsed.DeclarationError`,** a `TypeError`
   too.
