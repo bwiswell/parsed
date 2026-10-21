@@ -89,6 +89,9 @@ it. **A base that declares fields must be decorated too:** seared drops an undec
 subclasses without a word, so parsed refuses a command beneath such a base, naming it. A base without fields of its
 own (one that only sets `EFFECT`, say) needn't be.
 
+**Every field needs an annotation,** as a dataclass's does: seared leaves out a field without one, on any class, so
+parsed refuses it and suggests one (`hours: float = …`).
+
 **A command can inherit a protocol's request class,** a plain seared class, so its fields and their bounds are the
 protocol's own rather than copied:
 
@@ -128,6 +131,7 @@ put it right:
 | `KINDS` that isn't a mapping, or a key that isn't a field name | |
 | a command with a `PHRASE`, not decorated | decorate it with `@parsed.parsed` |
 | a base that declares fields, not decorated | seared would drop them |
+| a field without an annotation, on the command, a base or a request class it inherits | seared would leave it out; add an annotation (`hours: float = …`) |
 | a phrase that doesn't read (`'Mine'`, `'{fleet} mine'`, a slot twice, `{rest**}` not last) | the message says which part, and why |
 | a slot of `PHRASE` that names no field | it lists the fields |
 | an optional or `many` slot followed straight by another slot | a line would read two ways |
