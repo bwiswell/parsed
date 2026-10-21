@@ -37,6 +37,7 @@ _ROWS = (
     ('declaring', 'decorate', 'creating and decorating every command, as importing them does'),
     ('declaring', 'declare', "each command's first `declaration`"),
     ('declaring', 'reread', '`declaration` again, kept on the class'),
+    ('declaring', 'build', 'the `Tree` from them: their phrases compiled, the whole checked'),
 )
 
 #: Run counts the prose spells out; anything else stays a numeral.
@@ -166,7 +167,7 @@ def run_line(report: Report) -> str:
 def blocks(report: Report) -> dict[str, str]:
     """Every generated block by marker name. Table blocks sit on lines of their own."""
     r = Results(report)
-    decorate, declare = ('declaring', 'decorate'), ('declaring', 'declare')
+    decorate, declare, build = ('declaring', 'decorate'), ('declaring', 'declare'), ('declaring', 'build')
     return {
         # Table blocks.
         'declaring': f'\n{declaring_table(r)}\n',
@@ -178,6 +179,7 @@ def blocks(report: Report) -> dict[str, str]:
         'commands': _fmt(r.per(decorate), str),
         'decorate-ms': _fmt(r.us(decorate), lambda v: f'~{v / 1_000:.0f} ms'),
         'declare-ms': _fmt(r.us(declare), lambda v: f'~{v / 1_000:.0f} ms'),
+        'build-ms': _fmt(r.us(build), lambda v: f'~{v / 1_000:.1f} ms'),
     }
 
 

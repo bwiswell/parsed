@@ -39,17 +39,19 @@ Recorded <!-- bench:run -->2026-10-21, Python 3.14.3, median of 3 runs; parsed 0
 What a tree costs before any line is read:
 
 <!-- bench:declaring -->
-| Case       | What it times                                                 | Per tree | Per command |
-|------------|---------------------------------------------------------------|----------|-------------|
-| `decorate` | creating and decorating every command, as importing them does | 66.3 ms  | 252.13 µs   |
-| `declare`  | each command's first `declaration`                            | 5.8 ms   | 22.08 µs    |
-| `reread`   | `declaration` again, kept on the class                        | 87.8 µs  | 0.33 µs     |
+| Case       | What it times                                                   | Per tree | Per command |
+|------------|-----------------------------------------------------------------|----------|-------------|
+| `decorate` | creating and decorating every command, as importing them does   | 66.8 ms  | 253.86 µs   |
+| `declare`  | each command's first `declaration`                              | 5.9 ms   | 22.57 µs    |
+| `reread`   | `declaration` again, kept on the class                          | 98.5 µs  | 0.37 µs     |
+| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.2 ms   | 4.51 µs     |
 <!-- /bench:declaring -->
 
 So a module of <!-- bench:commands -->263<!-- /bench:commands --> commands costs
-<!-- bench:decorate-ms -->~66 ms<!-- /bench:decorate-ms --> to import, and declaring them all,
-<!-- bench:declare-ms -->~6 ms<!-- /bench:declare-ms --> more, once. A command line that starts a process for each
-line pays both each time.
+<!-- bench:decorate-ms -->~67 ms<!-- /bench:decorate-ms --> to import, declaring them all
+<!-- bench:declare-ms -->~6 ms<!-- /bench:declare-ms --> more, and building their tree
+<!-- bench:build-ms -->~1.2 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
+all three each time.
 
 ### Spread
 
@@ -58,12 +60,13 @@ Every number here is <!-- bench:runs -->the median of three runs<!-- /bench:runs
 <!-- bench:spread -->
 | Case       | Spread |
 |------------|--------|
-| `decorate` | 8.9%   |
-| `declare`  | 3.6%   |
-| `reread`   | 45.1%  |
+| `decorate` | 2.7%   |
+| `declare`  | 8.3%   |
+| `reread`   | 31.3%  |
+| `build`    | 23.3%  |
 <!-- /bench:spread -->
 
-The widest is <!-- bench:spread-max -->~45%<!-- /bench:spread-max -->.
+The widest is <!-- bench:spread-max -->~31%<!-- /bench:spread-max -->.
 
 ## Reproducing
 

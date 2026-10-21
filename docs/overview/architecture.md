@@ -27,8 +27,10 @@ seared  <-  zeared
   bind to its fields, for `declaration` to check.
 - **Kinds** ([`../kinds.md`](../kinds.md)): how a field's words are read, as plain data: a `Name` for an app's
   names, and a default for each seared type that has a word form.
+- **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal
+  beating a slot, with the checks across commands: no line read two ways, no flag meaning two things.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
 
-The tree that reads a line, and the docs a command describes itself with, arrive in the releases that follow, each
+Reading a line by the tree, and the docs a command describes itself with, arrive in the releases that follow, each
 adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).
