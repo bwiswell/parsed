@@ -1,0 +1,77 @@
+[project]
+name = "parsed"
+version = "0.0.0"
+description = "Typed command trees on seared, for people and agents"
+authors = [
+    { name = "Benj Wiswell", email = "benjwiswell@gmail.com" },
+]
+requires-python = ">=3.14,<4.0"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "deptry",
+    "prek",
+    "pytest>=8.0,<10.0",
+    "ruff",
+    "ty",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["parsed"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+indent-width = 4
+# Ruff formats Python code blocks inside Markdown. Off here, as in seared and
+# zeared: the docs align declarations into columns deliberately, and some
+# ```python blocks show a command's JSON, which the formatter would rewrite.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM",     # comma rules (formatter owns these)
+    "CPY",     # copyright notice at top of file
+    "FLY",     # str.join -> f-string (we join to avoid the {{}} brace footgun)
+    "D100",    # missing docstring in public module
+    "D101",    # missing docstring in public class
+    "D104",    # missing docstring in public package
+    "PLC0415", # allow intentional lazy imports
+    "TD",      # TODO formatting
+    "FIX002",  # disallow TODOs
+    "TRY003",  # long messages outside exception class
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+
+[tool.ruff.lint.per-file-ignores]
+# `PT012`: testing declaration-time checks means declaring a command inside the
+# `pytest.raises` block, which is more than one statement by nature.
+"tests/**/*.py" = ["S", "SLF", "ANN", "D", "INP", "ARG", "PLR", "PT012"]
+
+[tool.ruff.format]
+docstring-code-format = true
+line-ending = "lf"
+quote-style = "single"
+
+[tool.ty.src]
+exclude = ["tests"]
+
+[tool.pytest.ini_options]
+# The repo root too, so tests can import the repo-only `bench` package once it
+# lands (`tests/` has no `__init__.py`, so pytest adds only `tests/` itself).
+pythonpath = ["tests", "."]
+# importlib mode lets test modules of the same name in different directories
+# (one per source module, in the matching directory) coexist.
+addopts = "--import-mode=importlib"
