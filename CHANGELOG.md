@@ -7,6 +7,21 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.2 — unreleased
+
+**Reading a line.**
+
+### Added
+
+- **`parsed.tree.Tree`:** every command's phrases compiled into one trie of words, from classes or from packages
+  (`Tree.collect`). A literal beats a slot, a node has one slot at most, and an optional slot is compiled both ways.
+  The build refuses two phrases that read the same lines, two kinds of slot at one node, a flag that's a switch in
+  one command and takes a value in another, two flags of one command with one name, a flag name that isn't lowercase
+  words, and a field named for one of parsed's own flags (`--help`, `--json`, `--yes`, `--dry-run`).
+- **Flags are named from their fields' wire names,** `_` written `-`; a `Bool` flag is a switch, `--no-…` when it
+  defaults to `True`.
+- **The declaring benchmark** times building the tree too.
+
 ## 0.1.1 — 2026-10-21
 
 **Declaring a command.** A command is a seared class, said by its phrase, with optional class constants for the
