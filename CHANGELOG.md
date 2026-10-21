@@ -7,6 +7,25 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.1 — unreleased
+
+**Declaring a command.**
+
+### Added
+
+- **`parsed.Command`,** the base of every command: a seared class, decorated with `@parsed.parsed`, said by its
+  `PHRASE`. Its class constants say the rest: `EXTRA_PHRASES`, `EFFECT`, `ASKS`, `INTERACTIVE`, `POLYMORPHIC`,
+  `INSTEAD`, `REPLY` and `KINDS`. Every one but `PHRASE` is optional, and none is inferred. Each is inherited from a
+  base that declares it, and `KINDS` is merged along the class's bases. A class with no `PHRASE` is a base.
+- **`parsed.command.declaration(cls)`** reads a class's constants once, checks each, and keeps the result on the
+  class. What's wrong is a `DeclarationError` naming the class and the constant, and how to put it right. It
+  refuses a command beneath a base that declares fields without being decorated, since seared would drop them.
+- **A command can inherit a protocol's request class,** a plain seared class, so its fields and their bounds are the
+  protocol's own.
+- **`parsed.Effect` and `parsed.effect_of`:** zeared's vocabulary, value for value, ordered `READ < WRITE < ACTION`.
+- **`parsed.ParsedError`,** the base of every error parsed raises, and **`parsed.DeclarationError`,** a `TypeError`
+  too.
+
 ## 0.1.0 — 2026-10-21
 
 **The scaffold.** The family's toolchain and release model, and a package root that re-exports seared's
