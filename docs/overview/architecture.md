@@ -17,8 +17,18 @@ seared  <-  zeared
   parsed, so tooling (the family's [tooled](https://github.com/bwiswell/tooled), for agents) can read them
   without the app's runtime.
 
-## What 0.1.0 holds
+## What it holds
 
-Only the package root ([`../parsed.md`](../parsed.md)): seared's declaration surface, re-exported. The commands,
-the tree that reads a line, and the docs a command describes itself with arrive in the 0.1.x releases that follow,
-each adding its part here.
+- **The package root** ([`../parsed.md`](../parsed.md)): seared's declaration surface, re-exported, and parsed's
+  own names.
+- **Commands** ([`../command.md`](../command.md)): `Command`, the base of every command; the constants a command
+  declares; and `declaration`, which reads and checks them, keeping the result on the class.
+- **Phrases** ([`../_phrase/index.md`](../_phrase/index.md)): a phrase's grammar, and how a command's phrases
+  bind to its fields, for `declaration` to check.
+- **Kinds** ([`../kinds.md`](../kinds.md)): how a field's words are read, as plain data: a `Name` for an app's
+  names, and a default for each seared type that has a word form.
+- **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
+- **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
+
+The tree that reads a line, and the docs a command describes itself with, arrive in the releases that follow, each
+adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).

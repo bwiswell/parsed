@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-10-21T23:16:49+00:00",
+  "python": "3.14.3",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "seared": "0.4.4",
+  "runs": 3,
+  "measurements": [
+    {
+      "suite": "declaring",
+      "case": "decorate",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 14.399926128855814,
+      "us_per_op": 69444.80069214478,
+      "run": 0
+    },
+    {
+      "suite": "declaring",
+      "case": "declare",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 172.1867071806031,
+      "us_per_op": 5807.649245252833,
+      "run": 0
+    },
+    {
+      "suite": "declaring",
+      "case": "reread",
+      "version": "0.1.1",
+      "iterations": 4000,
+      "per": 263,
+      "ops_per_s": 9599.690937217374,
+      "us_per_op": 104.17002032045275,
+      "run": 0
+    },
+    {
+      "suite": "declaring",
+      "case": "decorate",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 15.080504147174564,
+      "us_per_op": 66310.7804779429,
+      "run": 1
+    },
+    {
+      "suite": "declaring",
+      "case": "declare",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 172.4913015101842,
+      "us_per_op": 5797.393788816407,
+      "run": 1
+    },
+    {
+      "suite": "declaring",
+      "case": "reread",
+      "version": "0.1.1",
+      "iterations": 4000,
+      "per": 263,
+      "ops_per_s": 11390.291223720416,
+      "us_per_op": 87.7940678037703,
+      "run": 1
+    },
+    {
+      "suite": "declaring",
+      "case": "decorate",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 15.679344351180218,
+      "us_per_op": 63778.17704633344,
+      "run": 2
+    },
+    {
+      "suite": "declaring",
+      "case": "declare",
+      "version": "0.1.1",
+      "iterations": 40,
+      "per": 263,
+      "ops_per_s": 166.428491286678,
+      "us_per_op": 6008.586584357545,
+      "run": 2
+    },
+    {
+      "suite": "declaring",
+      "case": "reread",
+      "version": "0.1.1",
+      "iterations": 4000,
+      "per": 263,
+      "ops_per_s": 13932.797497488316,
+      "us_per_op": 71.77309511462227,
+      "run": 2
+    }
+  ]
+}
