@@ -23,6 +23,8 @@ seared  <-  zeared
   own names.
 - **Commands** ([`../command.md`](../command.md)): `Command`, the base of every command; the constants a command
   declares; and `declaration`, which reads and checks them, keeping the result on the class.
+- **Phrases** ([`../_phrase/index.md`](../_phrase/index.md)): a phrase's grammar, and how a command's phrases
+  bind to its fields, for `declaration` to check.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
 

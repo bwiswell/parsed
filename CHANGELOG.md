@@ -22,6 +22,12 @@ lines as it lands, and the entry is dated when that version is released.
   refuses a command beneath a base that declares fields without being decorated, since seared would drop them.
 - **A command can inherit a protocol's request class,** a plain seared class, so its fields and their bounds are the
   protocol's own.
+- **Phrases.** A phrase is words separated by spaces: a literal word, `{name}` for one field's value, or a last
+  `{name**}` for the rest of the line. `PHRASE`'s slots name the fields that are positionals; every other field is a
+  flag. A slot that may be left out, or takes several words, is followed by a word or ends the phrase.
+- **`EXTRA_PHRASES`:** an alias takes `PHRASE`'s slots and may leave one out, its field keeping its default. A twin
+  renames a slot, which fills the field at its place in `PHRASE` and is read by the `KINDS` entry its name keys.
+  `POLYMORPHIC`, when declared, is checked both ways. `declaration` holds each phrase bound, and the flags.
 - **`parsed.Effect` and `parsed.effect_of`:** zeared's vocabulary, value for value, ordered `READ < WRITE < ACTION`.
 - **`parsed.ParsedError`,** the base of every error parsed raises, and **`parsed.DeclarationError`,** a `TypeError`
   too.
