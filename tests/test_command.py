@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from types import MappingProxyType
 from typing import ClassVar
 
@@ -458,3 +459,67 @@ class TestScopes:
             fleet: str = parsed.Str(required=True)
 
         assert 'station' not in declaration(Mine).field_kinds
+
+
+class TestAnnotations:
+    # seared takes only a field with an annotation, and drops the rest without a word.
+
+    @pytest.mark.parametrize(
+        ('field', 'hint'),
+        [
+            (parsed.Float(default=1.0), 'float'),
+            (parsed.Int(required=True), 'int'),
+            (parsed.Str(default=None), 'str | None'),
+            (parsed.Str(many=True, default_factory=list), 'list[str]'),
+            (parsed.TimeDelta(default=None), 'timedelta | None'),
+            (parsed.Dict(default_factory=dict), '<its type>'),
+        ],
+    )
+    def test_a_field_without_one_is_refused_with_an_example(self, field, hint):
+        cls = parsed.parsed(type('Mine', (Command,), {'__qualname__': 'Mine', 'PHRASE': 'mine', 'extra': field}))
+        said = (
+            r'Mine\.extra has no annotation, so seared leaves it out: add an annotation, such as '
+            rf'extra: {re.escape(hint)} = …'
+        )
+        with pytest.raises(DeclarationError, match=said):
+            declaration(cls)
+
+    def test_a_slot_s_field_too_before_its_phrase_is_bound(self):
+        @parsed.parsed
+        class Mine(Command):
+            PHRASE = 'mine {fleet}'
+
+            fleet = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r'Mine\.fleet has no annotation'):
+            declaration(Mine)
+
+    def test_on_a_decorated_base_it_names_the_base(self):
+        @parsed.parsed
+        class Base(Command):
+            fleet = parsed.Str(required=True)
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'mine'
+
+        with pytest.raises(DeclarationError, match=r'Base\.fleet has no annotation, so seared leaves it out of .*Mine'):
+            declaration(Mine)
+
+    def test_on_an_inherited_request_class(self):
+        @seared.seared
+        class Request(seared.Seared):
+            source: str = seared.Str(required=True)
+            port = seared.Int(default=5084)
+
+        @parsed.parsed
+        class Connect(Command, Request):
+            PHRASE = 'connect {source}'
+
+        with pytest.raises(
+            DeclarationError, match=r'Request\.port has no annotation, so seared leaves it out of .*Connect'
+        ):
+            declaration(Connect)
+
+    def test_annotated_fields_are_fine(self):
+        assert declaration(farlandia.FleetMine).flags == ('for_',)

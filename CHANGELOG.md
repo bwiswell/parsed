@@ -19,7 +19,8 @@ lines as it lands, and the entry is dated when that version is released.
   base that declares it, and `KINDS` is merged along the class's bases. A class with no `PHRASE` is a base.
 - **`parsed.command.declaration(cls)`** reads a class's constants once, checks each, and keeps the result on the
   class. What's wrong is a `DeclarationError` naming the class and the constant, and how to put it right. It
-  refuses a command beneath a base that declares fields without being decorated, since seared would drop them.
+  refuses a command beneath a base that declares fields without being decorated, and a field without an annotation
+  on the command or anything it inherits, since seared would leave either out; it suggests the annotation to add.
 - **A command can inherit a protocol's request class,** a plain seared class, so its fields and their bounds are the
   protocol's own.
 - **Phrases.** A phrase is words separated by spaces: a literal word, `{name}` for one field's value, or a last

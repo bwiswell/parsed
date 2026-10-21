@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar
 
-from seared import Field, Seared
+from seared import Field, Seared, field_kind
 from seared.doc import is_seared_class
 
 from ._phrase import Binding, Bound, Place, bind
@@ -168,20 +168,61 @@ def _phrase(cls: type[Command], name: str) -> str | None:
 
 
 def _check_decorated(cls: type[Command], name: str, *, is_command: bool) -> None:
-    """Refuse a command that isn't decorated, and any base in its MRO whose fields seared would drop."""
+    """Refuse a command that isn't decorated, and any field in its MRO that seared would drop.
+
+    seared takes only a field it can see: one with an annotation, on a decorated class. It drops the rest without a
+    word, so a command would quietly take less than it declares. After decorating, seared keeps an annotated field
+    only in ``__seared_fields__``; a ``Field`` still in a decorated class's own attributes is one it left out.
+    """
     if is_command and not is_seared_class(cls):
         msg = f'{name} has a PHRASE but is not decorated: decorate it with @parsed.parsed'
         raise DeclarationError(msg)
     for base in cls.__mro__:
         if base in (Command, Seared) or not issubclass(base, Seared):
             continue
-        declares_fields = any(isinstance(value, Field) for value in vars(base).values())
-        if declares_fields and not is_seared_class(base):
+        fields = [(attr, value) for attr, value in vars(base).items() if isinstance(value, Field)]
+        if not fields:
+            continue
+        owner = base.__qualname__
+        if not is_seared_class(base):
             msg = (
-                f'{base.__qualname__} declares fields but is not decorated, so seared would drop them from '
-                f'{name}: decorate {base.__qualname__} with @parsed.parsed'
+                f'{owner} declares fields but is not decorated, so seared would drop them from {name}: decorate '
+                f'{owner} with @parsed.parsed'
             )
             raise DeclarationError(msg)
+        attr, field = fields[0]
+        where = '' if base is cls else f' of {name}'
+        msg = (
+            f'{owner}.{attr} has no annotation, so seared leaves it out{where}: add an annotation, such as '
+            f'{attr}: {_type_hint(field)} = …'
+        )
+        raise DeclarationError(msg)
+
+
+#: What an annotation names for each plain field, in a refusal's example; any other reads ``<its type>``.
+_HINTS = {
+    'str': 'str',
+    'int': 'int',
+    'float': 'float',
+    'bool': 'bool',
+    'timedelta': 'timedelta',
+    'date': 'date',
+    'datetime': 'datetime',
+    'time': 'time',
+    'uuid': 'UUID',
+    'path': 'Path',
+    'decimal': 'Decimal',
+}
+
+
+def _type_hint(field: Field) -> str:
+    kind = field_kind(field)
+    hint = _HINTS.get(kind.value, '<its type>') if kind is not None else '<its type>'
+    if field.many:
+        hint = f'list[{hint}]'
+    if not field.required and field.default is None and field.default_factory is None:
+        hint = f'{hint} | None'
+    return hint
 
 
 def _extra_phrases(cls: type[Command], name: str, phrase: str | None) -> tuple[str, ...]:
