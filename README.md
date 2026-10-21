@@ -2,9 +2,10 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.1.0 is the scaffold:** the family's toolchain and release model, and a package root that re-exports seared's
-> declaration surface. Commands arrive in the 0.1.x releases that follow, and 0.2.0 is the first version to build
-> a command line on.
+> **0.1.1 declares commands:** a command is a seared class, said by its phrase, with class constants for the rest,
+> and `declaration` checks it, binding its phrases to its fields and giving every field a kind. Reading lines and
+> running commands arrive in the 0.1.x releases that follow, and 0.2.0 is the first version to build a command line
+> on.
 
 ## Why parsed
 
@@ -22,14 +23,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.1.0
+uv add git+https://github.com/bwiswell/parsed --tag v0.1.1
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.0" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.1" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving
