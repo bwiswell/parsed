@@ -42,6 +42,8 @@ class TestDefaults:
             instead=None,
             reply=None,
             kinds=MappingProxyType({}),
+            phrases=(),
+            flags=(),
         )
         assert not found.is_command
 
@@ -119,6 +121,8 @@ class TestKinds:
             PHRASE = 'leaf'
             KINDS: ClassVar[dict[object, object]] = {'ship': TestKinds.SHIP}
 
+            ship: str = parsed.Str(default='')
+
         assert dict(declaration(Leaf).kinds) == {
             'fleet': self.FLEET,
             'detachment': self.DETACHMENT,
@@ -136,6 +140,8 @@ class TestKinds:
             PHRASE = 'leaf'
             KINDS: ClassVar[dict[object, object]] = {'fleet': other}
 
+            fleet: str = parsed.Str(default='')
+
         assert declaration(Leaf).kinds['fleet'] is other
 
     def test_a_sibling_and_the_base_are_untouched(self):
@@ -146,6 +152,8 @@ class TestKinds:
         class One(Base):
             PHRASE = 'one'
             KINDS: ClassVar[dict[object, object]] = {'ship': TestKinds.SHIP}
+
+            ship: str = parsed.Str(default='')
 
         @parsed.parsed
         class Two(Base):

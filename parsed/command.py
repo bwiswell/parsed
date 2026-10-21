@@ -22,7 +22,9 @@ Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherit
 can declare one for every command beneath it. ``KINDS`` is merged along the MRO instead: a base's entries and its
 subclasses' all count, a subclass's winning where they name the same field.
 
-:func:`declaration` reads a class's constants once, checks each, and returns its :class:`Declaration`.
+:func:`declaration` reads a class's constants once, checks each, and returns its :class:`Declaration`, with each
+phrase bound to the fields it fills (:mod:`parsed._phrase`): a field a slot of ``PHRASE`` names is a positional, and
+every other field a flag.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from typing import ClassVar
 from seared import Field, Seared
 from seared.doc import is_seared_class
 
+from ._phrase import Binding, Bound, bind
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
 
@@ -75,6 +78,8 @@ class Declaration:
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
+        phrases: ``PHRASE`` and then each of ``EXTRA_PHRASES``, bound to the fields they fill; empty for a base.
+        flags: The fields no slot of ``PHRASE`` names, in their declared order; empty for a base.
     """
 
     cls: type[Command]
@@ -87,6 +92,8 @@ class Declaration:
     instead: type[Command] | None
     reply: type[Seared] | None
     kinds: Mapping[str, object]
+    phrases: tuple[Bound, ...]
+    flags: tuple[str, ...]
 
     @property
     def is_command(self) -> bool:
@@ -100,8 +107,9 @@ def declaration(cls: type) -> Declaration:
     The result is kept on the class itself, so there's no registry beside it.
 
     Raises:
-        DeclarationError: ``cls`` isn't a command class, one of its bases declares fields but isn't decorated, or a
-            constant is of the wrong kind. The message names the class and the constant, and how to put it right.
+        DeclarationError: ``cls`` isn't a command class, one of its bases declares fields but isn't decorated, a
+            constant is of the wrong kind, or a phrase doesn't read or doesn't bind. The message names the class and
+            the constant, and how to put it right.
     """
     found = cls.__dict__.get(_CACHE) if isinstance(cls, type) else None
     if found is None:
@@ -119,6 +127,9 @@ def _read(cls: type) -> Declaration:
     _check_decorated(cls, name, is_command=phrase is not None)
     extra = _extra_phrases(cls, name, phrase)
     interactive = _flag(cls, name, 'INTERACTIVE')
+    polymorphic = _polymorphic(cls, name)
+    kinds = _kinds(cls)
+    binding = _bind(cls, name, phrase=phrase, extra=extra, kinds=kinds, polymorphic=polymorphic)
     return Declaration(
         cls=cls,
         phrase=phrase,
@@ -126,10 +137,12 @@ def _read(cls: type) -> Declaration:
         effect=_effect(cls),
         asks=_flag(cls, name, 'ASKS'),
         interactive=interactive,
-        polymorphic=_polymorphic(cls, name),
+        polymorphic=polymorphic,
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
-        kinds=_kinds(cls),
+        kinds=kinds,
+        phrases=binding.phrases,
+        flags=binding.flags,
     )
 
 
@@ -226,6 +239,22 @@ def _reply(cls: type[Command], name: str) -> type[Seared] | None:
         msg = f'{name}.REPLY = {shown}: a seared class, decorated with @parsed.parsed'
         raise DeclarationError(msg)
     return reply
+
+
+def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrases
+    cls: type[Command],
+    name: str,
+    *,
+    phrase: str | None,
+    extra: tuple[str, ...],
+    kinds: Mapping[str, object],
+    polymorphic: bool | None,
+) -> Binding:
+    if phrase is None:
+        return Binding(phrases=(), flags=())
+    fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
+    own = vars(cls).get('KINDS', {})
+    return bind(fields, name, phrase=phrase, extra_phrases=extra, kinds=kinds, own_kinds=own, polymorphic=polymorphic)
 
 
 def _kinds(cls: type[Command]) -> Mapping[str, object]:
