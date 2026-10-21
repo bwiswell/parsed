@@ -36,7 +36,7 @@ from seared import (
     seared as parsed,  # the decorator, renamed for the same reason
 )
 
-__version__ = '0.0.0'
+__version__ = '0.1.0'
 
 __all__ = [
     'UUID',

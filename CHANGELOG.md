@@ -7,7 +7,7 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-21
 
 **The scaffold.** The family's toolchain and release model, and a package root that re-exports seared's
 declaration surface. Commands arrive in the releases that follow.
