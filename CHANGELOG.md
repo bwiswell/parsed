@@ -7,9 +7,11 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.1 — unreleased
+## 0.1.1 — 2026-10-21
 
-**Declaring a command.**
+**Declaring a command.** A command is a seared class, said by its phrase, with optional class constants for the
+rest. `declaration` reads and checks it: its phrases bound to its fields, every field given a kind, and anything
+seared would silently leave out refused by name. Nothing reads a line yet.
 
 ### Added
 

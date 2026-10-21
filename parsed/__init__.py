@@ -49,7 +49,7 @@ from .effect import Effect, effect_of
 from .errors import DeclarationError, ParsedError
 from .kinds import Kind, Name
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 __all__ = [
     'UUID',
