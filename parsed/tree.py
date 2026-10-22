@@ -42,7 +42,7 @@ from seared.doc import collect
 
 from . import _walk
 from ._phrase import Word
-from ._walk import RESERVED, Arity, Reading, SlotKind
+from ._walk import RESERVED, Arity, Completion, Reading, SlotKind
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
@@ -180,6 +180,15 @@ class Tree:
             ReadError: As :meth:`walk` does, or a value seared refuses (``'validation'``, at the word that gave it).
         """
         return self.walk(line, names).load()
+
+    def complete(self, text: str, names: Mapping[str, Resolver] | None = None) -> Completion:
+        """What may come next on ``text``, a line up to the cursor: the candidates, and how much each replaces.
+
+        Args:
+            text: The line, up to the cursor.
+            names: The app's resolvers, by category, whose ``options`` a name's slot or flag offers.
+        """
+        return _walk.complete(self, text, names)
 
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__

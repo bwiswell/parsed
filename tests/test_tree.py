@@ -227,6 +227,10 @@ class TestReading:
         assert fixtures.walk('fleet Prospector mine', names=farlandia.NAMES).given['fleet'].value == 'f1'
         assert fixtures.read('fleet Prospector mine', names=farlandia.NAMES).fleet == 'f1'
 
+    def test_complete_says_what_may_come_next(self, fixtures):
+        assert fixtures.complete('fleet f1 mine --f') == (['--for'], 3)
+        assert fixtures.complete('fleet ', names=farlandia.NAMES).words == ['Prospector', 'Hauler']
+
     def test_a_line_that_doesn_t_read(self, fixtures):
         with pytest.raises(ReadError, match=r'no command'):
             fixtures.read('frobnicate')

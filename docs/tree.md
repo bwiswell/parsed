@@ -50,6 +50,18 @@ log {n}: must be >= 1, got 0
 
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
 
+## Completing a line
+
+`tree.complete(text, names=…)` offers what may come next on a line being typed, up to the cursor: the words that
+may follow, a slot's values (a name's from its resolver's `options`), the command's flags, a flag's values, and a
+pair's keys and values. It gives the candidates, as they'd be typed, and how many characters before the cursor each
+replaces ([`_walk/_complete.md`](_walk/_complete.md)):
+
+```python
+tree.complete('fleet f1 mine --f')
+# Completion(words=['--for'], replace=3)
+```
+
 ## Flags
 
 A flag stands anywhere after the line's first word: `--for 10m`, or `--for=10m`. `--` ends the flags, so every word

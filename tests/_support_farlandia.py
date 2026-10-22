@@ -20,6 +20,7 @@ It grows with each release that needs more of it. So far, the declarations, and 
 """
 
 import difflib
+import enum
 
 # At runtime: tooling evaluates a command's annotations (`typing.get_type_hints`).
 from datetime import timedelta  # noqa: TC003
@@ -29,6 +30,13 @@ import parsed
 
 FLEET = parsed.Name('fleet')
 DETACHMENT = parsed.Name('detachment')
+
+
+class Colour(enum.Enum):
+    """A hull's paint: an enum's values to offer."""
+
+    RED = 'red'
+    GREEN = 'green'
 
 
 class Table:
@@ -62,7 +70,7 @@ class Variables(Table):
     """Each routine's variables, as a pairs resolver: the variables by routine, and each one's own names."""
 
     def __init__(self, routines: dict[str, dict[str, parsed.Resolver | None]]) -> None:
-        variables = {variable for held in routines.values() for variable in held}
+        variables = dict.fromkeys(variable for held in routines.values() for variable in held)  # in order
         super().__init__(
             {variable: variable for variable in variables}, within={r: set(v) for r, v in routines.items()}
         )

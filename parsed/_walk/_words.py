@@ -35,11 +35,15 @@ class Token:
         return '"' in self.raw
 
 
-def split(line: str) -> list[Token]:
+def split(line: str, *, partial: bool = False) -> list[Token]:
     """A line's words, in order.
 
+    Args:
+        line: The line.
+        partial: Whether it's a line being typed, so a quote left open holds the last word as far as it goes.
+
     Raises:
-        ReadError: A quote is left open.
+        ReadError: A quote is left open, on a line that isn't being typed.
     """
     tokens: list[Token] = []
     text: list[str] = []
@@ -56,7 +60,7 @@ def split(line: str) -> list[Token]:
         else:
             start = at if start < 0 else start
             text.append(ch)
-    if opened >= 0:
+    if opened >= 0 and not partial:
         hint = f'{line}"'
         msg = f'the quote at column {opened + 1} is never closed: {line[opened:]} `{hint}`'
         raise ReadError(msg, line=line, column=opened, hint=hint)
