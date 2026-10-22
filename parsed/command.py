@@ -115,6 +115,11 @@ class Declaration:
         """Whether the class is a command, rather than a base: whether it has a ``PHRASE``."""
         return self.phrase is not None
 
+    @property
+    def can_wait(self) -> bool:
+        """Whether a line may wait on it (``--until``): a read, with a ``REPLY`` whose values a condition reads."""
+        return self.is_command and self.effect is Effect.READ and self.reply is not None
+
     def kind_of(self, place: Place) -> Kind:
         """The kind a slot's words are read by: a slot by an alias's own ``KINDS`` entry, else its field's kind."""
         if place.renamed and place.slot in self.kinds:

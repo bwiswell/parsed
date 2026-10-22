@@ -43,7 +43,9 @@ from seared import ValidationError
 
 from parsed._phrase import Place, Slot
 from parsed.errors import ReadError
-from parsed.kinds import NOT_LITERAL, Name, Named, Pairs
+from parsed.kinds import NOT_LITERAL, Name, Named, Pairs, span
+from parsed.wait import FLAGS as WAIT_FLAGS
+from parsed.wait import TIMEOUT, Condition, Wait, problem
 
 from ._hints import close, either, usage
 from ._terms import RESERVED, Arity, SlotKind
@@ -52,7 +54,7 @@ from ._words import Token, split
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from seared import Field
+    from seared import Field, Seared
 
     from parsed.command import Command
     from parsed.kinds import Kind
@@ -91,12 +93,14 @@ class Reading:
             line's. A field the line leaves out isn't here, and keeps its default.
         own: parsed's own flags the line gives, by name (``yes``, ``json``, …), for whatever runs the command.
         line: The line read.
+        wait: Its wait, when it gives ``--until`` on a command that can wait: the conditions and the bound.
     """
 
     end: End
     given: Mapping[str, Given]
     own: frozenset[str]
     line: str
+    wait: Wait | None = None
 
     @property
     def command(self) -> type[Command]:
@@ -189,11 +193,12 @@ class _Walker:
             msg = 'no command: the line has no words'
             raise self.refuse(msg, suggestions=list(self.tree.root.words))
         end, slots = self._walk_words(words)
+        flags, wait = self._wait(end, flags)
         specs = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
         fields = {**self._slot_fields(end, slots, specs), **self._flag_fields(end, flags, words, specs)}
         values = self._values(fields)
         given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
-        return Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line)
+        return Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line, wait=wait)
 
     def refuse(  # noqa: PLR0913 -- one refusal, its parts named
         self,
@@ -395,8 +400,69 @@ class _Walker:
                 raise self.refuse(msg, field=flag.field, hint=hint)
         return out
 
+    # --- a wait ----------------------------------------------------------------------------------------------
+
+    def _wait(self, end: End, flags: list[_Said]) -> tuple[list[_Said], Wait | None]:
+        """A command that can wait: its wait's flags taken off the rest, read and checked, before anything runs."""
+        found = end.declaration
+        if not found.can_wait:
+            return flags, None
+        kept: list[_Said] = []
+        until: list[Condition] = []
+        given: list[Token] = []
+        timeout: tuple[Token, float] | None = None
+        for said in flags:
+            name, token, value = said
+            if name not in WAIT_FLAGS or value is None:
+                kept.append(said)
+            elif name == 'until':
+                given.append(token)
+                condition = self._condition(found.reply, value)
+                until += [] if condition is None else [condition]
+            elif timeout is not None:
+                msg = '--timeout is given twice'
+                raise self.refuse(msg, word=token)
+            else:
+                timeout = (token, self._timeout(value))
+        if not given:
+            if timeout is not None:
+                msg = '--timeout bounds a wait: give --until too'
+                raise self.refuse(msg, word=timeout[0])
+            return kept, None
+        return kept, Wait(tuple(until), TIMEOUT if timeout is None else timeout[1])
+
+    def _condition(self, reply: type[Seared] | None, value: Token) -> Condition | None:
+        """An ``--until``'s condition, its path checked against the reply's dump schema; ``None`` for a placeholder."""
+        if self.placeholders and _placeholder(value):
+            return None
+        try:
+            condition = Condition.parse(value.text)
+        except ValueError as e:
+            msg = f'--until: {e}'
+            raise self.refuse(msg, word=value, hint='--until <path>=<value>') from None
+        refused = None if reply is None else problem(condition, reply)
+        if refused is not None:
+            what, near = refused
+            raise self.refuse(what, word=value, suggestions=near)
+        return condition
+
+    def _timeout(self, value: Token) -> float:
+        """A ``--timeout``'s seconds, a span of time: the default, for a placeholder."""
+        if self.placeholders and _placeholder(value):
+            return TIMEOUT
+        try:
+            return span(value.text)
+        except ValueError as e:
+            msg = f'--timeout: {e}'
+            raise self.refuse(msg, word=value) from None
+
     def _not_taken(self, end: End, name: str, token: Token, words: list[Token]) -> ReadError:
         """A flag its command doesn't take, with its usage, and its own flags close to the one given."""
+        if name in WAIT_FLAGS and self.tree.waits:
+            msg = (
+                f"{_said(words)} can't wait: --{name} is for a read, a command that declares EFFECT = READ and a REPLY"
+            )
+            return self.refuse(msg, word=token, hint=self._usage(end))
         hint = self._usage(end)
         near = [f'--{found}' for found in close(name, self.tree.flags_of(end.declaration.cls))]
         return self.refuse(f'{_said(words)} takes no --{name}', word=token, hint=hint, near=near)

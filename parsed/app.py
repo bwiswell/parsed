@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from .context import Context
     from .names import Resolver
     from .reply import Answer
+    from .wait import Wait
 
 #: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
 #: is awaited if it's awaitable.
@@ -531,7 +532,7 @@ class Session[S]:
             return Result(
                 line, said, ok=False, text=message, error={'error': 'handler', 'message': message}, exception=e
             )
-        return _outcome(line, said, found, dry_run='dry-run' in own)
+        return _outcome(line, said, found, dry_run='dry-run' in own, wait=routed.reading.wait)
 
     async def call(self, line: str, *, yes: bool = False) -> object:
         """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
@@ -574,6 +575,8 @@ class Session[S]:
             found = _checked(await _awaited(handler(command, ctx)), cls)
             while isinstance(found, Ask) and (yes or await self._answered(found.question)):
                 found = _checked(await _awaited(found.then()), cls)
+            if routed.reading.wait is not None and not isinstance(found, Ask):
+                _replied(found, cls)
             for hook in hooks.after:
                 await _awaited(hook(command, ctx, found))
         except Exception as error:
@@ -702,13 +705,24 @@ def _checked(found: object, cls: type[Command]) -> Seared | str | Ask | None:
     raise TypeError(msg)
 
 
-def _outcome(line: str, said: str, found: Seared | str | Ask | None, *, dry_run: bool) -> Result:
+def _outcome(line: str, said: str, found: Seared | str | Ask | None, *, dry_run: bool, wait: Wait | None) -> Result:
     """What a line came to, from what its handler gave: the question it stopped at, its reply, or its text."""
     if isinstance(found, Ask):
         return Result(line, said, asks=found.question, text=found.question)
     if found is None or isinstance(found, str):
         return Result(line, said, done=not dry_run, text=found)
-    return Result(line, said, done=not dry_run, reply=found, text=str(found))
+    met = None if wait is None else wait.met(found)
+    return Result(line, said, done=not dry_run, met=met, reply=found, text=str(found))
+
+
+def _replied(found: object, cls: type[Command]) -> None:
+    """Refuse what a waited-on handler returned unless it's its ``REPLY``: a wait reads the reply's values."""
+    reply = declaration(cls).reply
+    if reply is None or not isinstance(found, reply):
+        said = 'nothing' if found is None else f'a {type(found).__name__}'
+        what = 'its REPLY' if reply is None else f'its REPLY ({reply.__name__})'
+        msg = f"{cls.__qualname__}'s handler returned {said}: a wait reads {what}, so it returns one"
+        raise TypeError(msg)
 
 
 async def _awaited(found: object) -> object:

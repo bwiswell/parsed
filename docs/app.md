@@ -139,6 +139,9 @@ handler that returned something besides its `REPLY`, text, nothing or an `Ask`, 
 or answered no, leaves the line undone: `run` gives a result with the question as its `asks`, exit code `0`, and
 `call` gives back the `Ask` itself.
 
+**A line that waits** (`--until`, on a read with a `REPLY`: [`wait.md`](wait.md)) runs its read once, and the
+result's `met` says whether its reply met every condition. Its handler returns its `REPLY`, since a wait reads it.
+
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
 

@@ -39,6 +39,7 @@ class TestAsJson:
             'ok': True,
             'done': True,
             'asks': None,
+            'met': None,
             'reply': None,
             'text': None,
             'error': None,

@@ -933,3 +933,41 @@ class TestHooks:
     def test_refused(self, app, stage, given, message):
         with pytest.raises(DeclarationError, match=message):
             getattr(app, stage)(*given)
+
+
+class TestWaitingOnce:
+    # A line that waits runs its read once, so far, and says whether its reply met the conditions.
+    @pytest.fixture
+    def shows(self, app) -> App:
+        app.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet=command.fleet, docked=True))
+        return app
+
+    async def _run(self, app: App, line: str):
+        async with app.open() as session:
+            return await session.run(line)
+
+    async def test_met(self, shows):
+        found = await self._run(shows, 'fleets show f1 --until docked=true')
+        assert (found.ok, found.met, found.code) == (True, True, 0)
+        assert found.to_json()['met'] is True
+
+    async def test_not_met(self, shows):
+        found = await self._run(shows, 'fleets show f1 --until docked=false --until fleet=f1')
+        assert (found.ok, found.met) == (True, False)
+
+    async def test_none_for_a_line_that_doesn_t_wait(self, shows):
+        assert (await self._run(shows, 'fleets show f1')).met is None
+
+    async def test_refused_before_anything_runs(self, app):
+        ran = []
+        app.on(farlandia.FleetsShow, lambda command, ctx: ran.append(command))
+        found = await self._run(app, 'fleets show f1 --until dockd=true')
+        assert (found.ok, found.code, ran) == (False, 2, [])
+
+    async def test_a_waited_on_handler_returns_its_reply(self, app):
+        app.on(farlandia.FleetsShow, lambda command, ctx: 'docked')
+        found = await self._run(app, 'fleets show f1 --until docked=true')
+        assert (found.ok, found.code) == (False, 1)
+        assert found.text == (
+            "TypeError: FleetsShow's handler returned a str: a wait reads its REPLY (FleetView), so it returns one"
+        )
