@@ -21,6 +21,12 @@ lines as it lands, and the entry is dated when that version is released.
 - **`Kind.write(value, field)`:** a wire value as the words a line says it in, a literal word first, else
   `Kind.spell`, each kind's own (`5400.0` seconds as `1h30m`).
 - **A rendering benchmark** times writing an instance of each command back to its line.
+- **`parsed.doc`:** commands as data, for the tools that read them, in `zeared.doc`'s shape. `is_command_class`;
+  `introspect_command(cls)`, a `CommandDoc` of seared's `SchemaDoc`, the phrases, each slot (its field and kind),
+  the flags, each field's kind, the constants, and `fields_from`, the seared classes it takes fields from that
+  aren't commands (a protocol's request class it inherits). `json_schema(cls)`: seared's load schema, closed, with
+  `x-kind` and `x-scope` on a name's property and the command's own `x-` keys (`x-phrase`, `x-effect`, `x-asks` and
+  the rest).
 
 ## 0.1.3 — 2026-10-21
 
