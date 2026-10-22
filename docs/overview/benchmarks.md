@@ -32,7 +32,7 @@ Each call declares new classes, so declaring can be timed from nothing.
 
 ## Results
 
-Recorded <!-- bench:run -->2026-10-21, Python 3.14.3, median of 3 runs; parsed 0.1.1, seared 0.4.4<!-- /bench:run -->.
+Recorded <!-- bench:run -->2026-10-22, Python 3.14.3, median of 3 runs; parsed 0.1.1, seared 0.4.4<!-- /bench:run -->.
 
 ### Declaring
 
@@ -41,17 +41,32 @@ What a tree costs before any line is read:
 <!-- bench:declaring -->
 | Case       | What it times                                                   | Per tree | Per command |
 |------------|-----------------------------------------------------------------|----------|-------------|
-| `decorate` | creating and decorating every command, as importing them does   | 66.8 ms  | 253.86 µs   |
-| `declare`  | each command's first `declaration`                              | 5.9 ms   | 22.57 µs    |
-| `reread`   | `declaration` again, kept on the class                          | 98.5 µs  | 0.37 µs     |
-| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.2 ms   | 4.51 µs     |
+| `decorate` | creating and decorating every command, as importing them does   | 72.5 ms  | 275.81 µs   |
+| `declare`  | each command's first `declaration`                              | 6.7 ms   | 25.46 µs    |
+| `reread`   | `declaration` again, kept on the class                          | 183.0 µs | 0.70 µs     |
+| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.4 ms   | 5.48 µs     |
 <!-- /bench:declaring -->
 
 So a module of <!-- bench:commands -->263<!-- /bench:commands --> commands costs
-<!-- bench:decorate-ms -->~67 ms<!-- /bench:decorate-ms --> to import, declaring them all
-<!-- bench:declare-ms -->~6 ms<!-- /bench:declare-ms --> more, and building their tree
-<!-- bench:build-ms -->~1.2 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
+<!-- bench:decorate-ms -->~73 ms<!-- /bench:decorate-ms --> to import, declaring them all
+<!-- bench:declare-ms -->~7 ms<!-- /bench:declare-ms --> more, and building their tree
+<!-- bench:build-ms -->~1.4 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
 all three each time.
+
+### Reading
+
+A line for each command, on a tree built once: its `PHRASE`, each slot a word, and each of its flags given
+([`bench/tree.py`](../../bench/tree.py)'s `lines`):
+
+<!-- bench:reading -->
+| Case   | What it times                                                       | Every line | Per line |
+|--------|---------------------------------------------------------------------|------------|----------|
+| `walk` | a line's flags split off, its words walked, each field's words kept | 2.7 ms     | 10.12 µs |
+| `read` | a line on to its instance, loaded by seared from its words          | 3.8 ms     | 14.34 µs |
+<!-- /bench:reading -->
+
+So a line costs <!-- bench:walk-us -->~10 µs<!-- /bench:walk-us --> to walk, and
+<!-- bench:read-us -->~14 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
 
 ### Spread
 
@@ -60,13 +75,15 @@ Every number here is <!-- bench:runs -->the median of three runs<!-- /bench:runs
 <!-- bench:spread -->
 | Case       | Spread |
 |------------|--------|
-| `decorate` | 2.7%   |
-| `declare`  | 8.3%   |
-| `reread`   | 31.3%  |
-| `build`    | 23.3%  |
+| `decorate` | 11.6%  |
+| `declare`  | 11.3%  |
+| `reread`   | 6.8%   |
+| `build`    | 7.8%   |
+| `walk`     | 14.7%  |
+| `read`     | 12.4%  |
 <!-- /bench:spread -->
 
-The widest is <!-- bench:spread-max -->~31%<!-- /bench:spread-max -->.
+The widest is <!-- bench:spread-max -->~15%<!-- /bench:spread-max -->.
 
 ## Reproducing
 

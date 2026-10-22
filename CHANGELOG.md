@@ -20,7 +20,17 @@ lines as it lands, and the entry is dated when that version is released.
   words, and a field named for one of parsed's own flags (`--help`, `--json`, `--yes`, `--dry-run`).
 - **Flags are named from their fields' wire names,** `_` written `-`; a `Bool` flag is a switch, `--no-…` when it
   defaults to `True`.
-- **The declaring benchmark** times building the tree too.
+- **Reading a line:** `Tree.read(line)` gives the command's instance, and `Tree.walk(line)` stops short of it, at
+  a `Reading` that keeps each field's words and where they stand. Words split on whitespace, double quotes holding
+  spaces; a literal matches case aside, and a quoted word is never a literal or a flag. A slot of several words
+  takes them up to a literal after them. seared loads the words into the instance, and names are kept as typed.
+- **Flags anywhere after the first word,** `--name=value`, and `--` to end them. A list's flag may be given again.
+  parsed's own (`--help`, `--json`, `--yes`, `--dry-run`) are switches every command takes, kept apart from the
+  fields.
+- **`parsed.ReadError`,** for a line that doesn't read: its message says what's wrong, with the words read up to it.
+- **`parsed.Tree` and `parsed.ReadError` on the package root.**
+- **The declaring benchmark** times building the tree too, and a **reading benchmark** times walking and reading a
+  line for each command.
 
 ## 0.1.1 — 2026-10-21
 

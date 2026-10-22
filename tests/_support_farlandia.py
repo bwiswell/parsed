@@ -1,11 +1,13 @@
 """Commands shaped like farlandia's hardest, written fresh: parsed's tests depend on no game.
 
-It grows with each release that needs more of it. So far, the declarations alone:
+It grows with each release that needs more of it. So far, the declarations, and the lines they read:
 
 - a base carrying a field, an effect and kinds for the commands beneath it, and names read as the app's own;
 - a fleet's command that a detachment says too, its slot renamed (`fleet {fleet} mine`, `detachment {detachment}
   mine`);
 - a station that may be left out (`dock {station}` beside `dock nearest`);
+- a literal beside a slot, in two commands (`jump {system}`, `jump nearest {ore}`);
+- a required flag and a switch, on a command that asks first (`fleets merge {fleet} --into …`);
 - an optional positional, a slot of several words, and the rest of the line;
 - a read with a typed reply, a command that asks first, and an interactive command with the form an agent says
   instead.
@@ -62,6 +64,26 @@ class FleetDock(FleetCommand):
 
 
 @parsed.parsed
+class FleetJump(FleetCommand):
+    """Jump to a system."""
+
+    PHRASE = 'fleet {fleet} jump {system}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'system': parsed.Name('system')}
+
+    system: str = parsed.Str(required=True, doc='the system')
+
+
+@parsed.parsed
+class FleetJumpNearest(FleetCommand):
+    """Jump to the nearest system with an ore."""
+
+    PHRASE = 'fleet {fleet} jump nearest {ore}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'ore': parsed.Name('good')}
+
+    ore: str = parsed.Str(required=True, doc='the ore')
+
+
+@parsed.parsed
 class FleetSell(FleetCommand):
     """Sell goods from the hold."""
 
@@ -101,6 +123,20 @@ class FleetBuyShip(FleetCommand):
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'hull': parsed.Name('hull')}
 
     hull: str = parsed.Str(required=True, doc='the hull to buy')
+
+
+@parsed.parsed
+class FleetsMerge(parsed.Command):
+    """Merge a fleet into another, asked first."""
+
+    PHRASE = 'fleets merge {fleet}'
+    EFFECT = parsed.Effect.WRITE
+    ASKS = True
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET, 'into': FLEET}
+
+    fleet: str = parsed.Str(required=True, doc='the fleet merged')
+    into: str = parsed.Str(required=True, doc='the fleet it joins')
+    quiet: bool = parsed.Bool(default=False, doc='without a report')
 
 
 @parsed.parsed
