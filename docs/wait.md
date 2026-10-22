@@ -50,9 +50,23 @@ any of its commands can wait, a tree takes `--until` and `--timeout`, each takin
 ## What a line that waits reads to
 
 Its [`Reading`](_walk/_walker.md#reading)'s `wait` is a `Wait`: `until`, its `Condition`s, and `timeout`, in
-seconds. `wait.met(reply)` says whether a reply meets every condition. A session runs the read once, and the
-result's `met` says whether its reply met them ([`reply.md`](reply.md)); a handler waited on returns its `REPLY`,
-since a wait reads its values.
+seconds. `wait.met(reply)` says whether a reply meets every condition.
+
+## Waiting
+
+A [session](app.md#sessions) runs the read, then reads again until its reply meets every condition, or the bound
+passes:
+
+- **at once when the app says its state moved:** `session.changed()`, from any thread, wired where the app learns
+  of a change (`controls.on_change = session.changed`). A change while a read is under way isn't missed: the wait
+  holds the change it was given before the read began;
+- **else every `interval` seconds** (`app.open(state, interval=…)`, a second by default). An app that signals every
+  change opens with `interval=None`, so a wait reads only on a change, never on a poll.
+
+At the bound it stops, reading again only if a change woke it there. The result's `met` says whether the conditions
+were met, and its reply is the last read ([`reply.md`](reply.md)); `session.call` gives that reply. A handler waited
+on returns its `REPLY`, since a wait reads its values. Hooks run once around the whole wait, not around each read,
+and the session stays open for it, so a wait pays the app's opening once.
 
 With placeholders (`--until <until>`, `--timeout <timeout>`), as an example in help says them, a condition is any
 condition and the bound is the default.

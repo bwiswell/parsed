@@ -113,7 +113,7 @@ reaches a handler. Hooks are the app's; a mount's own come later.
 
 ## Sessions
 
-`app.open(state=None, verbosity=0, answer=None)` gives a `Session`, used once, as
+`app.open(state=None, verbosity=0, answer=None, interval=1.0)` gives a `Session`, used once, as
 `async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
@@ -123,6 +123,8 @@ reaches a handler. Hooks are the app's; a mount's own come later.
 - **`answer`** answers a question a line asks, when `--yes` doesn't: yes or no from the question, sync or async.
   `parsed.reply.terminal` prompts a person (`Buy a hauler for 1,200 credits? [y/N]`). With none, a question is
   left unanswered.
+- **`interval`** is how often, in seconds, a wait reads again when nothing says the state moved: a second by
+  default; `None` for an app that calls `session.changed()` on every change, so a wait reads only then.
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -139,8 +141,14 @@ handler that returned something besides its `REPLY`, text, nothing or an `Ask`, 
 or answered no, leaves the line undone: `run` gives a result with the question as its `asks`, exit code `0`, and
 `call` gives back the `Ask` itself.
 
-**A line that waits** (`--until`, on a read with a `REPLY`: [`wait.md`](wait.md)) runs its read once, and the
-result's `met` says whether its reply met every condition. Its handler returns its `REPLY`, since a wait reads it.
+**A line that waits** (`--until`, on a read with a `REPLY`: [`wait.md`](wait.md#waiting)) reads again until its
+reply meets every condition, or its bound passes: at once when `session.changed()` says the app's state moved, else
+every `interval`. The result's `met` says whether it was met, and its reply is the last read. Its handler returns
+its `REPLY`, since a wait reads it, and hooks run once around the whole wait.
+
+**`session.changed()`** says the app's state moved, from any thread: wire it where the app learns of a change
+(`controls.on_change = session.changed`). Every wait on the session reads again at once; a change while a read is
+under way isn't missed.
 
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.

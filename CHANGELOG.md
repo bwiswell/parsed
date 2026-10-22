@@ -22,8 +22,11 @@ lines as it lands, and the entry is dated when that version is released.
 - **A wait's flags are a tree's** once any of its commands can wait (`tree.waits`): a command that can wait can't
   name a field for them, and any other command refuses `--until` with the reason, unless a field of its own takes
   it. A reading's `wait` holds the conditions and the bound (`parsed.wait.Wait`), and completion offers them.
-- **`result.met`:** a session runs a line that waits once, so far, and says whether its reply met every condition;
-  its handler returns its `REPLY`.
+- **Waiting:** a session runs a line that waits again until its reply meets every condition, or the bound passes:
+  at once when the app says its state moved, `session.changed()`, from any thread
+  (`controls.on_change = session.changed`); else every `interval` seconds (`app.open(state, interval=…)`, 1 s by
+  default, `None` for an app that signals every change). `result.met` says whether it was met; past the bound,
+  it's the last reply, with `met` false. Its handler returns its `REPLY`, and hooks run once around the whole wait.
 - **`parsed.kinds.span(word)`:** a span of time's seconds, as `Duration` reads one.
 
 ## 0.1.5 — 2026-10-22
