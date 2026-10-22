@@ -10,6 +10,7 @@ A base, a reply's class, a protocol's request class and an undecorated subclass 
 | `schema` | seared's `SchemaDoc` of its fields |
 | `phrase`, `extra_phrases` | its `PHRASE` and `EXTRA_PHRASES` |
 | `keys` | each phrase's key template, for policy ([`keys.md`](keys.md)): `fleet/{fleet}/mine` |
+| `examples` | its `EXAMPLES`, lines that say it; a `<name>` stands for any value |
 | `slots` | every slot of its phrases, each name once, in the order they first stand: `SlotDoc`s |
 | `flags` | its flags, in the order its fields are declared: `FlagDoc`s |
 | `kinds` | each field's kind, by attribute name |

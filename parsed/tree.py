@@ -165,18 +165,19 @@ class Tree:
         """
         return self._flags[cls]
 
-    def walk(self, line: str, names: Mapping[str, Resolver] | None = None) -> Reading:
+    def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
         """What ``line`` says: the command, and each field's words and wire value, before seared loads them.
 
         Args:
             line: The line.
             names: The app's resolvers, by category: a ``Name`` of a category with none reads as typed.
+            placeholders: Whether a ``<name>`` word stands for any value, for a line that's checked, not run.
 
         Raises:
             ReadError: The line doesn't read, a word its kind can't read, or a name no resolver answers to; the
                 message says why, with the words read up to it.
         """
-        return _walk.walk(self, line, names)
+        return _walk.walk(self, line, names, placeholders=placeholders)
 
     def read(self, line: str, names: Mapping[str, Resolver] | None = None) -> Command:
         """The command ``line`` says, loaded by seared from its fields' values; ``names`` as :meth:`walk` takes it.

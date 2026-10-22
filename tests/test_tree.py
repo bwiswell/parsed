@@ -260,6 +260,9 @@ class TestReading:
         assert reading.data() == {'fleet': 'f1', 'for': 90.0}
         assert reading.own == {'yes'}
 
+    def test_walk_reads_placeholders_when_asked(self, fixtures):
+        assert fixtures.walk('fleet <fleet> mine', placeholders=True).data() == {'fleet': '<fleet>'}
+
     def test_read_goes_on_to_the_instance(self, fixtures):
         assert fixtures.read('fleet f1 mine --for 90s') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
 

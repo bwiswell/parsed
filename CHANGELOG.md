@@ -31,6 +31,16 @@ lines as it lands, and the entry is dated when that version is released.
   says it, its words and its slots' values slashed as a topic is (`fleet/f1/dock/vesta`); a slot of several words,
   the rest of the line, an optional slot at its default and the flags left out. `CommandDoc.keys` holds each
   phrase's template (`fleet/{fleet}/dock/{station}`).
+- **`parsed check`, for an app's CI:** `python -m parsed check <target> …` builds the tree of a package's commands
+  and checks each one. Two instances made from its fields' types and constraints each render and read back to
+  themselves; each line of its `EXAMPLES` reads to it; and its schema takes its example, is closed, has `enum`s a
+  constrained decoder can hold, and stays compact (`--max-schema-bytes`, 2048 by default). The report is JSON on
+  stdout, exit `1` with problems, and a usage that doesn't read is a JSON error on stderr, exit `2`.
+  `parsed.doc.check(targets)` gives the same as a `CheckReport`.
+- **`EXAMPLES`:** an optional tuple of lines that say a command, a `<name>` standing for any value, for help and
+  for `parsed check` to read. `CommandDoc.examples` holds them.
+- **Placeholders:** `tree.walk(line, placeholders=True)` reads an unquoted `<name>` as any value, by no kind and no
+  resolver.
 
 ## 0.1.3 — 2026-10-21
 

@@ -35,6 +35,14 @@ resolver for its category** ([`names.md`](../names.md)), when `walk(tree, line, 
 gives the key. The walk first gathers each field's words, then reads them in an order that puts a scope before
 the names it narrows, whatever their order on the line, and gives each resolver its scope's value.
 
+## Placeholders
+
+`walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes
+for a command (`fleet <fleet> mine --for <for>`), read by no kind and no resolver, so `data()` holds `'<fleet>'` as
+typed. A literal word still reads as one, and a quoted `"<fleet>"` is a value, as any quoted word is. Such a reading
+isn't one to load: [`parsed check`](../doc/check.md) walks a command's `EXAMPLES` so, to see that each ends at its
+command. Without `placeholders`, a `<name>` is a word like any other.
+
 ## `Reading`
 
 | Attribute | Holds |

@@ -83,6 +83,7 @@ class CommandDoc:
         phrase: Its ``PHRASE``.
         extra_phrases: Its ``EXTRA_PHRASES``.
         keys: Each phrase's key template, for policy (:mod:`parsed.doc.keys`): ``fleet/{fleet}/mine``.
+        examples: Its ``EXAMPLES``, lines that say it; a ``<name>`` stands for any value.
         slots: Every slot of its phrases, each name once, in the order they first stand.
         flags: Its flags, in the order its fields are declared.
         kinds: Each field's kind, by attribute name.
@@ -100,6 +101,7 @@ class CommandDoc:
     phrase: str
     extra_phrases: tuple[str, ...]
     keys: tuple[str, ...]
+    examples: tuple[str, ...]
     slots: tuple[SlotDoc, ...]
     flags: tuple[FlagDoc, ...]
     kinds: Mapping[str, Kind]
@@ -160,6 +162,7 @@ def introspect_command(cls: type[Command]) -> CommandDoc:
         phrase=found.phrase or '',
         extra_phrases=found.extra_phrases,
         keys=tuple(_key_template(bound) for bound in found.phrases),
+        examples=found.examples,
         slots=tuple(slots.values()),
         flags=flags,
         kinds=MappingProxyType(dict(found.field_kinds)),

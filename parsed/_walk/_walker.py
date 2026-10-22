@@ -33,6 +33,7 @@ seared's ``ValidationError`` comes back as the word that gave the value.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -124,12 +125,18 @@ class Reading:
 type _Said = tuple[str, Token, Token | None]
 
 
+#: A placeholder: ``<name>``, standing for any value in a line that's checked, not run.
+_PLACEHOLDER = re.compile(r'<[^<>\s]+>')
+
 #: A name's scope, once read: the field it is, its value as the resolver is given it, and its words as typed.
 type _Scope = tuple[str, str, str]
 
 
-def walk(tree: Tree, line: str, names: Mapping[str, Resolver] | None = None) -> Reading:
+def walk(tree: Tree, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
     """Read ``line`` by ``tree``, as the module's docstring describes, its names by ``names``' resolvers.
+
+    With ``placeholders``, a word written ``<name>`` (unquoted) stands for any value: it fills its slot or flag as
+    it is, read by no kind or resolver, so a line from help or a hint checks its shape. Its reading won't load.
 
     Raises:
         ReadError: The line doesn't read: an open quote, a flag before the first word or that no command takes, a
@@ -137,7 +144,7 @@ def walk(tree: Tree, line: str, names: Mapping[str, Resolver] | None = None) -> 
             doesn't take or a required one it leaves out, a word its kind can't read, or a name no resolver
             answers to.
     """
-    return _Walker(tree, line, names or {}).walk()
+    return _Walker(tree, line, names or {}, placeholders=placeholders).walk()
 
 
 class _Field(NamedTuple):  # a tuple: one is made for each field of each line, and a tuple is the cheapest to make
@@ -170,6 +177,7 @@ class _Walker:
     tree: Tree
     line: str
     names: Mapping[str, Resolver]
+    placeholders: bool = False
 
     def walk(self) -> Reading:
         tokens = split(self.line)
@@ -428,6 +436,8 @@ class _Walker:
 
     def _read(self, found: _Field, word: Token, scope: _Scope | None) -> object:
         """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
+        if self.placeholders and _placeholder(word):
+            return word.text
         kind = found.kind
         resolver = self.names.get(kind.category) if self.names and isinstance(kind, Name) else None
         if not isinstance(kind, Name) or resolver is None:
@@ -465,6 +475,8 @@ class _Walker:
 
     def _resolved(self, found: _Field, resolver: Resolver, word: Token, scope: _Scope | None, what: str) -> str:
         """The key a resolver reads a word to; a word no name answers to is refused, with what's close to it."""
+        if self.placeholders and _placeholder(word):
+            return word.text
         given = None if scope is None else scope[1]
         key = resolver.lookup(word.text, given)
         if key is not None:
@@ -494,6 +506,11 @@ def _ends(node: Node) -> list[End]:
     if node.slot is not None:
         found += _ends(node.slot.node)
     return found
+
+
+def _placeholder(word: Token) -> bool:
+    """Whether a word is a placeholder, ``<name>``, unquoted: one standing for any value."""
+    return not word.quoted and _PLACEHOLDER.fullmatch(word.text) is not None
 
 
 def _literal(node: Node, word: Token) -> Node | None:

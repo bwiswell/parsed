@@ -29,6 +29,7 @@ class TestDefaults:
         assert Command.INSTEAD is None
         assert Command.REPLY is None
         assert dict(Command.KINDS) == {}
+        assert Command.EXAMPLES == ()
 
     def test_the_base_declares_nothing(self):
         found = declaration(Command)
@@ -42,6 +43,7 @@ class TestDefaults:
             polymorphic=None,
             instead=None,
             reply=None,
+            examples=(),
             kinds=MappingProxyType({}),
             aliases=MappingProxyType({}),
             field_kinds=MappingProxyType({}),
@@ -237,6 +239,10 @@ class TestRefusals:
             ({'EXTRA_PHRASES': 'go on'}, r"EXTRA_PHRASES = 'go on': a tuple of phrases; one alone needs a trailing"),
             ({'EXTRA_PHRASES': ('go on', '')}, r'EXTRA_PHRASES = .*: a tuple of phrases, each a string of words'),
             ({'EXTRA_PHRASES': ('go on',), 'PHRASE': None}, r'has EXTRA_PHRASES but no PHRASE'),
+            ({'EXAMPLES': 'go'}, r"Declared\.EXAMPLES = 'go': a tuple of lines; one alone needs a trailing comma"),
+            ({'EXAMPLES': ('go', ' ')}, r'Declared\.EXAMPLES = .*: a tuple of lines, each a string of words'),
+            ({'EXAMPLES': 3}, r'Declared\.EXAMPLES = 3: a tuple of lines, each a string of words'),
+            ({'EXAMPLES': ('go',), 'PHRASE': None}, r'Declared has EXAMPLES but no PHRASE: a base says nothing'),
             ({'EFFECT': 'reed'}, r"Declared\.EFFECT = 'reed': expected one of read, write, action"),
             ({'EFFECT': 1}, r'Declared\.EFFECT must be an Effect, an effect name or None, not int'),
             ({'ASKS': 'yes'}, r"Declared\.ASKS = 'yes': True or False"),
@@ -269,6 +275,22 @@ class TestRefusals:
 
         with pytest.raises(DeclarationError, match=r'REPLY = .*Unready: a seared class'):
             declaration(_declared(REPLY=Unready))
+
+
+class TestExamples:
+    def test_a_command_s_lines_kept(self):
+        assert declaration(farlandia.Log).examples == ('log', 'log 40')
+
+    def test_a_list_kept_as_a_tuple(self):
+        assert declaration(_declared(EXAMPLES=['go'])).examples == ('go',)
+
+    def test_inherited_as_any_constant_is(self):
+        # Lines are read by `parsed check`, not here, as a declaration has no tree: it finds these saying Log.
+        @parsed.parsed
+        class Twin(farlandia.Log):
+            PHRASE = 'tail {n}'
+
+        assert declaration(Twin).examples == ('log', 'log 40')
 
 
 class TestInstead:

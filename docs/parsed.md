@@ -39,6 +39,9 @@ class Mined(parsed.Parsed):
 **Import it unaliased** (`import parsed`, not `import parsed as p`) in a module that declares, so a field can take
 any name without shadowing the module, as the family's message modules do with `import zeared`.
 
+**`python -m parsed` is parsed's own command line** (`__main__.py`): `check <target> …` checks a package's commands
+in its CI ([`doc/check.md`](doc/check.md)).
+
 ## See also
 
 - [seared's own docs](https://github.com/bwiswell/seared), for every field type and its options.

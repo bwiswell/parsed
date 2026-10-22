@@ -18,6 +18,8 @@ Constant           Default                      What it says
 ``KINDS``          empty                        how each field's words are read, by field name
 ``ALIASES``        empty                        other names a phrase's slot may fill a field by
                                                 (``{'detachment': 'fleet'}``)
+``EXAMPLES``       ``()``                       lines that say it, for help and for ``parsed check`` to read;
+                                                ``<name>`` stands for any value
 =================  ===========================  ==============================================================
 
 Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherited like any class attribute, so a base
@@ -66,6 +68,7 @@ class Command(Seared):
     REPLY: ClassVar[type[Seared] | None] = None
     KINDS: ClassVar[Mapping[str, Kind]] = MappingProxyType({})
     ALIASES: ClassVar[Mapping[str, str]] = MappingProxyType({})
+    EXAMPLES: ClassVar[tuple[str, ...]] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +85,7 @@ class Declaration:
         polymorphic: ``POLYMORPHIC`` as declared: ``True``, ``False``, or ``None`` when it declares neither.
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
+        examples: Its ``EXAMPLES``, lines that say it.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
         aliases: ``ALIASES``, merged likewise: a slot's name, to the field it fills.
         field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
@@ -99,6 +103,7 @@ class Declaration:
     polymorphic: bool | None
     instead: type[Command] | None
     reply: type[Seared] | None
+    examples: tuple[str, ...]
     kinds: Mapping[str, Kind]
     aliases: Mapping[str, str]
     field_kinds: Mapping[str, Kind]
@@ -158,6 +163,7 @@ def _read(cls: type) -> Declaration:
         polymorphic=polymorphic,
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
+        examples=_examples(cls, name, phrase),
         kinds=kinds,
         aliases=aliases,
         field_kinds=field_kinds,
@@ -246,6 +252,20 @@ def _extra_phrases(cls: type[Command], name: str, phrase: str | None) -> tuple[s
         msg = f'{name} has EXTRA_PHRASES but no PHRASE: a base has no phrases; give it a PHRASE, or move them'
         raise DeclarationError(msg)
     return tuple(extra)
+
+
+def _examples(cls: type[Command], name: str, phrase: str | None) -> tuple[str, ...]:
+    examples = cls.EXAMPLES
+    if isinstance(examples, str):
+        msg = f"{name}.EXAMPLES = {examples!r}: a tuple of lines; one alone needs a trailing comma: ('…',)"
+        raise DeclarationError(msg)
+    if not isinstance(examples, (tuple, list)) or not all(isinstance(line, str) and line.strip() for line in examples):
+        msg = f'{name}.EXAMPLES = {examples!r}: a tuple of lines, each a string of words'
+        raise DeclarationError(msg)
+    if examples and phrase is None:
+        msg = f'{name} has EXAMPLES but no PHRASE: a base says nothing; give it a PHRASE, or move them'
+        raise DeclarationError(msg)
+    return tuple(examples)
 
 
 def _effect(cls: type[Command]) -> Effect | None:
