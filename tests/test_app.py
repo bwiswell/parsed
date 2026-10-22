@@ -546,14 +546,17 @@ class TestRunning:
             (
                 'log',
                 {'lines': []},
-                "Log's handler returned a dict: a handler returns text or nothing, or the REPLY its command declares",
+                (
+                    "Log's handler returned a dict: a handler returns text or nothing, or the REPLY its command "
+                    'declares, or asks first'
+                ),
             ),
             (
                 'fleets show f1',
                 service.RelaySettings(),
                 (
                     "FleetsShow's handler returned a RelaySettings: a handler returns its REPLY (FleetView), text "
-                    'or nothing'
+                    'or nothing, or asks first'
                 ),
             ),
         ],
@@ -602,3 +605,172 @@ class TestOneLine:
     async def test_not_inside_a_running_loop(self, app):
         with pytest.raises(RuntimeError, match=r'runs an event loop of its own; inside one, open a session'):
             app.run('relay run')
+
+
+class _Hangar:
+    """A fake state for buying ships: what a fleet holds, the credits, and how each purchase was answered."""
+
+    def __init__(self) -> None:
+        self.ships: list[str] = []
+        self.credits = 2000
+
+
+def _buy(command, ctx):
+    """Buy a ship, asked first: it names the price, and nothing is bought until the answer is yes."""
+    hangar = ctx.state
+
+    def bought() -> str:
+        hangar.ships.append(command.hull)
+        hangar.credits -= 1200
+        return f'{command.fleet} bought a {command.hull}'
+
+    return parsed.Ask(f'Buy a {command.hull} for 1,200 credits?', bought)
+
+
+def _buy_twice(command, ctx):
+    """Asked twice: the price, then the crew."""
+    hangar = ctx.state
+
+    async def crewed() -> str:
+        await asyncio.sleep(0)
+        hangar.ships.append(command.hull)
+        return 'bought and crewed'
+
+    return parsed.Ask('Buy it?', lambda: parsed.Ask('Crew it too?', crewed))
+
+
+class TestAskingFirst:
+    @pytest.fixture
+    def shop(self, app) -> App:
+        app.on(farlandia.FleetBuyShip, _buy)
+        return app
+
+    async def test_unanswered_nothing_is_done(self, shop):
+        hangar = _Hangar()
+        async with shop.open(hangar) as session:
+            found = await session.run('fleet f1 buy ship hauler')
+        assert found == parsed.Result(
+            'fleet f1 buy ship hauler',
+            'fleet {fleet} buy ship {hull}',
+            asks='Buy a hauler for 1,200 credits?',
+            text='Buy a hauler for 1,200 credits?',
+        )
+        assert (found.ok, found.done, found.code) == (True, False, 0)
+        assert hangar.ships == []
+
+    @pytest.mark.parametrize(
+        ('line', 'yes'), [('fleet f1 buy ship hauler --yes', False), ('fleet f1 buy ship hauler', True)]
+    )
+    async def test_yes_answers_it(self, shop, line, yes):
+        hangar = _Hangar()
+        async with shop.open(hangar) as session:
+            found = await session.run(line, yes=yes)
+        assert (found.ok, found.done, found.asks, found.text) == (True, True, None, 'f1 bought a hauler')
+        assert (hangar.ships, hangar.credits) == (['hauler'], 800)
+
+    @pytest.mark.parametrize('said', [True, False])
+    async def test_the_session_s_answer(self, shop, said):
+        asked: list[str] = []
+
+        def answer(question: str) -> bool:
+            asked.append(question)
+            return said
+
+        hangar = _Hangar()
+        async with shop.open(hangar, answer=answer) as session:
+            found = await session.run('fleet f1 buy ship hauler')
+        assert asked == ['Buy a hauler for 1,200 credits?']
+        assert found.done is said
+        assert hangar.ships == (['hauler'] if said else [])
+        assert found.asks == (None if said else 'Buy a hauler for 1,200 credits?')
+
+    async def test_an_async_answer(self, shop):
+        async def answer(question: str) -> bool:
+            await asyncio.sleep(0)
+            return True
+
+        hangar = _Hangar()
+        async with shop.open(hangar, answer=answer) as session:
+            assert (await session.run('fleet f1 buy ship hauler')).done
+        assert hangar.ships == ['hauler']
+
+    async def test_yes_asks_no_one(self, shop):
+        def answer(question: str) -> bool:
+            raise AssertionError(question)
+
+        async with shop.open(_Hangar(), answer=answer) as session:
+            assert (await session.run('fleet f1 buy ship hauler --yes')).done
+
+    async def test_then_may_ask_again(self, app):
+        app.on(farlandia.FleetBuyShip, _buy_twice)
+        asked: list[str] = []
+        hangar = _Hangar()
+        async with app.open(hangar, answer=lambda question: asked.append(question) or len(asked) < 2) as session:
+            declined = await session.run('fleet f1 buy ship hauler')
+            bought = await session.run('fleet f1 buy ship hauler --yes')
+        assert asked == ['Buy it?', 'Crew it too?']  # the first yes, the second no
+        assert (declined.asks, declined.done) == ('Crew it too?', False)
+        assert (bought.text, bought.done) == ('bought and crewed', True)
+        assert hangar.ships == ['hauler']
+
+    async def test_what_then_returns_is_checked(self, app):
+        app.on(farlandia.FleetBuyShip, lambda command, ctx: parsed.Ask('Buy it?', lambda: 3))
+        async with app.open() as session:
+            found = await session.run('fleet f1 buy ship hauler --yes')
+        assert (found.ok, found.code) == (False, 1)
+        assert found.text.startswith("TypeError: FleetBuyShip's handler returned a int")
+
+    async def test_any_command_may_ask(self, app):
+        # `ASKS` says ahead of time that a command may ask; asking doesn't need it.
+        assert not parsed.command.declaration(service.Run).asks
+        app.on(service.Run, lambda command, ctx: parsed.Ask('Run it?', lambda: 'running'))
+        async with app.open() as session:
+            assert (await session.run('relay run')).asks == 'Run it?'
+            assert (await session.run('relay run --yes')).text == 'running'
+
+    async def test_call_gives_the_question_back(self, shop):
+        hangar = _Hangar()
+        async with shop.open(hangar) as session:
+            asked = await session.call('fleet f1 buy ship hauler')
+            assert isinstance(asked, parsed.Ask)
+            assert asked.question == 'Buy a hauler for 1,200 credits?'
+            assert await session.call('fleet f1 buy ship hauler', yes=True) == 'f1 bought a hauler'
+        assert hangar.ships == ['hauler']
+
+    def test_one_line_answered(self, shop):
+        hangar = _Hangar()
+        assert shop.run('fleet f1 buy ship hauler', hangar).asks is not None
+        assert shop.run('fleet f1 buy ship hauler', hangar, yes=True).done
+        assert shop.run('fleet f1 buy ship hauler', hangar, answer=lambda question: True).done
+        assert hangar.ships == ['hauler', 'hauler']
+
+
+class TestTheTerminalGameEndToEnd:
+    # The fixture's tree run against a fake state: what's read, what's shown, and a purchase asked first.
+    @pytest.fixture
+    def game(self) -> App:
+        found = App('farlandia')
+        for category, resolver in farlandia.NAMES.items():
+            found.names(category, resolver)
+        found.mount('_support_farlandia')
+        found.on(farlandia.FleetBuyShip, _buy)
+        found.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet=command.fleet, docked=True))
+        found.on(farlandia.FleetMine, lambda command, ctx: f'{command.fleet} mines' + (' (dry run)' * ctx.dry_run))
+        return found
+
+    async def test_a_session_of_several_lines(self, game):
+        hangar = _Hangar()
+        async with game.open(hangar) as session:
+            mined = await session.run('fleet Prospector mine --for 1h')
+            shown = await session.run('fleets show Hauler --json')
+            asked = await session.run('fleet Prospector buy ship hauler')
+            bought = await session.run('fleet Prospector buy ship hauler --yes')
+            dry = await session.run('fleet Prospector mine --dry-run')
+            wrong = await session.run('fleet Nobody mine')
+        assert (mined.text, mined.done) == ('f1 mines', True)
+        assert shown.to_json()['reply'] == {'fleet': 'f2', 'docked': True}
+        assert (asked.asks, asked.done) == ('Buy a hauler for 1,200 credits?', False)
+        assert (bought.text, bought.done) == ('f1 bought a hauler', True)
+        assert (dry.text, dry.done) == ('f1 mines (dry run)', False)
+        assert (wrong.ok, wrong.code) == (False, 2)
+        assert (hangar.ships, hangar.credits) == (['hauler'], 800)  # bought once, on the yes

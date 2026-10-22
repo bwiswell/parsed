@@ -88,12 +88,16 @@ an `ImportError` naming the command and the path; one that names something that 
 
 ## Sessions
 
-`app.open(state=None, verbosity=0)` gives a `Session`, used once, as `async with app.open(state) as session`:
+`app.open(state=None, verbosity=0, answer=None)` gives a `Session`, used once, as
+`async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
   async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
   it's left when the session closes, told of any error the session's body raised. Anything else is kept as it is.
 - **`verbosity`** is how much handlers should say (`ctx.verbosity`): `0` by default, more for more.
+- **`answer`** answers a question a line asks, when `--yes` doesn't: yes or no from the question, sync or async.
+  `parsed.reply.terminal` prompts a person (`Buy a hauler for 1,200 credits? [y/N]`). With none, a question is
+  left unanswered.
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -102,14 +106,20 @@ well, whether it was done, and any error, with its exit code. Nothing the line o
 
 `await session.call(line)` runs it the same way and gives what the handler returned, letting every error through: a
 `ReadError` for a line that doesn't read, a `LookupError` for a command with no handler, a `TypeError` for a
-handler that returned something besides its `REPLY`, text or nothing, and whatever the handler raises.
+handler that returned something besides its `REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
+
+**A handler asks first** by returning `parsed.Ask(question, then)`, having done nothing yet
+([`reply.md`](reply.md#asking-first)). Each question is answered yes by `--yes` on the line, or `yes=True` given to
+`run` or `call`; else by the session's `answer`. A yes runs `then`, which may ask again. A question left unanswered,
+or answered no, leaves the line undone: `run` gives a result with the question as its `asks`, exit code `0`, and
+`call` gives back the `Ask` itself.
 
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
 
-**`app.run(line, state=None, verbosity=0)`** runs one line in a session of its own, opened around it and closed
-after, and gives its `Result`: for a program that runs one line and exits. It runs an event loop of its own, so it's
-refused inside one with a `RuntimeError`; there, open a session.
+**`app.run(line, state=None, verbosity=0, yes=False, answer=None)`** runs one line in a session of its own,
+opened around it and closed after, and gives its `Result`: for a program that runs one line and exits. It runs an
+event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
 line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as

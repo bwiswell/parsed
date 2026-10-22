@@ -27,6 +27,11 @@ handlers see what entering it gave. Each line's handler is called as ``handler(c
 - ``app.run(line, state)`` runs one line in a session of its own, for a program that runs one and exits.
 
 A line that gives ``--help`` runs nothing: it's answered with its command's usage.
+
+**A handler asks first** by returning :class:`~parsed.reply.Ask` ``(question, then)``, having done nothing yet. A
+yes runs ``then``, which may ask again: ``--yes`` on the line (or ``yes=True``) answers each question yes; else the
+session's ``answer`` does, if it has one (``app.open(state, answer=parsed.reply.terminal)`` prompts a person). A
+question left unanswered, or answered no, leaves the line undone, its question in the result (``asks``).
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ from typing import TYPE_CHECKING, Any, overload
 from ._walk import Reading, Routes
 from .command import Command, declaration
 from .errors import DeclarationError, ReadError, RenderError
-from .reply import Result
+from .reply import Ask, Result
 from .tree import Tree
 
 if TYPE_CHECKING:
@@ -56,6 +61,7 @@ if TYPE_CHECKING:
     from ._walk import Completion
     from .context import Context
     from .names import Resolver
+    from .reply import Answer
 
 #: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
 #: is awaited if it's awaitable.
@@ -159,14 +165,18 @@ class App:
         return self._bound.handler(cls)
 
     @overload
-    def open(self, state: None = None, *, verbosity: int = 0) -> Session[None]: ...
+    def open(self, state: None = None, *, verbosity: int = 0, answer: Answer | None = None) -> Session[None]: ...
     @overload
-    def open[S](self, state: AbstractAsyncContextManager[S], *, verbosity: int = 0) -> Session[S]: ...
+    def open[S](
+        self, state: AbstractAsyncContextManager[S], *, verbosity: int = 0, answer: Answer | None = None
+    ) -> Session[S]: ...
     @overload
-    def open[S](self, state: AbstractContextManager[S], *, verbosity: int = 0) -> Session[S]: ...
+    def open[S](
+        self, state: AbstractContextManager[S], *, verbosity: int = 0, answer: Answer | None = None
+    ) -> Session[S]: ...
     @overload
-    def open[S](self, state: S, *, verbosity: int = 0) -> Session[S]: ...
-    def open(self, state: object = None, *, verbosity: int = 0) -> Session[Any]:
+    def open[S](self, state: S, *, verbosity: int = 0, answer: Answer | None = None) -> Session[S]: ...
+    def open(self, state: object = None, *, verbosity: int = 0, answer: Answer | None = None) -> Session[Any]:
         """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
 
         Args:
@@ -174,10 +184,20 @@ class App:
                 sync or async, is entered when the session opens, and its handlers see what entering it gave; it's
                 left when the session closes. ``None`` by default, for an app with no state.
             verbosity: How much handlers should say (``ctx.verbosity``): ``0`` by default, more for more.
+            answer: What answers a question a line asks, when ``--yes`` doesn't: yes or no from the question, sync
+                or async (``parsed.reply.terminal`` asks a person). With none, a question is left unanswered.
         """
-        return Session(self, state, verbosity=verbosity)
+        return Session(self, state, verbosity=verbosity, answer=answer)
 
-    def run(self, line: str, state: object = None, *, verbosity: int = 0) -> Result:
+    def run(
+        self,
+        line: str,
+        state: object = None,
+        *,
+        verbosity: int = 0,
+        yes: bool = False,
+        answer: Answer | None = None,
+    ) -> Result:
         """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
 
         It gives what :meth:`Session.run` gives. It runs an event loop for the session (``asyncio.run``), so it's
@@ -187,6 +207,8 @@ class App:
             line: The line.
             state: The app's state, as :meth:`open` takes it.
             verbosity: How much handlers should say, as :meth:`open` takes it.
+            yes: Whether to answer every question the line asks yes, as ``--yes`` does.
+            answer: What answers a question otherwise, as :meth:`open` takes it.
 
         Raises:
             RuntimeError: It's called inside a running event loop.
@@ -196,8 +218,8 @@ class App:
             raise RuntimeError(msg)
 
         async def once() -> Result:
-            async with self.open(state, verbosity=verbosity) as session:
-                return await session.run(line)
+            async with self.open(state, verbosity=verbosity, answer=answer) as session:
+                return await session.run(line, yes=yes)
 
         return asyncio.run(once())
 
@@ -339,12 +361,14 @@ class Session[S]:
     Attributes:
         app: The app.
         verbosity: How much handlers should say: ``0`` by default, more for more.
+        answer: What answers a question a line asks, when ``--yes`` doesn't; ``None`` leaves it unanswered.
     """
 
-    def __init__(self, app: App, state: object, *, verbosity: int) -> None:
+    def __init__(self, app: App, state: object, *, verbosity: int, answer: Answer | None) -> None:
         """Hold what to open; nothing is entered until the session opens."""
         self.app = app
         self.verbosity = verbosity
+        self.answer = answer
         self._given = state
         self._state: Any = None
         self._stack: AsyncExitStack | None = None
@@ -401,11 +425,12 @@ class Session[S]:
         if stack is not None:
             await stack.__aexit__(kind, error, traceback)
 
-    async def run(self, line: str) -> Result:
+    async def run(self, line: str, *, yes: bool = False) -> Result:
         """Run ``line`` as :meth:`call` does, and give what came of it: the envelope, its error and exit code among it.
 
         A line that doesn't read, a value its field refuses, and a handler that fails, has no binding or returns what
-        it shouldn't, each comes back as the result's error, none of them raised.
+        it shouldn't, each comes back as the result's error, none of them raised. A question it stops at is its
+        ``asks``, with nothing done. ``yes`` answers every question yes, as ``--yes`` does.
 
         Raises:
             RuntimeError: The session isn't open.
@@ -423,48 +448,59 @@ class Session[S]:
         except ReadError as e:
             return Result(line, said, ok=False, text=str(e), error=e.to_json(), exception=e)
         try:
-            found = await self._handled(routed, command)
+            found = await self._handled(routed, command, yes=yes)
         except Exception as e:  # noqa: BLE001 -- a handler's failure is the result's, never the caller's
             message = f'{type(e).__name__}: {e}' if str(e) else type(e).__name__
             return Result(
                 line, said, ok=False, text=message, error={'error': 'handler', 'message': message}, exception=e
             )
-        done = 'dry-run' not in own
-        if found is None or isinstance(found, str):
-            return Result(line, said, done=done, text=found)
-        return Result(line, said, done=done, reply=found, text=str(found))
+        return _outcome(line, said, found, dry_run='dry-run' in own)
 
-    async def call(self, line: str) -> object:
+    async def call(self, line: str, *, yes: bool = False) -> object:
         """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
 
         The line goes to its mount and is loaded there (:meth:`App.walk`); its handler is the mount's, else the
         app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async. It returns its
-        command's ``REPLY``, text or nothing. A line that gives ``--help`` runs nothing: it gives the command's usage.
+        command's ``REPLY``, text or nothing, or asks first. A line that gives ``--help`` runs nothing: it gives the
+        command's usage.
+
+        A question is answered yes by ``--yes`` or ``yes``, else by the session's ``answer``; a yes runs what the
+        handler asked to do, which may ask again. A question left unanswered, or answered no, is given back: the
+        :class:`~parsed.reply.Ask` itself, with nothing done.
 
         Raises:
             RuntimeError: The session isn't open.
             ReadError: The line doesn't read.
             LookupError: Its command has no handler.
             ImportError: Its handler's path doesn't import.
-            TypeError: Its handler returned something besides its ``REPLY``, text or nothing.
-            Exception: Whatever its handler raises.
+            TypeError: Its handler returned something besides its ``REPLY``, text, nothing or an ``Ask``.
+            Exception: Whatever its handler raises, or its answer.
         """
         self._check_open()
         routed = self.app.walk(line)
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
-        return await self._handled(routed, routed.load())
+        return await self._handled(routed, routed.load(), yes=yes)
 
-    async def _handled(self, routed: Routed, command: Command) -> Seared | str | None:
-        """Call the handler for ``command``, awaited if it's async, and check what it returned."""
+    async def _handled(self, routed: Routed, command: Command, *, yes: bool) -> Seared | str | Ask | None:
+        """Call the handler for ``command``, check what it returned, and ask each question it asks, in turn."""
         handler = routed.mount.handler(routed.command)
         if handler is None:
             msg = f'{routed.command.__qualname__} has no handler in {routed.mount.label}: bind one with app.on'
             raise LookupError(msg)
-        found = handler(command, self.context(routed))
-        if inspect.isawaitable(found):
-            found = await found
-        return _checked(found, routed.command)
+        found = _checked(await _awaited(handler(command, self.context(routed))), routed.command)
+        yes = yes or 'yes' in routed.reading.own
+        while isinstance(found, Ask):
+            if not (yes or await self._answered(found.question)):
+                return found
+            found = _checked(await _awaited(found.then()), routed.command)
+        return found
+
+    async def _answered(self, question: str) -> bool:
+        """Whether the session's answer says yes to ``question``; no, with none."""
+        if self.answer is None:
+            return False
+        return bool(await _awaited(self.answer(question)))
 
     def context(self, routed: Routed) -> Context[S]:
         """The context a line's handler is given, for ``routed``: this session, its mount and its reading."""
@@ -567,17 +603,31 @@ class _Bindings:
         return f' in {self.where}' if self.where else ''
 
 
-def _checked(found: object, cls: type[Command]) -> Seared | str | None:
-    """What a handler returned, if it's its command's ``REPLY``, text or nothing: refused otherwise, naming it."""
+def _checked(found: object, cls: type[Command]) -> Seared | str | Ask | None:
+    """What a handler returned, if it's its command's ``REPLY``, text, nothing or an ``Ask``: refused otherwise."""
     reply = declaration(cls).reply
-    if found is None or isinstance(found, str) or (reply is not None and isinstance(found, reply)):
+    if found is None or isinstance(found, (str, Ask)) or (reply is not None and isinstance(found, reply)):
         return found
     said = f"{cls.__qualname__}'s handler returned a {type(found).__name__}"
     if reply is None:
-        msg = f'{said}: a handler returns text or nothing, or the REPLY its command declares'
+        msg = f'{said}: a handler returns text or nothing, or the REPLY its command declares, or asks first'
     else:
-        msg = f'{said}: a handler returns its REPLY ({reply.__name__}), text or nothing'
+        msg = f'{said}: a handler returns its REPLY ({reply.__name__}), text or nothing, or asks first'
     raise TypeError(msg)
+
+
+def _outcome(line: str, said: str, found: Seared | str | Ask | None, *, dry_run: bool) -> Result:
+    """What a line came to, from what its handler gave: the question it stopped at, its reply, or its text."""
+    if isinstance(found, Ask):
+        return Result(line, said, asks=found.question, text=found.question)
+    if found is None or isinstance(found, str):
+        return Result(line, said, done=not dry_run, text=found)
+    return Result(line, said, done=not dry_run, reply=found, text=str(found))
+
+
+async def _awaited(found: object) -> object:
+    """``found``, awaited if it's awaitable: what a sync or an async callable gave."""
+    return await found if inspect.isawaitable(found) else found
 
 
 def _looping() -> bool:

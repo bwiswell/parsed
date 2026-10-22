@@ -33,7 +33,7 @@ class FleetMine(FleetCommand):
 | `PHRASE` | `None` | the words that say it (`'fleet {fleet} mine'`). A class without one is a base, not a command |
 | `EXTRA_PHRASES` | `()` | other phrases that say it too, as a tuple |
 | `EFFECT` | `None` | what running it does: `parsed.Effect.READ`, `WRITE` or `ACTION`, or its name ([`effect.md`](effect.md)) |
-| `ASKS` | `False` | whether it may ask before it acts |
+| `ASKS` | `False` | whether it may ask before it acts ([`reply.md`](reply.md#asking-first)): said ahead of time, for help and an agent's tooling; asking doesn't need it |
 | `INTERACTIVE` | `False` | whether it's only for a person at the client: an editor, a viewer |
 | `POLYMORPHIC` | `None` | whether a phrase says a slot by an alias; when declared, it's checked |
 | `INSTEAD` | `None` | on an interactive command, the command an agent says in its place |

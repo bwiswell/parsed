@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import pytest
 
 import parsed
-from parsed.reply import CODES, Result
+from parsed.reply import CODES, Result, terminal
 
 
 class TestTheResult:
@@ -38,6 +38,7 @@ class TestAsJson:
             'line': 'relay run',
             'ok': True,
             'done': True,
+            'asks': None,
             'reply': None,
             'text': None,
             'error': None,
@@ -61,3 +62,43 @@ def test_its_annotations_resolve():
 
 def test_exported():
     assert parsed.Result is Result
+
+
+class TestAsk:
+    def test_a_question_and_what_acts_on_a_yes(self):
+        then = lambda: 'bought'  # noqa: E731 -- what acts, named for the test
+        asked = parsed.Ask('Buy a hauler for 1,200 credits?', then)
+        assert (asked.question, asked.then) == ('Buy a hauler for 1,200 credits?', then)
+
+    @pytest.mark.parametrize(
+        ('question', 'then', 'message'),
+        [
+            ('', lambda: None, r"Ask\('', …\): a question is a sentence, for a person"),
+            (3, lambda: None, r'Ask\(3, …\): a question is a sentence'),
+            ('Buy it?', 'bought', r"Ask\('Buy it\?', 'bought'\): then is what acts on a yes, a callable of nothing"),
+        ],
+    )
+    def test_refused_unless_it_s_a_question_and_a_callable(self, question, then, message):
+        with pytest.raises(TypeError, match=message):
+            parsed.Ask(question, then)
+
+    def test_a_result_that_stopped_at_one(self):
+        found = Result('fleet f1 buy ship hauler', 'fleet {fleet} buy ship {hull}', asks='Buy it?', text='Buy it?')
+        assert (found.ok, found.done, found.code) == (True, False, 0)
+        assert found.to_json()['asks'] == 'Buy it?'
+
+
+class TestTerminal:
+    @pytest.mark.parametrize(('said', 'yes'), [('y', True), (' YES ', True), ('n', False), ('', False), ('yep', False)])
+    async def test_yes_for_y_or_yes(self, monkeypatch, said, yes):
+        asked = []
+        monkeypatch.setattr('builtins.input', lambda prompt: asked.append(prompt) or said)
+        assert await terminal('Buy it?') is yes
+        assert asked == ['Buy it? [y/N] ']
+
+    async def test_no_at_the_end_of_input(self, monkeypatch):
+        def ended(prompt):
+            raise EOFError
+
+        monkeypatch.setattr('builtins.input', ended)
+        assert await terminal('Buy it?') is False
