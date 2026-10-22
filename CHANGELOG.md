@@ -7,6 +7,46 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.2 — 2026-10-21
+
+**Reading a line.** A tree compiles every command's phrases and checks them as a whole, then reads a line to its
+command's instance: the flags split off, the words walked, each read by its field's kind, and seared loading the
+values. A line that doesn't read is one error, with where it stands, a hint and what may have been meant. Names are
+kept as typed, and nothing runs a command yet.
+
+### Added
+
+- **`parsed.Tree`:** every command's phrases compiled into one trie of words, from classes or from packages
+  (`Tree.collect`). A literal beats a slot, a node has one slot at most, and an optional slot is compiled both ways.
+  The build refuses two phrases that read the same lines, two kinds of slot at one node, a flag that's a switch in
+  one command and takes a value in another, two flags of one command with one name, a flag name that isn't lowercase
+  words, and a field named for one of parsed's own flags (`--help`, `--json`, `--yes`, `--dry-run`).
+- **Flags are named from their fields' wire names,** `_` written `-`; a `Bool` flag is a switch, `--no-…` when it
+  defaults to `True`.
+- **Reading a line:** `Tree.read(line)` gives the command's instance, and `Tree.walk(line)` stops short of it, at
+  a `Reading` that keeps each field's words and where they stand. Words split on whitespace, double quotes holding
+  spaces; a literal matches case aside, and a quoted word is never a literal or a flag. A slot of several words
+  takes them up to a literal after them. seared loads the instance, and names are kept as typed.
+- **Flags anywhere after the first word,** `--name=value`, and `--` to end them. A list's flag may be given again.
+  parsed's own (`--help`, `--json`, `--yes`, `--dry-run`) are switches every command takes, kept apart from the
+  fields.
+- **Word forms:** each word is read by its field's kind to the field's wire value, before seared checks it. A number
+  may group its thousands by commas (`1,000`); a span of time says its units (`90s`, `10m`, `1h30m`); an `Enum`'s
+  value reads case aside; `true` or `false` for a `Bool` said as a word; ISO 8601 for dates and times; a `UUID`
+  checked. `Kind.read(word, field)` is each kind's.
+- **One error for a line that doesn't read,** `parsed.ReadError`, whichever part refused it. Its message says
+  what's wrong with the words read up to it, then any did-you-mean
+  (`no command 'fleet f1 mien'; did you mean mine?`) and a hint, a usage with a `<slot>` for each value
+  (``fleet f1 jump: which system? `fleet f1 jump <system>` ``). As data: its `kind`, `line`, `column`, `word`,
+  `field`, `hint` and `suggestions`, and `to_json()`.
+- **seared's refusals come back as the word that gave the value:** a value out of its bounds, lengths or pattern is
+  a `ReadError` of kind `'validation'`, at that word (`log {n}: must be >= 1, got 0`).
+- **A required flag left out is refused by the walk,** with the line it's missing from as the hint.
+- **`Reading.load` refuses a key the command doesn't know.**
+- **`parsed.Tree` and `parsed.ReadError` on the package root.**
+- **The declaring benchmark** times building the tree too, and a **reading benchmark** times walking and reading a
+  line for each command.
+
 ## 0.1.1 — 2026-10-21
 
 **Declaring a command.** A command is a seared class, said by its phrase, with optional class constants for the

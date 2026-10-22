@@ -8,9 +8,11 @@ parsed's own surface:
 
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.
-- ``errors.py``: :class:`ParsedError`, the base of parsed's errors, and :class:`DeclarationError`.
+- ``errors.py``: :class:`ParsedError`, the base of parsed's errors, :class:`DeclarationError` and
+  :class:`ReadError`.
 - ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
   kinds stay ``parsed.kinds.*``.
+- ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
 """
 
 from seared import (
@@ -46,10 +48,11 @@ from seared import (
 
 from .command import Command
 from .effect import Effect, effect_of
-from .errors import DeclarationError, ParsedError
+from .errors import DeclarationError, ParsedError, ReadError
 from .kinds import Kind, Name
+from .tree import Tree
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 __all__ = [
     'UUID',
@@ -73,11 +76,13 @@ __all__ = [
     'ParsedError',
     'Path',
     'PolarsFrame',
+    'ReadError',
     'SearedError',
     'Str',
     'T',
     'Time',
     'TimeDelta',
+    'Tree',
     'Tuple',
     'Union',
     'ValidationError',

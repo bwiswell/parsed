@@ -2,10 +2,10 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.1.1 declares commands:** a command is a seared class, said by its phrase, with class constants for the rest,
-> and `declaration` checks it, binding its phrases to its fields and giving every field a kind. Reading lines and
-> running commands arrive in the 0.1.x releases that follow, and 0.2.0 is the first version to build a command line
-> on.
+> **0.1.2 reads lines:** a tree of commands, built and checked as a whole, reads a line to its command's instance,
+> each word read by its field's kind, and a line that doesn't read is one error, with a hint and what may have been
+> meant. Names read against an app's own, running commands and help arrive in the 0.1.x releases that follow, and
+> 0.2.0 is the first version to build a command line on.
 
 ## Why parsed
 
@@ -23,14 +23,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.1.1
+uv add git+https://github.com/bwiswell/parsed --tag v0.1.2
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.1" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.2" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving
@@ -62,6 +62,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/parsed.md`](docs/parsed.md): the package root, and what it re-exports.
 - [`docs/command.md`](docs/command.md): commands, and what they declare.
 - [`docs/kinds.md`](docs/kinds.md): how a field's words are read.
+- [`docs/tree.md`](docs/tree.md): every command's phrases, compiled and checked as a whole.
 - [`docs/effect.md`](docs/effect.md): what running a command does.
 - [`docs/errors.md`](docs/errors.md): what can go wrong.
 - [`docs/overview/benchmarks.md`](docs/overview/benchmarks.md): what a command line built on parsed costs.

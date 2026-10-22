@@ -10,10 +10,22 @@ from __future__ import annotations
 import pytest
 
 from bench.harness import Measurement, Report
-from bench.tables import Results, blocks, declaring_table, load, render, run_line, spread_table, update
+from bench.tables import (
+    Results,
+    blocks,
+    declaring_table,
+    load,
+    reading_table,
+    render,
+    run_line,
+    spread_table,
+    update,
+)
 
 DECORATE = ('declaring', 'decorate')
 DECLARE = ('declaring', 'declare')
+WALK = ('reading', 'walk')
+READ = ('reading', 'read')
 
 
 def _m(case: tuple[str, str], us: float, run: int = 0, per: int = 100) -> Measurement:
@@ -73,6 +85,15 @@ class TestTables:
         assert '`decorate`' in table
         assert '`declare`' not in table
 
+    def test_a_suite_s_table_holds_its_own_cases(self):
+        results = Results(_report(_m(DECORATE, 10.0), _m(WALK, 2_400.0, per=263), _m(READ, 3_500.0, per=263)))
+        table = reading_table(results)
+        assert 'Every line' in table
+        assert 'Per line' in table
+        assert ('`walk`' in table, '`read`' in table, '`decorate`' in table) == (True, True, False)
+        assert '9.13 µs' in table
+        assert '`walk`' not in declaring_table(results)
+
     def test_spread_reads_n_a_for_one_run(self):
         assert '| n/a ' in spread_table(Results(_report(_m(DECORATE, 10.0))))
 
@@ -86,6 +107,11 @@ class TestBlocks:
         assert (found['commands'], found['decorate-ms'], found['declare-ms']) == ('263', '~63 ms', '~5 ms')
         assert found['runs'] == 'from one run'
         assert found['spread-max'] == 'n/a'
+
+    def test_the_inline_numbers_per_line(self):
+        found = blocks(_report(_m(WALK, 2_400.0, per=263), _m(READ, 3_500.0, per=263)))
+        assert (found['walk-us'], found['read-us']) == ('~9 µs', '~13 µs')
+        assert blocks(_report(_m(DECORATE, 10.0)))['walk-us'] == 'n/a'
 
     def test_render_replaces_each_body_and_keeps_the_prose(self):
         text = 'A <!-- bench:commands -->old<!-- /bench:commands --> tree.'
