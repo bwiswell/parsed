@@ -52,7 +52,7 @@ from .errors import DeclarationError, ParsedError, ReadError
 from .kinds import Kind, Name
 from .tree import Tree
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 __all__ = [
     'UUID',
