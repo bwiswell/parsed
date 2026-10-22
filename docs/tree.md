@@ -19,7 +19,8 @@ tree.read('fleet prospector mine --for 1h30m')
 ## Reading a line
 
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
-[`Reading`](_walk/_walker.md#reading): the command, and each field's words.
+[`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
+unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:
@@ -64,6 +65,18 @@ replaces ([`_walk/_complete.md`](_walk/_complete.md)):
 ```python
 tree.complete('fleet f1 mine --f')
 # Completion(words=['--for'], replace=3)
+```
+
+## Writing a line back
+
+`tree.render(command, names=…)` is reading's other way: the line that says an instance, which reads back to it. It
+takes the first of the command's phrases that can say the instance (with names, one whose names the resolvers
+know), writes each value by its field's kind, quoting a word where the line would read it otherwise, then the flags
+not at their defaults ([`_walk/_render.md`](_walk/_render.md)):
+
+```python
+tree.render(FleetDock(fleet='f1', station='nearest'))
+# 'fleet f1 dock "nearest"'
 ```
 
 ## Flags

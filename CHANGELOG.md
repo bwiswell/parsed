@@ -7,6 +7,44 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.4 — 2026-10-22
+
+**Writing back and describing.** An instance is written back to the line that says it, which reads back to it.
+`parsed.doc` describes each command as data, for the tools that read commands: a `CommandDoc`, a closed JSON
+Schema, and a key for policy. `parsed check` checks a package's commands in its CI, each command's new `EXAMPLES`
+among them.
+
+### Added
+
+- **Rendering:** `tree.render(command, names=…)` writes the line that says an instance, which reads back to it. It
+  takes the first of the command's phrases that can say it (with names, one whose names the resolvers know, so a
+  twin's key is said by its twin), writes each value by its field's kind, quotes a word where the line would read
+  it otherwise (`dock "nearest"`), and gives the flags not at their defaults. `parsed.RenderError` for an instance
+  no phrase can say.
+- **`Kind.write(value, field)`:** a wire value as the words a line says it in, a literal word first, else
+  `Kind.spell`, each kind's own (`5400.0` seconds as `1h30m`).
+- **`parsed.doc`:** commands as data, for the tools that read them, in `zeared.doc`'s shape. `is_command_class`;
+  `introspect_command(cls)`, a `CommandDoc` of seared's `SchemaDoc`, the phrases, each slot (its field and kind),
+  the flags, each field's kind, the constants, and `fields_from`, the seared classes it takes fields from that
+  aren't commands (a protocol's request class it inherits). `json_schema(cls)`: seared's load schema, closed, with
+  `x-kind` and `x-scope` on a name's property and the command's own `x-` keys (`x-phrase`, `x-effect`, `x-asks` and
+  the rest).
+- **Command keys, for policy:** `parsed.doc.command_key(command, names=…)`, an instance's key by the phrase that
+  says it, its words and its slots' values slashed as a topic is (`fleet/f1/dock/vesta`); a slot of several words,
+  the rest of the line, an optional slot at its default and the flags left out. `CommandDoc.keys` holds each
+  phrase's template (`fleet/{fleet}/dock/{station}`).
+- **`parsed check`, for an app's CI:** `python -m parsed check <target> …` builds the tree of a package's commands
+  and checks each one. Two instances made from its fields' types and constraints each render and read back to
+  themselves; each line of its `EXAMPLES` reads to it; and its schema takes its example, is closed, has `enum`s a
+  constrained decoder can hold, and stays compact (`--max-schema-bytes`, 2048 by default). The report is JSON on
+  stdout, exit `1` with problems, and a usage that doesn't read is a JSON error on stderr, exit `2`.
+  `parsed.doc.check(targets)` gives the same as a `CheckReport`.
+- **`EXAMPLES`:** an optional tuple of lines that say a command, a `<name>` standing for any value, for help and
+  for `parsed check` to read. `CommandDoc.examples` holds them.
+- **Placeholders:** `tree.walk(line, placeholders=True)` reads an unquoted `<name>` as any value, by no kind and no
+  resolver.
+- **A rendering benchmark** times writing an instance of each command back to its line.
+
 ## 0.1.3 — 2026-10-21
 
 **Names and completion.** A line is read with the app's own names, by the resolver it gives for each category, a

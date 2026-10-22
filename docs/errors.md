@@ -8,6 +8,7 @@ gave the value.
 |---|---|
 | `ParsedError` | the base of every error below |
 | `DeclarationError` | a command is declared in a way parsed can't use ([`command.md`](command.md)): it names the class and the constant, and says how to put it right. It's a `TypeError` too, as a mistake in a class's definition is in Python |
+| `RenderError` | an instance no phrase of its command can say ([`_walk/_render.md`](_walk/_render.md)): a value holding a double quote, one the app's names don't know, or a class that isn't one of the tree's commands. It's a `ValueError` too |
 | `ReadError` | a line doesn't read ([`_walk/_walker.md`](_walk/_walker.md#what-it-refuses)): a word no command says, a slot left empty, a flag the command doesn't take, a word its kind can't read. Its message says what's wrong, with the words read up to it. It's a `ValueError` too, as a value Python can't read is |
 
 ## `ReadError`

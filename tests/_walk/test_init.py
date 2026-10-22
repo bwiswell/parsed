@@ -19,6 +19,8 @@ def test_it_gathers_its_modules():
         'SlotKind',
         'Token',
         'complete',
+        'key',
+        'render',
         'split',
         'walk',
     }

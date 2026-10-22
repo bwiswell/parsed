@@ -33,11 +33,15 @@ seared  <-  zeared
 - **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal
   beating a slot, with the checks across commands: no line read two ways, no flag meaning two things.
 - **The walk** ([`../_walk/index.md`](../_walk/index.md)): a line split into words, its flags split off, and its
-  words walked from the tree's root to a `Reading`, each field's words kept for seared to load; and completion,
-  what may come next on a line being typed.
+  words walked from the tree's root to a `Reading`, each field's words kept for seared to load; completion, what
+  may come next on a line being typed; and rendering, an instance back to its line.
+- **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
+  its arguments as a closed JSON Schema, for the tools that read commands; and `python -m parsed check`, a
+  package's commands checked in its CI.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
-- **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`, and `ReadError`, one error for a
-  line that doesn't read, with where it stands, a hint and what may have been meant.
+- **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`; `ReadError`, one error for a line
+  that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
+  no line can say.
 
-Writing an instance back to its line, the docs a command describes itself with, and running a command arrive in
-the releases that follow, each adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).
+Running a command arrives in the releases that follow, each adding its part here. What each part costs is in
+[`benchmarks.md`](benchmarks.md).

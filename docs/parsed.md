@@ -11,7 +11,7 @@ so a module that declares commands needs no other import.
 | Kinds | `Kind` and `Name` ([`kinds.md`](kinds.md)); the default kinds stay `parsed.kinds.*` |
 | Names | `Resolver` ([`names.md`](names.md)), what an app gives for a category of its names |
 | The tree | `Tree` ([`tree.md`](tree.md)) |
-| Errors | `ParsedError`, `DeclarationError`, `ReadError` ([`errors.md`](errors.md)) |
+| Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RenderError` ([`errors.md`](errors.md)) |
 | Version | `__version__` |
 
 **seared's:**
@@ -38,6 +38,9 @@ class Mined(parsed.Parsed):
 
 **Import it unaliased** (`import parsed`, not `import parsed as p`) in a module that declares, so a field can take
 any name without shadowing the module, as the family's message modules do with `import zeared`.
+
+**`python -m parsed` is parsed's own command line** (`__main__.py`): `check <target> …` checks a package's commands
+in its CI ([`doc/check.md`](doc/check.md)).
 
 ## See also
 

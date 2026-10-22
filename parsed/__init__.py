@@ -8,12 +8,13 @@ parsed's own surface:
 
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.
-- ``errors.py``: :class:`ParsedError`, the base of parsed's errors, :class:`DeclarationError` and
-  :class:`ReadError`.
+- ``errors.py``: :class:`ParsedError`, the base of parsed's errors, :class:`DeclarationError`, :class:`ReadError`
+  and :class:`RenderError`.
 - ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
   kinds stay ``parsed.kinds.*``.
 - ``names.py``: :class:`Resolver`, what an app gives for a category of its names.
 - ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
+- ``__main__.py``: ``python -m parsed check``, a package's commands checked in its CI (:mod:`parsed.doc.check`).
 """
 
 from seared import (
@@ -49,12 +50,12 @@ from seared import (
 
 from .command import Command
 from .effect import Effect, effect_of
-from .errors import DeclarationError, ParsedError, ReadError
+from .errors import DeclarationError, ParsedError, ReadError, RenderError
 from .kinds import Kind, Name
 from .names import Resolver
 from .tree import Tree
 
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 __all__ = [
     'UUID',
@@ -79,6 +80,7 @@ __all__ = [
     'Path',
     'PolarsFrame',
     'ReadError',
+    'RenderError',
     'Resolver',
     'SearedError',
     'Str',
