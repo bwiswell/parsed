@@ -2,9 +2,10 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.1.3 reads names and completes lines:** a tree of commands reads a line to its command's instance, its names
-> read by the resolvers an app gives for each category, and offers what may come next on a line being typed. A
-> line that doesn't read is one error, with a hint and what may have been meant. Writing a line back, running
+> **0.1.4 writes lines back and describes commands:** a tree of commands reads a line to its command's instance,
+> its names read by the resolvers an app gives, offers what may come next on a line being typed, and writes an
+> instance back to the line that says it. `parsed.doc` describes each command as data, with a closed JSON Schema,
+> for the tools that read commands, and `python -m parsed check` checks a package's commands in its CI. Running
 > commands and help arrive in the 0.1.x releases that follow, and 0.2.0 is the first version to build a command
 > line on.
 
@@ -24,14 +25,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.1.3
+uv add git+https://github.com/bwiswell/parsed --tag v0.1.4
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.3" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.4" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving
@@ -65,7 +66,8 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/kinds.md`](docs/kinds.md): how a field's words are read.
 - [`docs/names.md`](docs/names.md): an app's names, by the resolvers it gives.
 - [`docs/tree.md`](docs/tree.md): every command's phrases, compiled and checked as a whole.
-- [`docs/doc/index.md`](docs/doc/index.md): commands as data, for the tools that read them.
+- [`docs/doc/index.md`](docs/doc/index.md): commands as data, for the tools that read them, and `parsed check`,
+  for an app's CI.
 - [`docs/effect.md`](docs/effect.md): what running a command does.
 - [`docs/errors.md`](docs/errors.md): what can go wrong.
 - [`docs/overview/benchmarks.md`](docs/overview/benchmarks.md): what a command line built on parsed costs.

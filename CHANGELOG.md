@@ -7,9 +7,12 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.4 — unreleased
+## 0.1.4 — 2026-10-22
 
-**Writing back and describing.**
+**Writing back and describing.** An instance is written back to the line that says it, which reads back to it.
+`parsed.doc` describes each command as data, for the tools that read commands: a `CommandDoc`, a closed JSON
+Schema, and a key for policy. `parsed check` checks a package's commands in its CI, each command's new `EXAMPLES`
+among them.
 
 ### Added
 
@@ -20,7 +23,6 @@ lines as it lands, and the entry is dated when that version is released.
   no phrase can say.
 - **`Kind.write(value, field)`:** a wire value as the words a line says it in, a literal word first, else
   `Kind.spell`, each kind's own (`5400.0` seconds as `1h30m`).
-- **A rendering benchmark** times writing an instance of each command back to its line.
 - **`parsed.doc`:** commands as data, for the tools that read them, in `zeared.doc`'s shape. `is_command_class`;
   `introspect_command(cls)`, a `CommandDoc` of seared's `SchemaDoc`, the phrases, each slot (its field and kind),
   the flags, each field's kind, the constants, and `fields_from`, the seared classes it takes fields from that
@@ -41,6 +43,7 @@ lines as it lands, and the entry is dated when that version is released.
   for `parsed check` to read. `CommandDoc.examples` holds them.
 - **Placeholders:** `tree.walk(line, placeholders=True)` reads an unquoted `<name>` as any value, by no kind and no
   resolver.
+- **A rendering benchmark** times writing an instance of each command back to its line.
 
 ## 0.1.3 — 2026-10-21
 
