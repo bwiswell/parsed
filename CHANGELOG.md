@@ -35,6 +35,11 @@ lines as it lands, and the entry is dated when that version is released.
   `key value` pairs: each key by the app's `PairsResolver`, and each value by the resolver it gives that key. A
   command is refused when `Pairs` reads a field that isn't keyed or isn't the rest of the line.
 
+### Fixed
+
+- **`Tree.collect` takes commands in the order they're declared,** not by class name, so the words a refusal lists
+  and completion offers come as written (`mine | dock | jump`, where they read `buy | dock | jump`).
+
 ## 0.1.2 — 2026-10-21
 
 **Reading a line.** A tree compiles every command's phrases and checks them as a whole, then reads a line to its

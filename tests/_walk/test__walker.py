@@ -391,7 +391,7 @@ class TestRefusals:
             ('--', r'no command: the line has no words'),
             ('frobnicate', r"no command 'frobnicate'"),
             ('fleet', r'fleet: which fleet\?'),
-            ('fleet f1', r'fleet f1: then what\? buy \| dock \| jump \| mine \| retreat \| run \| sell'),
+            ('fleet f1', r'fleet f1: then what\? mine \| dock \| jump \| retreat \| run \| sell \| buy'),
             ('fleet f1 jump', r'fleet f1 jump: which system\?'),
             ('fleet f1 jump nearest', r'fleet f1 jump nearest: which ore\?'),
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
@@ -473,8 +473,8 @@ class TestRefusalsAsData:
         [
             ('flet f1 mine', ('fleet', 'fleets')),
             ('fleet f1 mien', ('mine',)),
-            ('fleet f1 xyz', ('buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell')),
-            ('fleet f1', ('buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell')),
+            ('fleet f1 xyz', ('mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy')),
+            ('fleet f1', ('mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy')),
             ('log --fro 3', ('--for',)),
             ('log --jsno', ('--json',)),
         ],
@@ -486,7 +486,7 @@ class TestRefusalsAsData:
         assert str(_refusal(tree, 'log --fro 3')) == 'no command takes --fro; did you mean --for?'
         assert (
             str(_refusal(tree, 'fleet f1 xyz'))
-            == "no command 'fleet f1 xyz': buy | dock | jump | mine | retreat | run | sell"
+            == "no command 'fleet f1 xyz': mine | dock | jump | retreat | run | sell | buy"
         )
 
     def test_the_field_where_the_walk_knows_it(self, tree):
