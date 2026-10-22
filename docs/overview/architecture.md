@@ -37,7 +37,8 @@ seared  <-  zeared
   may come next on a line being typed; and rendering, an instance back to its line.
 - **The app** ([`../app.md`](../app.md)): a program's trees, each mounted under a prefix of words with its own
   parameters; a line sent to its mount by its first words; the handlers commands run with, bound by callable or by
-  a path imported when first looked up; and the names lines are read with.
+  a path imported when first looked up; the names lines are read with; and sessions, which hold the app's state
+  open and call each line's handler with a fresh context ([`../context.md`](../context.md)).
 - **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
   its arguments as a closed JSON Schema, for the tools that read commands; and `python -m parsed check`, a
   package's commands checked in its CI.
@@ -46,6 +47,6 @@ seared  <-  zeared
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
   no line can say.
 
-Running a command (its context, its reply and asking first) arrives in the releases that follow, each adding its
-part here. What each part costs is in
+A command's reply, its result envelope, asking first and hooks arrive in the releases that follow, each adding
+its part here. What each part costs is in
 [`benchmarks.md`](benchmarks.md).

@@ -1,7 +1,8 @@
-# `app.py`: a program's trees, mounted, with their handlers and names
+# `app.py`: a program's trees, mounted, with their handlers and names, and the sessions that run them
 
 `parsed.App(prog)` holds a program's commands, each tree of them mounted under a prefix of words. It binds the
-handler each command runs with, and the resolvers its lines are read with:
+handler each command runs with, and the resolvers its lines are read with; a session runs lines against the app's
+state:
 
 ```python
 import parsed
@@ -18,6 +19,9 @@ app.on(Run, 'service.runtime:run')                           # imported when it'
 gateway.on(Run, 'gateway.runtime:run')                       # this mount's own, which wins here
 
 app.read('relay run --config relay.toml')                    # Run(config=PosixPath('relay.toml'))
+
+async with app.open(Link(galaxy)) as session:                # the link is opened, and closed after
+    await session.call('fleet f1 mine')                      # mine(FleetMine(fleet='f1'), ctx)
 ```
 
 ## Mounting
@@ -66,6 +70,7 @@ mounted nowhere, or not in the mount given, with a `RenderError`.
 
 ## Handlers
 
+A handler is called as `handler(command, ctx)`, `ctx` a [`Context`](context.md), and awaited if it's async.
 `app.on(Cls, handler)` binds the handler a command runs with, in every mount that holds it. `mount.on(Cls, handler)`
 binds one for that mount alone, which wins there, so a group mounted twice can run differently in each.
 
@@ -76,6 +81,24 @@ app that gathers several packages imports none of their runtimes to read a line 
 `mount.handler(Cls)` is the handler `Cls` runs with in that mount: its own, else the app's, else `None`.
 `app.handler(Cls)` is the app's own. Looking up a path that doesn't import, or names nothing in its module, raises
 an `ImportError` naming the command and the path; one that names something that isn't callable, a `TypeError`.
+
+## Sessions
+
+`app.open(state=None, verbosity=0)` gives a `Session`, used once, as `async with app.open(state) as session`:
+
+- **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
+  async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
+  it's left when the session closes, told of any error the session's body raised. Anything else is kept as it is.
+- **`verbosity`** is how much handlers should say (`ctx.verbosity`): `0` by default, more for more.
+
+`await session.call(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
+handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what the
+handler returns. It raises a `ReadError` for a line that doesn't read, a `LookupError` for a command with no
+handler, and whatever the handler raises.
+
+`session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
+line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
+is opening a session twice.
 
 ## Names
 

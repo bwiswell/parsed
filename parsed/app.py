@@ -15,15 +15,22 @@
 
 A line goes to its mount by its first words (:mod:`parsed._walk._route`), then the mount's tree reads it, with the
 mount's names: :meth:`App.walk`, :meth:`App.read`, :meth:`App.complete` and :meth:`App.render`, as a tree's.
+
+**A session runs lines** against the app's state: ``async with app.open(state) as session``, then
+``await session.call(line)``. A state that opens and closes (a context manager, as a link to a server is) is entered
+when the session opens and left when it closes, and handlers see what entering it gave. Each line's handler is
+called as ``handler(command, ctx)``, ``ctx`` a fresh :class:`~parsed.context.Context`, and awaited if it's async.
 """
 
 from __future__ import annotations
 
 import importlib
+import inspect
 import re
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, AsyncExitStack
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, overload
 
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import Reading, Routes
@@ -33,11 +40,14 @@ from .tree import Tree
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+    from types import TracebackType
 
     from ._walk import Completion
+    from .context import Context
     from .names import Resolver
 
-#: What a command runs with: a callable, given the command.
+#: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
+#: is awaited if it's awaitable.
 type Handler = Callable[..., object]
 
 #: The path to a handler: a module's dotted name, ``:``, and a name in it (dotted, for an attribute's).
@@ -136,6 +146,25 @@ class App:
             TypeError: Its path names something that isn't callable.
         """
         return self._bound.handler(cls)
+
+    @overload
+    def open(self, state: None = None, *, verbosity: int = 0) -> Session[None]: ...
+    @overload
+    def open[S](self, state: AbstractAsyncContextManager[S], *, verbosity: int = 0) -> Session[S]: ...
+    @overload
+    def open[S](self, state: AbstractContextManager[S], *, verbosity: int = 0) -> Session[S]: ...
+    @overload
+    def open[S](self, state: S, *, verbosity: int = 0) -> Session[S]: ...
+    def open(self, state: object = None, *, verbosity: int = 0) -> Session[Any]:
+        """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
+
+        Args:
+            state: What handlers are given as ``ctx.state``: the app's own (a link, a mirror). A context manager,
+                sync or async, is entered when the session opens, and its handlers see what entering it gave; it's
+                left when the session closes. ``None`` by default, for an app with no state.
+            verbosity: How much handlers should say (``ctx.verbosity``): ``0`` by default, more for more.
+        """
+        return Session(self, state, verbosity=verbosity)
 
     def walk(self, line: str, *, placeholders: bool = False) -> Routed:
         """The mount ``line`` goes to, and what its tree reads the line to, with the mount's names.
@@ -265,6 +294,109 @@ class Mount:
         """
         own = self._bound.handler(cls)
         return own if own is not None else self.app.handler(cls)
+
+
+class Session[S]:
+    """An app, open: its state held for every line it calls, until it closes (see the module).
+
+    Made by :meth:`App.open`, and used once, as ``async with app.open(state) as session``.
+
+    Attributes:
+        app: The app.
+        verbosity: How much handlers should say: ``0`` by default, more for more.
+    """
+
+    def __init__(self, app: App, state: object, *, verbosity: int) -> None:
+        """Hold what to open; nothing is entered until the session opens."""
+        self.app = app
+        self.verbosity = verbosity
+        self._given = state
+        self._state: Any = None
+        self._stack: AsyncExitStack | None = None
+        self._closed = False
+
+    def __repr__(self) -> str:
+        """The session, by its app and whether it's open."""
+        stage = 'closed' if self._closed else 'open' if self._stack is not None else 'not yet open'
+        return f'<Session of {self.app.prog}, {stage}>'
+
+    @property
+    def is_open(self) -> bool:
+        """Whether it's open: entered, and not yet left."""
+        return self._stack is not None
+
+    @property
+    def state(self) -> S:
+        """The app's state, as the session opened it.
+
+        Raises:
+            RuntimeError: The session isn't open.
+        """
+        self._check_open()
+        return self._state
+
+    async def __aenter__(self) -> Session[S]:
+        """Open: enter the state, if it's a context manager.
+
+        Raises:
+            RuntimeError: The session has been opened before.
+        """
+        if self._stack is not None or self._closed:
+            msg = f'{self!r} opens once: open another with app.open(state)'
+            raise RuntimeError(msg)
+        stack = AsyncExitStack()
+        given = self._given
+        if isinstance(given, AbstractAsyncContextManager):
+            self._state = await stack.enter_async_context(given)
+        elif isinstance(given, AbstractContextManager):
+            self._state = stack.enter_context(given)
+        else:
+            self._state = given
+        self._stack = stack
+        return self
+
+    async def __aexit__(
+        self, kind: type[BaseException] | None, error: BaseException | None, traceback: TracebackType | None
+    ) -> bool:
+        """Close: leave the state, if it was entered, telling it of any error the session's body raised."""
+        stack, self._stack, self._closed = self._stack, None, True
+        if stack is None:
+            return False
+        return bool(await stack.__aexit__(kind, error, traceback))
+
+    async def call(self, line: str) -> object:
+        """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
+
+        The line goes to its mount and is loaded there (:meth:`App.walk`); its handler is the mount's, else the
+        app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async.
+
+        Raises:
+            RuntimeError: The session isn't open.
+            ReadError: The line doesn't read.
+            LookupError: Its command has no handler.
+            ImportError: Its handler's path doesn't import.
+            Exception: Whatever its handler raises.
+        """
+        self._check_open()
+        routed = self.app.walk(line)
+        command = routed.load()
+        handler = routed.mount.handler(routed.command)
+        if handler is None:
+            msg = f'{routed.command.__qualname__} has no handler in {routed.mount.label}: bind one with app.on'
+            raise LookupError(msg)
+        found = handler(command, self.context(routed))
+        return await found if inspect.isawaitable(found) else found
+
+    def context(self, routed: Routed) -> Context[S]:
+        """The context a line's handler is given, for ``routed``: this session, its mount and its reading."""
+        from .context import Context  # here: the context's module imports this one
+
+        return Context(self, routed.mount, routed.reading)
+
+    def _check_open(self) -> None:
+        if self._stack is None:
+            msg = f'{self!r}: call lines inside `async with app.open(state) as session`'
+            raise RuntimeError(msg)
 
 
 @dataclass(frozen=True, slots=True)
