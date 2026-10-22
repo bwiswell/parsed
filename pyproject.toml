@@ -15,6 +15,7 @@ dev = [
     "deptry",
     "prek",
     "pytest>=8.0,<10.0",
+    "pytest-asyncio>=0.24",
     "ruff",
     "ty",
 ]
@@ -92,3 +93,6 @@ pythonpath = ["tests", "."]
 # importlib mode lets test modules of the same name in different directories
 # (one per source module, in the matching directory) coexist.
 addopts = "--import-mode=importlib"
+# An app opens, and calls its handlers, asynchronously: its tests are
+# coroutines, run as they're written.
+asyncio_mode = "auto"

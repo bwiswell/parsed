@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -185,9 +186,9 @@ class TestHandlers:
         ran = _mount(app, 'relay').handler(service.Run)
         assert '_support_handlers' in sys.modules
         assert ran is not None
-        assert ran(service.Run()) == 'ran Run(config=None)'
+        assert ran(service.Run(), None) == 'ran Run(config=None)'
         assert app.handler(service.Run) is ran  # imported once
-        assert _mount(app, 'gateway').handler(service.Run)(service.Run()) == 'status of Run(config=None)'
+        assert _mount(app, 'gateway').handler(service.Run)(service.Run(), None) == 'status of Run(config=None)'
 
     @pytest.mark.parametrize(
         ('path', 'error', 'message'),
@@ -277,3 +278,161 @@ class TestNames:
         relay.names('fleet', _Fleets())
         with pytest.raises(DeclarationError, match=r"fleet has a resolver in _support_service under 'relay' already"):
             relay.names('fleet', _Fleets())
+
+
+class _Link:
+    """A state that opens and closes, as a link to a server does: it keeps what happened to it."""
+
+    def __init__(self) -> None:
+        self.happened: list[object] = []
+
+    async def __aenter__(self) -> dict[str, str]:
+        self.happened.append('opened')
+        return {'link': 'up'}
+
+    async def __aexit__(self, kind, error, traceback) -> bool:
+        self.happened.append(('closed', kind))
+        return False
+
+
+class _File:
+    """A state that opens and closes, synchronously."""
+
+    def __init__(self) -> None:
+        self.happened: list[str] = []
+
+    def __enter__(self) -> str:
+        self.happened.append('opened')
+        return 'contents'
+
+    def __exit__(self, kind, error, traceback) -> bool:
+        self.happened.append('closed')
+        return False
+
+
+class TestSessions:
+    async def test_a_state_held_while_it_s_open(self, app):
+        state = object()
+        session = app.open(state)
+        assert not session.is_open
+        async with session as opened:
+            assert opened is session
+            assert session.is_open
+            assert session.state is state
+        assert not session.is_open
+
+    async def test_a_state_that_opens_and_closes_is_entered_and_left(self, app):
+        link = _Link()
+        async with app.open(link) as session:
+            assert session.state == {'link': 'up'}  # what entering it gave
+            assert link.happened == ['opened']
+        assert link.happened == ['opened', ('closed', None)]
+
+    async def test_a_sync_one_too(self, app):
+        file = _File()
+        async with app.open(file) as session:
+            assert session.state == 'contents'
+        assert file.happened == ['opened', 'closed']
+
+    async def test_left_with_the_error_its_body_raised(self, app):
+        link = _Link()
+        with pytest.raises(ValueError, match='boom'):
+            async with app.open(link):
+                msg = 'boom'
+                raise ValueError(msg)
+        assert link.happened == ['opened', ('closed', ValueError)]
+
+    async def test_none_for_an_app_with_no_state(self, app):
+        async with app.open() as session:
+            assert session.state is None
+            assert session.verbosity == 0
+
+    async def test_its_verbosity(self, app):
+        async with app.open(verbosity=2) as session:
+            assert session.verbosity == 2
+
+    async def test_opened_once(self, app):
+        session = app.open()
+        async with session:
+            pass
+        with pytest.raises(RuntimeError, match=r'<Session of farlandia, closed> opens once: open another'):
+            async with session:
+                pass
+
+    async def test_its_state_only_while_it_s_open(self, app):
+        session = app.open(3)
+        with pytest.raises(RuntimeError, match=r'not yet open>: call lines inside `async with app.open'):
+            _ = session.state
+
+    async def test_sessions_are_apart(self, app):
+        async with app.open('one') as one, app.open('two') as two:
+            assert (one.state, two.state) == ('one', 'two')
+
+    def test_said_by_its_app_and_its_stage(self, app):
+        assert repr(app.open()) == '<Session of farlandia, not yet open>'
+
+
+def _recorded(command, ctx):
+    return command, ctx
+
+
+async def _awaited(command, ctx):
+    await asyncio.sleep(0)
+    return command, ctx
+
+
+class TestCalling:
+    async def test_a_line_runs_by_its_handler_with_its_context(self, app):
+        app.on(farlandia.FleetMine, _recorded)
+        async with app.open('state') as session:
+            command, ctx = await session.call('fleet Prospector mine --for 90s')
+            assert command == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
+            assert isinstance(ctx, parsed.Context)
+            assert (ctx.session, ctx.state, ctx.mount) == (session, 'state', _mount(app, ''))
+        with pytest.raises(RuntimeError, match=r'closed>: call lines inside'):
+            _ = ctx.state  # left when the session closed
+
+    async def test_an_async_handler_awaited(self, app):
+        app.on(service.Run, _awaited)
+        async with app.open() as session:
+            command, ctx = await session.call('relay run --config c.toml')
+        assert command == service.Run(config=Path('c.toml'))
+        assert ctx.params == service.RelaySettings()
+
+    async def test_by_the_mount_s_handler(self, app):
+        app.on(service.Run, _recorded)
+        _mount(app, 'gateway').on(service.Run, handlers.Service.status)
+        async with app.open() as session:
+            assert await session.call('gateway run') == 'status of Run(config=None)'
+            assert (await session.call('relay run'))[0] == service.Run()
+
+    async def test_a_handler_by_its_path(self, app):
+        app.on(service.Status, '_support_handlers:run')
+        async with app.open() as session:
+            assert await session.call('relay status') == 'ran Status(config=None)'
+
+    async def test_a_command_with_no_handler(self, app):
+        async with app.open() as session:
+            with pytest.raises(LookupError, match=r"Status has no handler in _support_service under 'relay': bind one"):
+                await session.call('relay status')
+
+    async def test_a_line_that_doesn_t_read(self, app):
+        async with app.open() as session:
+            with pytest.raises(ReadError, match=r"no command 'rela'; did you mean relay\?"):
+                await session.call('rela run')
+
+    async def test_what_its_handler_raises(self, app):
+        def broken(command, ctx):
+            raise KeyError(command)
+
+        app.on(service.Run, broken)
+        async with app.open() as session:
+            with pytest.raises(KeyError):
+                await session.call('relay run')
+
+    async def test_only_while_it_s_open(self, app):
+        session = app.open()
+        async with session:
+            pass
+        with pytest.raises(RuntimeError, match=r'closed>: call lines inside `async with app.open\(state\) as session`'):
+            await session.call('relay run')

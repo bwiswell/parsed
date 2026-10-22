@@ -23,6 +23,13 @@ lines as it lands, and the entry is dated when that version is released.
   `mount.on(Cls, handler)` one for that mount alone, which wins there. A handler is a callable, or a path,
   `'pkg.module:function'`, imported when it's first looked up, so an app that gathers several packages imports none
   of their runtimes to read a line. `mount.handler(Cls)` looks one up.
+- **Sessions:** `async with app.open(state, verbosity=…) as session` holds the app's state open; a state that's a
+  context manager, sync or async, is entered when it opens and left when it closes. `await session.call(line)`
+  runs the command a line says by its handler, `handler(command, ctx)`, awaited if it's async, and gives what the
+  handler returns.
+- **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
+  (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
+  it (a twin's wording told from its command's), `dry_run`, and the session's `verbosity`.
 - **Names on the app:** `app.names(category, resolver)` reads a category's names in every mount, and
   `mount.names(category, resolver)` in that mount alone, over the app's.
 - **A tree under a prefix:** `Tree(commands, under='relay')` and `Tree.collect(…, under=…)` put every phrase after

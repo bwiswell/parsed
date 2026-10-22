@@ -8,6 +8,7 @@ parsed's own surface:
 
 - ``app.py``: :class:`App`, a program's trees mounted under prefixes, the handlers their commands run with, and the
   names it reads lines with.
+- ``context.py``: :class:`Context`, what a handler is given beside its command.
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.
 - ``errors.py``: :class:`ParsedError`, the base of parsed's errors, :class:`DeclarationError`, :class:`ReadError`
@@ -52,6 +53,7 @@ from seared import (
 
 from .app import App
 from .command import Command
+from .context import Context
 from .effect import Effect, effect_of
 from .errors import DeclarationError, ParsedError, ReadError, RenderError
 from .kinds import Kind, Name
@@ -66,6 +68,7 @@ __all__ = [
     'Bool',
     'Bytes',
     'Command',
+    'Context',
     'Date',
     'DateTime',
     'Decimal',
