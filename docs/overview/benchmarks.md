@@ -32,7 +32,7 @@ Each call declares new classes, so declaring can be timed from nothing.
 
 ## Results
 
-Recorded <!-- bench:run -->2026-10-22, Python 3.14.3, median of 3 runs; parsed 0.1.3, seared 0.4.4<!-- /bench:run -->.
+Recorded <!-- bench:run -->2026-10-22, Python 3.14.3, median of 3 runs; parsed 0.1.4, seared 0.4.4<!-- /bench:run -->.
 
 ### Declaring
 
@@ -41,16 +41,16 @@ What a tree costs before any line is read:
 <!-- bench:declaring -->
 | Case       | What it times                                                   | Per tree | Per command |
 |------------|-----------------------------------------------------------------|----------|-------------|
-| `decorate` | creating and decorating every command, as importing them does   | 63.0 ms  | 239.67 µs   |
-| `declare`  | each command's first `declaration`                              | 5.8 ms   | 22.00 µs    |
-| `reread`   | `declaration` again, kept on the class                          | 184.2 µs | 0.70 µs     |
-| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.4 ms   | 5.33 µs     |
+| `decorate` | creating and decorating every command, as importing them does   | 61.7 ms  | 234.74 µs   |
+| `declare`  | each command's first `declaration`                              | 6.3 ms   | 23.97 µs    |
+| `reread`   | `declaration` again, kept on the class                          | 191.8 µs | 0.73 µs     |
+| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.5 ms   | 5.76 µs     |
 <!-- /bench:declaring -->
 
 So a module of <!-- bench:commands -->263<!-- /bench:commands --> commands costs
-<!-- bench:decorate-ms -->~63 ms<!-- /bench:decorate-ms --> to import, declaring them all
+<!-- bench:decorate-ms -->~62 ms<!-- /bench:decorate-ms --> to import, declaring them all
 <!-- bench:declare-ms -->~6 ms<!-- /bench:declare-ms --> more, and building their tree
-<!-- bench:build-ms -->~1.4 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
+<!-- bench:build-ms -->~1.5 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
 all three each time.
 
 ### Reading
@@ -61,12 +61,12 @@ A line for each command, on a tree built once: its `PHRASE`, each slot a word, a
 <!-- bench:reading -->
 | Case   | What it times                                                     | Every line | Per line |
 |--------|-------------------------------------------------------------------|------------|----------|
-| `walk` | a line's flags split off, its words walked, each read by its kind | 3.2 ms     | 12.15 µs |
-| `read` | a line on to its instance, which seared loads from the values     | 4.7 ms     | 17.79 µs |
+| `walk` | a line's flags split off, its words walked, each read by its kind | 3.6 ms     | 13.68 µs |
+| `read` | a line on to its instance, which seared loads from the values     | 5.3 ms     | 20.15 µs |
 <!-- /bench:reading -->
 
-So a line costs <!-- bench:walk-us -->~12 µs<!-- /bench:walk-us --> to walk, and
-<!-- bench:read-us -->~18 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
+So a line costs <!-- bench:walk-us -->~14 µs<!-- /bench:walk-us --> to walk, and
+<!-- bench:read-us -->~20 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
 
 ### Completing
 
@@ -76,10 +76,10 @@ values, the literal words and the flags offered there:
 <!-- bench:completing -->
 | Case       | What it times                                   | Every line | Per line |
 |------------|-------------------------------------------------|------------|----------|
-| `complete` | what may come after a line's words but its last | 2.7 ms     | 10.23 µs |
+| `complete` | what may come after a line's words but its last | 2.8 ms     | 10.69 µs |
 <!-- /bench:completing -->
 
-So a completion costs <!-- bench:complete-us -->~10 µs<!-- /bench:complete-us -->.
+So a completion costs <!-- bench:complete-us -->~11 µs<!-- /bench:complete-us -->.
 
 ### Rendering
 
@@ -89,10 +89,10 @@ values spelled by their kinds and quoted where they must be, its flags given:
 <!-- bench:rendering -->
 | Case     | What it times                                                                        | Every command | Per command |
 |----------|--------------------------------------------------------------------------------------|---------------|-------------|
-| `render` | an instance back to its line: its phrase picked, its values spelled, its flags given | 2.4 ms        | 8.97 µs     |
+| `render` | an instance back to its line: its phrase picked, its values spelled, its flags given | 2.7 ms        | 10.20 µs    |
 <!-- /bench:rendering -->
 
-So writing a command back costs <!-- bench:render-us -->~9 µs<!-- /bench:render-us -->.
+So writing a command back costs <!-- bench:render-us -->~10 µs<!-- /bench:render-us -->.
 
 ### Spread
 
@@ -101,17 +101,17 @@ Every number here is <!-- bench:runs -->the median of three runs<!-- /bench:runs
 <!-- bench:spread -->
 | Case       | Spread |
 |------------|--------|
-| `decorate` | 15.4%  |
-| `declare`  | 16.7%  |
-| `reread`   | 10.7%  |
-| `build`    | 2.8%   |
-| `walk`     | 3.7%   |
-| `read`     | 21.6%  |
-| `complete` | 13.3%  |
-| `render`   | 22.8%  |
+| `decorate` | 12.8%  |
+| `declare`  | 37.2%  |
+| `reread`   | 3.2%   |
+| `build`    | 1.8%   |
+| `walk`     | 7.0%   |
+| `read`     | 4.6%   |
+| `complete` | 5.4%   |
+| `render`   | 17.6%  |
 <!-- /bench:spread -->
 
-The widest is <!-- bench:spread-max -->~23%<!-- /bench:spread-max -->.
+The widest is <!-- bench:spread-max -->~37%<!-- /bench:spread-max -->.
 
 ## Reproducing
 
