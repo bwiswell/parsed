@@ -41,16 +41,16 @@ What a tree costs before any line is read:
 <!-- bench:declaring -->
 | Case       | What it times                                                   | Per tree | Per command |
 |------------|-----------------------------------------------------------------|----------|-------------|
-| `decorate` | creating and decorating every command, as importing them does   | 66.0 ms  | 250.96 µs   |
-| `declare`  | each command's first `declaration`                              | 5.8 ms   | 22.23 µs    |
-| `reread`   | `declaration` again, kept on the class                          | 156.3 µs | 0.59 µs     |
-| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.4 ms   | 5.28 µs     |
+| `decorate` | creating and decorating every command, as importing them does   | 63.9 ms  | 243.09 µs   |
+| `declare`  | each command's first `declaration`                              | 5.8 ms   | 22.21 µs    |
+| `reread`   | `declaration` again, kept on the class                          | 162.9 µs | 0.62 µs     |
+| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.3 ms   | 5.02 µs     |
 <!-- /bench:declaring -->
 
 So a module of <!-- bench:commands -->263<!-- /bench:commands --> commands costs
-<!-- bench:decorate-ms -->~66 ms<!-- /bench:decorate-ms --> to import, declaring them all
+<!-- bench:decorate-ms -->~64 ms<!-- /bench:decorate-ms --> to import, declaring them all
 <!-- bench:declare-ms -->~6 ms<!-- /bench:declare-ms --> more, and building their tree
-<!-- bench:build-ms -->~1.4 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
+<!-- bench:build-ms -->~1.3 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
 all three each time.
 
 ### Reading
@@ -61,12 +61,12 @@ A line for each command, on a tree built once: its `PHRASE`, each slot a word, a
 <!-- bench:reading -->
 | Case   | What it times                                                     | Every line | Per line |
 |--------|-------------------------------------------------------------------|------------|----------|
-| `walk` | a line's flags split off, its words walked, each read by its kind | 2.8 ms     | 10.77 µs |
-| `read` | a line on to its instance, which seared loads from the values     | 4.0 ms     | 15.15 µs |
+| `walk` | a line's flags split off, its words walked, each read by its kind | 2.9 ms     | 10.90 µs |
+| `read` | a line on to its instance, which seared loads from the values     | 4.5 ms     | 17.11 µs |
 <!-- /bench:reading -->
 
 So a line costs <!-- bench:walk-us -->~11 µs<!-- /bench:walk-us --> to walk, and
-<!-- bench:read-us -->~15 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
+<!-- bench:read-us -->~17 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
 
 ### Spread
 
@@ -75,15 +75,15 @@ Every number here is <!-- bench:runs -->the median of three runs<!-- /bench:runs
 <!-- bench:spread -->
 | Case       | Spread |
 |------------|--------|
-| `decorate` | 3.0%   |
-| `declare`  | 16.1%  |
-| `reread`   | 14.7%  |
-| `build`    | 24.4%  |
-| `walk`     | 14.2%  |
-| `read`     | 17.0%  |
+| `decorate` | 6.9%   |
+| `declare`  | 2.3%   |
+| `reread`   | 2.6%   |
+| `build`    | 2.6%   |
+| `walk`     | 14.4%  |
+| `read`     | 16.4%  |
 <!-- /bench:spread -->
 
-The widest is <!-- bench:spread-max -->~24%<!-- /bench:spread-max -->.
+The widest is <!-- bench:spread-max -->~16%<!-- /bench:spread-max -->.
 
 ## Reproducing
 

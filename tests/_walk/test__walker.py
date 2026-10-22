@@ -135,14 +135,15 @@ class TestWordForms:
     def test_a_kind_s_bounds_are_seared_s_to_check(self, tree):
         reading = tree.walk('log 0')
         assert reading.data() == {'n': 0}
-        with pytest.raises(parsed.ValidationError, match=r'Log\.n: must be >= 1'):
+        with pytest.raises(ReadError, match=r'log \{n\}: must be >= 1, got 0'):
             reading.load()
 
     def test_load_refuses_a_key_the_command_doesn_t_know(self, tree, monkeypatch):
         reading = tree.walk('log 40')
         monkeypatch.setattr(type(reading), 'data', lambda _: {'n': 40, 'lines': 3})
-        with pytest.raises(parsed.ValidationError, match=r'unknown key'):
+        with pytest.raises(ReadError, match=r'log \{n\}: unknown key') as caught:
             reading.load()
+        assert (caught.value.kind, caught.value.field) == ('validation', None)
 
 
 class TestFlags:
@@ -210,18 +211,8 @@ class TestReading:
         assert reading.command is farlandia.FleetDock
         assert reading.end.bound.phrase.text == 'fleet {fleet} dock nearest'
 
-    @pytest.mark.parametrize(
-        ('line', 'says'),
-        [
-            ('log 0', r'Log\.n: must be >= 1'),
-            ('handheld connect dock r7 --host h --port 70000', r'HandheldConnect\.port: must be <= 65535'),
-            ('handheld connect dock r7', r'HandheldConnect\.host: required key missing'),
-        ],
-    )
-    def test_seared_s_refusals_pass_through(self, tree, line, says):
-        reading = tree.walk(line)
-        with pytest.raises(parsed.ValidationError, match=says):
-            reading.load()
+    def test_the_line_it_was_read_from(self, tree):
+        assert tree.walk('  log 40 ').line == '  log 40 '
 
 
 class TestRefusals:
@@ -241,8 +232,9 @@ class TestRefusals:
             ('--yes log', r'--yes comes before a command: a flag follows the first word'),
             ('say "hello', r'the quote at column 5 is never closed'),
             ('log --n 3', r'no command takes --n'),
-            ('log --into f2', r'log \{n\} takes no flags, not --into'),
-            ('fleet f1 mine --into f2', r'fleet \{fleet\} mine takes --for, not --into'),
+            ('log --into f2', r'log takes no --into `log \[<n>\]`'),
+            ('fleet f1 mine --into f2', r'fleet f1 mine takes no --into `fleet <fleet> mine \[--for <for>\]`'),
+            ('fleets merge f1', r'fleets merge f1 needs --into `fleets merge f1 --into <into>`'),
             ('fleet f1 mine --for', r'--for needs a value'),
             ('fleet f1 mine --for --yes', r'--for needs a value'),
             ('fleet f1 mine --for -- 90', r'--for needs a value'),
@@ -262,14 +254,130 @@ class TestRefusals:
             tree.walk('fleet f1 sell')
 
 
+def _refusal(tree: Tree, line: str, *, load: bool = False) -> ReadError:
+    with pytest.raises(ReadError) as caught:
+        tree.read(line) if load else tree.walk(line)
+    return caught.value
+
+
+class TestRefusalsAsData:
+    # What each refusal says besides its message: where it stands, its hint and what may have been meant.
+    @pytest.mark.parametrize(
+        ('line', 'column', 'word'),
+        [
+            ('', 0, None),
+            ('say "hello', 4, None),
+            ('--yes log', 0, '--yes'),
+            ('log --fro 3', 4, '--fro'),
+            ('fleets merge f1 --into f2 --quiet=no', 26, '--quiet=no'),
+            ('fleet f1 mien', 9, 'mien'),
+            ('log 40 50', 7, '50'),
+            ('fleet f1 jump', 13, None),
+            ('fleet f1 mine --into f2', 14, '--into'),
+            ('fleet f1 mine --for 1m --for 2m', 23, '--for'),
+            ('fleets merge f1', 15, None),
+        ],
+    )
+    def test_where_it_stands(self, tree, line, column, word):
+        found = _refusal(tree, line)
+        assert (found.line, found.column, found.word, found.kind) == (line, column, word, 'usage')
+
+    @pytest.mark.parametrize(
+        ('line', 'hint'),
+        [
+            ('say "hello', 'say "hello"'),
+            ('fleet', 'fleet <fleet> …'),
+            ('fleet f1 jump', 'fleet f1 jump <system>'),
+            ('fleet f1 jump nearest', 'fleet f1 jump nearest <ore>'),
+            ('log 40 50', 'log [<n>]'),
+            ('log --into f2', 'log [<n>]'),
+            ('fleet f1 mine --for', '--for <for>'),
+            ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <into>'),
+        ],
+    )
+    def test_a_hint_says_how_to_say_it(self, tree, line, hint):
+        found = _refusal(tree, line)
+        assert found.hint == hint
+        assert str(found).endswith(f' `{hint}`')
+
+    @pytest.mark.parametrize(
+        ('line', 'suggestions'),
+        [
+            ('flet f1 mine', ('fleet', 'fleets')),
+            ('fleet f1 mien', ('mine',)),
+            ('fleet f1 xyz', ('buy', 'dock', 'jump', 'mine', 'sell')),
+            ('fleet f1', ('buy', 'dock', 'jump', 'mine', 'sell')),
+            ('log --fro 3', ('--for',)),
+            ('log --jsno', ('--json',)),
+        ],
+    )
+    def test_what_may_have_been_meant(self, tree, line, suggestions):
+        assert _refusal(tree, line).suggestions == suggestions
+
+    def test_did_you_mean_is_in_the_text_and_a_list_isn_t_doubled(self, tree):
+        assert str(_refusal(tree, 'log --fro 3')) == 'no command takes --fro; did you mean --for?'
+        assert str(_refusal(tree, 'fleet f1 xyz')) == "no command 'fleet f1 xyz': buy | dock | jump | mine | sell"
+
+    def test_the_field_where_the_walk_knows_it(self, tree):
+        assert _refusal(tree, 'log many').field == 'n'
+        assert _refusal(tree, 'fleet f1 mine --for soon').field == 'for_'
+        assert _refusal(tree, 'fleets merge f1').field == 'into'
+        assert _refusal(tree, 'fleet').field is None
+
+    def test_as_data(self, tree):
+        assert _refusal(tree, 'fleet f1 jump').to_json() == {
+            'error': 'usage',
+            'message': 'fleet f1 jump: which system? `fleet f1 jump <system>`',
+            'line': 'fleet f1 jump',
+            'column': 13,
+            'hint': 'fleet f1 jump <system>',
+        }
+
+
+class TestSearedsRefusals:
+    # A value seared refuses comes back as the word that gave it.
+    def test_a_slot_s_value(self, tree):
+        found = _refusal(tree, 'log 0', load=True)
+        assert str(found) == 'log {n}: must be >= 1, got 0'
+        assert (found.kind, found.column, found.word, found.field) == ('validation', 4, '0', 'n')
+        assert isinstance(found.__cause__, parsed.ValidationError)
+
+    def test_a_flag_s_value(self, tree):
+        found = _refusal(tree, 'handheld connect dock r7 --host h --port 70000', load=True)
+        assert str(found) == '--port: must be <= 65535, got 70000'
+        assert (found.column, found.word, found.field) == (41, '70000', 'port')
+
+    def test_one_of_a_list_s_words(self):
+        tag = _one('tag {ns}', ns=parsed.Int(many=True, required=True, ge=1))
+        found = _refusal(tag, 'tag 3 2 0 4', load=True)
+        assert (found.column, found.word) == (8, '0')
+
+    def test_one_of_a_list_s_flags(self):
+        tag = _one('tag', ns=parsed.Int(many=True, default_factory=list, ge=1))
+        found = _refusal(tag, 'tag --ns 2 --ns 0', load=True)
+        assert (found.column, found.word) == (16, '0')
+
+    def test_the_rest_of_the_line_from_its_first_word(self):
+        note = _one('note {text**}', text=parsed.Str(required=True, max_length=5))
+        found = _refusal(note, 'note far too long', load=True)
+        assert (found.column, found.word, found.field) == (5, 'far too long', 'text')
+        assert found.message.startswith('note {text**}: ')
+
+    def test_a_pattern(self):
+        code = _one('code {c}', c=parsed.Str(required=True, pattern='[a-z]+'))
+        found = _refusal(code, 'code AB1', load=True)
+        assert (found.kind, found.word) == ('validation', 'AB1')
+
+
 class TestFarlandiasCases:
     """farlandia's own reading cases (``tests/client/test_tree.py``), on this fixture's commands.
 
     Lifted: words, slots and flags anywhere after the first word; a slot of several words; a span of time and true or
-    false; the refusals that are the walk's. Changed on purpose: ``--quiet yes`` reads ``yes`` as a word, since the
-    tree knows ``--quiet`` is a switch. Later: did-you-mean and the hints (the structured errors), a share's ``off``
-    or percent (a kind of its own), names alone (names), chains and subjects, ``--help``, completion, usage, schemas
-    and ``render``.
+    false; the refusals that are the walk's, with did-you-mean and a usage for a hint. Changed on purpose: ``--quiet
+    yes`` reads ``yes`` as a word, since the tree knows ``--quiet`` is a switch; a flag the command doesn't take says
+    so with the command's usage (``takes no --into `fleet <fleet> mine [--for <for>]```), and a required flag left out
+    with the line it's missing from. Later: a share's ``off`` or percent (a kind of its own), names alone (names),
+    chains and subjects, ``--help``, completion, schemas and ``render``.
     """
 
     def test_words_slots_and_flags_anywhere_after_the_first_word(self, tree):
@@ -287,7 +395,8 @@ class TestFarlandiasCases:
             ('fleet', 'which fleet'),
             ('fleet f1 progrms', "no command 'fleet f1 progrms'"),
             ('fleet f1 jump', 'which system'),
-            ('fleet f1 mine --into f2', 'takes --for'),
+            ('fleet f1 mine --into f2', 'takes no --into `fleet <fleet> mine \\[--for <for>\\]`'),
+            ('fleets merge f1', '--into'),
             ('fleet f1 mine --for 1h --for 2h', 'given twice'),
             ('fleet f1 mine --for', 'needs a value'),
             ('fleet f1 mine --for soon', 'not a span of time'),
@@ -300,9 +409,9 @@ class TestFarlandiasCases:
         with pytest.raises(ReadError, match=says):
             tree.walk(line)
 
-    def test_a_required_flag_left_out_is_seared_s_to_refuse(self, tree):
-        with pytest.raises(parsed.ValidationError, match=r'into'):
-            tree.read('fleets merge f1')
+    def test_did_you_mean(self, tree):
+        with pytest.raises(ReadError, match=r"no command 'fleet f1 mien'; did you mean mine\?"):
+            tree.walk('fleet f1 mien')
 
     def test_a_switch_takes_no_word_so_the_word_is_left_over(self, tree):
         with pytest.raises(ReadError, match=r"fleets merge f1: 'yes' is left over"):

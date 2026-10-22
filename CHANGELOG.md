@@ -30,6 +30,13 @@ lines as it lands, and the entry is dated when that version is released.
   checked. A word its kind can't read is a `ReadError` naming the phrase or the flag. `Kind.read(word, field)` is
   each kind's.
 - **`Reading.load` refuses a key the command doesn't know.**
+- **One error for a line that doesn't read:** a `ReadError`, whichever part refused it. Its message says what's
+  wrong with the words read up to it, then any did-you-mean (`no command 'fleet f1 mien'; did you mean mine?`) and
+  a hint, a usage with a `<slot>` for each value (``fleet f1 jump: which system? `fleet f1 jump <system>` ``). As
+  data: its `kind`, `line`, `column`, `word`, `field`, `hint` and `suggestions`, and `to_json()`.
+- **seared's refusals come back as the word that gave the value:** a value out of its bounds, lengths or pattern is
+  a `ReadError` of kind `'validation'`, at that word (`log {n}: must be >= 1, got 0`).
+- **A required flag left out is refused by the walk,** with the line it's missing from as the hint.
 - **Flags anywhere after the first word,** `--name=value`, and `--` to end them. A list's flag may be given again.
   parsed's own (`--help`, `--json`, `--yes`, `--dry-run`) are switches every command takes, kept apart from the
   fields.

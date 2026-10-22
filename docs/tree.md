@@ -32,11 +32,20 @@ slots read on the way.
 
 **Each word is read by its field's kind** ([`kinds.md`](kinds.md#reading-a-word)) to the field's wire value:
 `1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A name is kept as typed. Then
-seared loads the values, so a field's bounds and pattern hold on a line too: a value out of them raises seared's
-`ValidationError`, as does a required field the line leaves out.
+seared loads the values, so a field's bounds and pattern hold on a line too.
 
-A line that doesn't read raises a `ReadError` saying why, with the words read up to it:
-[`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each.
+**A line that doesn't read raises one error,** a `ReadError`, whichever part refused it: the walk, a kind, or
+seared, whose refusal comes back as the word that gave the value. Its message says what's wrong, with the words
+read up to it, then any did-you-mean and a hint; the same parts are there as data, with where on the line it stands
+([`errors.md`](errors.md#readerror)):
+
+```
+fleet f1 jump: which system? `fleet f1 jump <system>`
+no command 'fleet f1 mien'; did you mean mine?
+log {n}: must be >= 1, got 0
+```
+
+[`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
 
 ## Flags
 

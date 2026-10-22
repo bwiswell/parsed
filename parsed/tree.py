@@ -172,8 +172,8 @@ class Tree:
         """The command ``line`` says, loaded by seared from its fields' values.
 
         Raises:
-            ReadError: The line doesn't read, or a word its kind can't read.
-            ValidationError: A value out of its field's bounds or pattern, or a required field the line leaves out.
+            ReadError: The line doesn't read, a word its kind can't read, or a value seared refuses (``'validation'``,
+                at the word that gave it).
         """
         return self.walk(line).load()
 

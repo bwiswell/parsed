@@ -35,6 +35,7 @@ its own `KINDS` entry. The rest of the line is read once, joined; a list's words
 | `end` | where the walk ended: the command, the phrase, and the slots read |
 | `given` | each field the line gives, by attribute name: its slots in the phrase's order, then its flags in the line's. A field the line leaves out isn't here, and keeps its default |
 | `own` | parsed's own flags the line gives, by name: `yes`, `json`, … |
+| `line` | the line read |
 | `command` | the command class (a property) |
 
 Each of `given` is a `Given`: `by`, the slot (a `Place`) or the flag (a `Flag`) that took the words; `words`, every
@@ -44,28 +45,37 @@ switch).
 
 `reading.data()` is the values by wire name, as seared's `load` takes them and a tool call would send them:
 `{'fleet': 'f1', 'for': 5400.0}`. `reading.load()` loads the command from them, refusing any key the command
-doesn't know. A value out of its field's bounds, lengths or pattern raises seared's `ValidationError`, as does a
-required field the line leaves out.
+doesn't know.
 
 ## What it refuses
 
-A `ReadError`, its message saying what's wrong with the words read up to it:
+One [`ReadError`](../errors.md#readerror) for each, its message saying what's wrong with the words read up to it,
+then any did-you-mean, then the hint in backticks. Its `column` is the word at fault's, or the line's end where a
+word is missing; its `suggestions` are the did-you-mean's words, or the words that may come next:
 
-| The line | Says |
-|---|---|
-| has no words | `no command: the line has no words` |
-| leaves a quote open | `the quote at column 7 is never closed: "Vruba mine` |
-| begins with a flag | `--yes comes before a command: a flag follows the first word` |
-| gives a flag no command takes | `no command takes --n` |
-| gives a value to a switch | `--quiet takes nothing after it` |
-| ends at a flag that takes a value, or gives it a flag | `--for needs a value` |
-| gives a flag twice | `--for is given twice` |
-| says a word no command says | `no command 'fleet f1 progrms'` |
-| goes on after a command's last word | `log 40: '50' is left over` |
-| stops at a slot | `fleet f1 jump: which system?` |
-| stops at a word that isn't a command | `fleet f1: then what? buy \| dock \| jump \| mine \| sell` |
-| gives a flag its command doesn't take | `fleet {fleet} mine takes --for, not --into` |
-| gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` |
-| gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` |
+| The line | Says | Suggests |
+|---|---|---|
+| has no words | `no command: the line has no words` | the first words |
+| leaves a quote open | ``the quote at column 5 is never closed: "hello `say "hello"` `` | |
+| begins with a flag | `--yes comes before a command: a flag follows the first word` | |
+| gives a flag no command takes | `no command takes --fro; did you mean --for?` | flags close to it |
+| gives a value to a switch | `--quiet takes nothing after it` | |
+| ends at a flag that takes a value, or gives it a flag | ``--for needs a value `--for <for>` `` | |
+| gives a flag twice | `--for is given twice` | |
+| says a word no command says | `no command 'fleet f1 mien'; did you mean mine?` | words close to it |
+| … with no word close to it | `no command 'fleet f1 xyz': buy \| dock \| jump \| mine \| sell` | the words that may come |
+| goes on after a command's last word | ``log 40: '50' is left over `log [<n>]` `` | |
+| stops at a slot | ``fleet f1 jump: which system? `fleet f1 jump <system>` `` | |
+| stops at a word that isn't a command | `fleet f1: then what? buy \| dock \| jump \| mine \| sell` | the words that may come |
+| gives a flag its command doesn't take | ``fleet f1 mine takes no --into `fleet <fleet> mine [--for <for>]` `` | its flags close to it |
+| leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <into>` `` | |
+| gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
+| gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
 
+A hint is a usage ([`_hints.md`](_hints.md)): the command's, or the line so far with a `<slot>` where a value goes.
 Since a switch takes no value, `--quiet yes` reads `yes` as a word, which the command may not take.
+
+**seared's refusals** of a value, once read (its bounds, lengths or pattern), come back from `load` as a
+`ReadError` whose `kind` is `'validation'`, at the word that gave the value: `log {n}: must be >= 1, got 0`, or
+`--port: must be <= 65535, got 70000`. For a list, it's the word at the refused index; for the rest of the line, the
+whole of it. seared's `ValidationError` is its `__cause__`.
