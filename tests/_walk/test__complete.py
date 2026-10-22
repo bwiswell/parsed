@@ -24,13 +24,13 @@ def _words(tree: Tree, text: str, names=None) -> list[str]:
 
 class TestWhatComesNext:
     def test_the_first_words(self, tree):
-        assert _words(tree, '') == ['fleet', 'detachment', 'fleets', 'log', 'say', 'ship', 'ships']
+        assert _words(tree, '') == ['fleet', 'detachment', 'log', 'say', 'fleets', 'ships', 'ship']
 
     def test_the_word_being_typed_case_aside(self, tree):
         assert tree.complete('FL') == Completion(words=['fleet', 'fleets'], replace=2)
 
     def test_the_literal_words_after_a_slot(self, tree):
-        assert _words(tree, 'fleet f1 ') == ['buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell']
+        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
 
     def test_a_whole_command_s_flags(self, tree):
         assert _words(tree, 'fleet f1 mine ') == ['--for']
@@ -47,7 +47,7 @@ class TestWhatComesNext:
         assert tree.complete('fleet f1 mine --f') == Completion(words=['--for'], replace=3)
 
     def test_a_flag_typed_before_the_command_is_whole(self, tree):
-        assert _words(tree, 'fleet f1 --') == ['--yes', '--for']
+        assert _words(tree, 'fleet f1 --') == ['--for', '--yes']
 
     def test_a_flag_s_values(self, tree):
         assert _words(tree, 'fleet f1 mine --for ') == ['10m', '30m', '1h']
@@ -130,7 +130,7 @@ class TestFarlandiasCases:
     """
 
     def test_completion_offers_words_slots_and_flags(self, tree):
-        assert _words(tree, 'fleet f1 ') == ['buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell']
+        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
         assert _words(tree, 'fleet f1 mine ') == ['--for']
         assert _words(tree, 'fleet f1 mine --for ') == ['10m', '30m', '1h']
         assert _words(tree, 'fleet f1 jump ') == ['nearest']

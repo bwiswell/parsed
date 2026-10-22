@@ -33,6 +33,7 @@ or kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads 
 from __future__ import annotations
 
 import importlib
+import math
 import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -143,13 +144,17 @@ class Tree:
     def collect(cls, *targets: str) -> Tree:
         """The tree of every command in ``targets``: modules or packages, by name, their submodules included.
 
+        The commands are taken in the order they're declared: each target's in turn, its modules by name, and a
+        module's by where each class begins. So a node's words, which a refusal lists and completion offers, come in
+        the order the commands that say them were written.
+
         Raises:
             DeclarationError: As the constructor does.
         """
         classes: list[type] = []
         for target in targets:
             importlib.import_module(target)
-            classes += [found for found in collect(target) if issubclass(found, Command)]
+            classes += sorted((found for found in collect(target) if issubclass(found, Command)), key=_declared)
         return cls(classes)
 
     def flags_of(self, cls: type) -> Mapping[str, Flag]:
@@ -218,6 +223,12 @@ class Tree:
         if node.end is not None:
             raise DeclarationError(_same_lines(node.end, end))
         node.end = end
+
+
+def _declared(cls: type) -> tuple[str, float, str]:
+    """Where a class is declared: its module, then its first line; one made without a ``class`` statement, after."""
+    # From the class's own namespace: one made by `type()` would otherwise take its base's first line.
+    return cls.__module__, vars(cls).get('__firstlineno__', math.inf), cls.__qualname__
 
 
 def _routes(bound: Bound) -> list[tuple[Place, ...]]:

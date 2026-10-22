@@ -4,6 +4,10 @@
 whole. `Tree.collect('pkg.commands', …)` builds one from every command in some modules or packages, their
 submodules included. A base, which has no `PHRASE`, is left out, as is any class that isn't a command.
 
+The commands are compiled in the order given; `Tree.collect` gives them in the order they're declared (each target
+in turn, its modules by name, and a module's by where each class begins). A node's words follow that order, so a
+refusal lists them, and completion offers them, as the commands that say them were written.
+
 ```python
 import parsed
 
