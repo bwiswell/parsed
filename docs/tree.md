@@ -8,8 +8,8 @@ submodules included. A base, which has no `PHRASE`, is left out, as is any class
 import parsed
 
 tree = parsed.Tree.collect('farm.commands')
-tree.read('fleet prospector mine --for 600')
-# FleetMine(fleet='prospector', for_=datetime.timedelta(seconds=600))
+tree.read('fleet prospector mine --for 1h30m')
+# FleetMine(fleet='prospector', for_=datetime.timedelta(seconds=5400))
 ```
 
 ## Reading a line
@@ -30,16 +30,17 @@ An optional slot is compiled both with it and without it, so `log {n}` ends at `
 default) and at `log 40`. Where a walk ends, one phrase ends at most (`node.end`): the command, the phrase, and the
 slots read on the way.
 
-**seared loads the words,** reading each as its field's type: `40` for an `Int`, `iron` for an `Enum` whose value
-it is, an ISO date for a `Date`. A name is kept as typed. A word seared doesn't read raises its `ValidationError`,
-as does a required field the line leaves out.
+**Each word is read by its field's kind** ([`kinds.md`](kinds.md#reading-a-word)) to the field's wire value:
+`1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A name is kept as typed. Then
+seared loads the values, so a field's bounds and pattern hold on a line too: a value out of them raises seared's
+`ValidationError`, as does a required field the line leaves out.
 
 A line that doesn't read raises a `ReadError` saying why, with the words read up to it:
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each.
 
 ## Flags
 
-A flag stands anywhere after the line's first word: `--for 600`, or `--for=600`. `--` ends the flags, so every word
+A flag stands anywhere after the line's first word: `--for 10m`, or `--for=10m`. `--` ends the flags, so every word
 after it is a word. Flags are split off a line before the walk, which doesn't yet know its command, so a flag's name
 says whether it takes a value, across the whole tree:
 

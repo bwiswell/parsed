@@ -8,6 +8,7 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - a station that may be left out (`dock {station}` beside `dock nearest`);
 - a literal beside a slot, in two commands (`jump {system}`, `jump nearest {ore}`);
 - a required flag and a switch, on a command that asks first (`fleets merge {fleet} --into …`);
+- a `Bool` said as a word (`fleets start true`);
 - an optional positional, a slot of several words, and the rest of the line;
 - a read with a typed reply, a command that asks first, and an interactive command with the form an agent says
   instead.
@@ -137,6 +138,16 @@ class FleetsMerge(parsed.Command):
     fleet: str = parsed.Str(required=True, doc='the fleet merged')
     into: str = parsed.Str(required=True, doc='the fleet it joins')
     quiet: bool = parsed.Bool(default=False, doc='without a report')
+
+
+@parsed.parsed
+class FleetsStart(parsed.Command):
+    """Start every fleet, or stop them."""
+
+    PHRASE = 'fleets start {on}'
+    EFFECT = parsed.Effect.WRITE
+
+    on: bool = parsed.Bool(required=True, doc='whether they start')
 
 
 @parsed.parsed

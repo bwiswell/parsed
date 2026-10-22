@@ -38,5 +38,5 @@ def test_each_line_reads_to_its_command():
     said = lines(commands)
     assert len(said) == COMMANDS
     assert [built.walk(line).command for line in said] == commands
-    assert any('--for 90' in line for line in said)
+    assert any('--for 90s' in line for line in said)
     assert all(isinstance(built.read(line), cls) for line, cls in zip(said, commands, strict=True))

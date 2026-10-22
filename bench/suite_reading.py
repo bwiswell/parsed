@@ -1,7 +1,7 @@
 """The reading suite: what a line costs, on a tree the size of a real one.
 
-- **walk:** each line's flags split off, its words walked from the root, each field's words kept (``Tree.walk``);
-- **read:** each line on to its instance, loaded by seared from its words (``Tree.read``).
+- **walk:** each line's flags split off, its words walked from the root, each read by its kind (``Tree.walk``);
+- **read:** each line on to its instance, which seared loads from the values (``Tree.read``).
 
 Each case reads one line for each command, :data:`~bench.tree.COMMANDS` lines, on a tree built once; the docs quote
 it for every line and per line.

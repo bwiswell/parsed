@@ -12,9 +12,12 @@
 (case aside, and never a quoted word), else the node's slot takes it. A slot of several words takes them up to a
 literal after them, or the end; the rest of the line takes every word left.
 
-**What a walk keeps** is a :class:`Reading`: the command, the phrase, and each field's words. A name is kept as typed.
-:meth:`Reading.load` hands the words to seared, which reads each as its field's type: ``40`` for an ``Int``, ``iron``
-for an ``Enum`` whose value it is, an ISO date for a ``Date``.
+**Each word is read by its field's kind** (:mod:`parsed.kinds`) to the field's wire value: ``1,000`` to ``1000``,
+``1h30m`` to ``5400.0`` seconds, ``Iron`` to an ``Enum``'s ``'iron'``. A name is kept as typed. A word its kind can't
+read is refused here, naming the phrase or the flag.
+
+**What a walk keeps** is a :class:`Reading`: the command, the phrase, and each field's words and value.
+:meth:`Reading.load` hands the values to seared, which checks them as it checks any, bounds and all.
 """
 
 from __future__ import annotations
@@ -32,8 +35,11 @@ from ._words import Token, split
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from seared import Field
+
     from parsed._phrase import Place
     from parsed.command import Command
+    from parsed.kinds import Kind
     from parsed.tree import End, Flag, Node, Tree
 
 #: Flags parsed takes for itself on every command, which no field may be named for.
@@ -62,7 +68,8 @@ class Given:
     Attributes:
         by: The slot (a :class:`~parsed._phrase.Place`) or the flag (a :class:`~parsed.tree.Flag`) that took them.
         words: Every word that went into it, in the line's order: a slot's words, or a flag and its value.
-        value: What seared loads for the field: a word, a list of words, or a switch's ``True`` or ``False``.
+        value: What seared loads for the field: each word read by the field's kind, a list of them for a ``many``
+            field, or a switch's ``True`` or ``False``.
     """
 
     by: Place | Flag
@@ -77,7 +84,7 @@ class Given:
 
 @dataclass(frozen=True, slots=True)
 class Reading:
-    """A line, read: the command it says, and each field's words, before seared loads them.
+    """A line, read: the command it says, and each field's words and wire value, before seared loads them.
 
     Attributes:
         end: Where the walk ended: the command, the phrase, and the slots read.
@@ -101,13 +108,12 @@ class Reading:
         return {wires[attr]: given.value for attr, given in self.given.items()}
 
     def load(self) -> Command:
-        """The command, loaded by seared from :meth:`data`.
+        """The command, loaded by seared from :meth:`data`, any key it doesn't know refused.
 
         Raises:
-            ValidationError: A word seared doesn't read as its field's type, or a required field the line leaves
-                out.
+            ValidationError: A value out of its field's bounds or pattern, or a required field the line leaves out.
         """
-        return self.command.load(self.data())
+        return self.command.load(self.data(), unknown='raise')
 
 
 #: A flag as the line gives it: its name, its own word, and its value's word, if it takes one.
@@ -255,11 +261,18 @@ def _unfinished(node: Node, said: list[Token]) -> str:
 
 
 def _slots_given(end: End, slots: list[tuple[Token, ...]]) -> dict[str, Given]:
-    """Each slot's words, as its field's: one word, a list of them, or the rest of the line, joined."""
+    """Each slot's words, read by its kind: one word, a list of them, or the rest of the line, joined."""
+    found = end.declaration
+    fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
+    where = end.bound.phrase.text
     given: dict[str, Given] = {}
     for place, words in zip(end.places, slots, strict=True):
-        texts = [word.text for word in words]
-        value: object = texts if place.many else ' '.join(texts) if place.rest else texts[0]
+        kind, field = found.kind_of(place), fields[place.field]
+        if place.rest and not place.many:
+            value = _read(kind, ' '.join(word.text for word in words), field, where)
+        else:
+            values = [_read(kind, word.text, field, where) for word in words]
+            value = values if place.many else values[0]
         given[place.field] = Given(by=place, words=words, value=value)
     return given
 
@@ -269,7 +282,8 @@ def _flags_given(end: End, flags: list[_Said], takes: Mapping[str, Flag]) -> dic
     by_name: dict[str, list[_Said]] = defaultdict(list)
     for said in flags:
         by_name[said[0]].append(said)
-    many = {spec.attr for spec in end.declaration.cls.__seared_fields__ if spec.field.many}
+    found = end.declaration
+    fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
     given: dict[str, Given] = {}
     for name, saids in by_name.items():
         flag = takes.get(name)
@@ -277,13 +291,23 @@ def _flags_given(end: End, flags: list[_Said], takes: Mapping[str, Flag]) -> dic
             named = ', '.join(f'--{taken}' for taken in takes) or 'no flags'
             msg = f'{end.bound.phrase.text} takes {named}, not --{name}'
             raise ReadError(msg)
-        if len(saids) > 1 and (flag.arity is Arity.SWITCH or flag.field not in many):
+        kind, field = found.field_kinds[flag.field], fields[flag.field]
+        if len(saids) > 1 and (flag.arity is Arity.SWITCH or not field.many):
             msg = f'--{name} is given twice'
             raise ReadError(msg)
         words = tuple(word for _, token, value in saids for word in (token, value) if word is not None)
-        values = [value.text for _, _, value in saids if value is not None]
+        values = [_read(kind, value.text, field, f'--{name}') for _, _, value in saids if value is not None]
         if flag.arity is Arity.SWITCH:
             given[flag.field] = Given(by=flag, words=words, value=not flag.negated)
         else:
-            given[flag.field] = Given(by=flag, words=words, value=values if flag.field in many else values[0])
+            given[flag.field] = Given(by=flag, words=words, value=values if field.many else values[0])
     return given
+
+
+def _read(kind: Kind, text: str, field: Field, where: str) -> object:
+    """A word, read by its field's kind; a word it can't read is refused, saying where it stands."""
+    try:
+        return kind.read(text, field)
+    except ValueError as e:
+        msg = f'{where}: {e}'
+        raise ReadError(msg) from None

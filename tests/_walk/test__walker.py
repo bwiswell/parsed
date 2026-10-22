@@ -36,7 +36,7 @@ class TestEveryFixture:
         ('line', 'expected'),
         [
             ('fleet prospector mine', farlandia.FleetMine(fleet='prospector')),
-            ('detachment d2 mine --for 90', farlandia.FleetMine(fleet='d2', for_=timedelta(seconds=90))),
+            ('detachment d2 mine --for 90s', farlandia.FleetMine(fleet='d2', for_=timedelta(seconds=90))),
             ('fleet f1 dock', farlandia.FleetDock(fleet='f1')),
             ('fleet f1 dock nearest', farlandia.FleetDock(fleet='f1')),
             ('fleet f1 dock vesta', farlandia.FleetDock(fleet='f1', station='vesta')),
@@ -95,6 +95,56 @@ class TestWords:
         assert reading.load() == farlandia.Log(n=20)
 
 
+class TestWordForms:
+    # Each kind's own words are `tests/test_kinds.py`'s; these pin the walk reading by them.
+    def test_a_slot_s_word_read_by_its_kind(self, tree):
+        reading = tree.walk('log 1,000')
+        assert reading.data() == {'n': 1000}
+        assert reading.load() == farlandia.Log(n=1000)
+
+    def test_a_flag_s_word_read_by_its_kind(self, tree):
+        assert tree.walk('fleet f1 mine --for 1h30m').data() == {'fleet': 'f1', 'for': 5400.0}
+        assert tree.walk('handheld connect dock r7 --host h --port 5,085').given['port'].value == 5085
+
+    def test_a_list_s_words_each_read(self):
+        tag = _one('tag {ns}', ns=parsed.Int(many=True, required=True))
+        assert tag.read('tag 1 2,000 3').ns == [1, 2000, 3]
+        flagged = _one('tag', ns=parsed.Int(many=True, default_factory=list))
+        assert flagged.read('tag --ns 1 --ns 2').ns == [1, 2]
+
+    def test_the_rest_of_the_line_read_once(self, tree):
+        assert tree.walk('say 1,000 ships').given['message'].value == '1,000 ships'
+
+    def test_a_bool_said_as_a_word(self, tree):
+        assert tree.read('fleets start FALSE') == farlandia.FleetsStart(on=False)
+
+    @pytest.mark.parametrize(
+        ('line', 'says'),
+        [
+            ('log many', r"log \{n\}: 'many' is not a whole number"),
+            ('fleet f1 mine --for soon', r"--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m"),
+            ('fleet f1 mine --for 90', r"--for: '90' is not a span of time"),
+            ('fleets start maybe', r"fleets start \{on\}: 'maybe' is not true or false"),
+            ('handheld connect dock r7 --host h --port 1,00', r"--port: '1,00' is not a whole number"),
+        ],
+    )
+    def test_a_word_its_kind_can_t_read_says_where_it_stands(self, tree, line, says):
+        with pytest.raises(ReadError, match=says):
+            tree.walk(line)
+
+    def test_a_kind_s_bounds_are_seared_s_to_check(self, tree):
+        reading = tree.walk('log 0')
+        assert reading.data() == {'n': 0}
+        with pytest.raises(parsed.ValidationError, match=r'Log\.n: must be >= 1'):
+            reading.load()
+
+    def test_load_refuses_a_key_the_command_doesn_t_know(self, tree, monkeypatch):
+        reading = tree.walk('log 40')
+        monkeypatch.setattr(type(reading), 'data', lambda _: {'n': 40, 'lines': 3})
+        with pytest.raises(parsed.ValidationError, match=r'unknown key'):
+            reading.load()
+
+
 class TestFlags:
     def test_anywhere_after_the_first_word(self, tree):
         expected = farlandia.FleetsMerge(fleet='f1', into='f2')
@@ -102,7 +152,7 @@ class TestFlags:
         assert tree.read('fleets --into f2 merge f1') == expected
 
     def test_a_value_after_an_equals_quoted_or_not(self, tree):
-        assert tree.read('fleet f1 mine --for=90').for_ == timedelta(seconds=90)
+        assert tree.read('fleet f1 mine --for=90s').for_ == timedelta(seconds=90)
         found = tree.read('handheld connect dock r7 --host=h --label="north dock"')
         assert found.label == 'north dock'
 
@@ -112,7 +162,7 @@ class TestFlags:
         assert stop.read('mine --no-stop').stop is False
 
     def test_names_are_lowercased(self, tree):
-        assert tree.read('fleet f1 mine --FOR 90').for_ == timedelta(seconds=90)
+        assert tree.read('fleet f1 mine --FOR 90s').for_ == timedelta(seconds=90)
 
     def test_a_value_the_tree_would_take_for_a_literal(self, tree):
         assert tree.read('fleets merge f1 --into merge').into == 'merge'
@@ -149,11 +199,11 @@ class TestReading:
         assert ([w.start for w in quiet.words], quiet.value) == ([26], True)
 
     def test_a_value_after_an_equals_starts_after_it(self, tree):
-        given = tree.walk('fleet f1 mine --for=90').given['for_']
-        assert [(w.text, w.start) for w in given.words] == [('--for=90', 14), ('90', 20)]
+        given = tree.walk('fleet f1 mine --for=90s').given['for_']
+        assert [(w.text, w.start) for w in given.words] == [('--for=90s', 14), ('90s', 20)]
 
     def test_data_is_by_wire_name(self, tree):
-        assert tree.walk('fleet f1 mine --for 90').data() == {'fleet': 'f1', 'for': '90'}
+        assert tree.walk('fleet f1 mine --for 90s').data() == {'fleet': 'f1', 'for': 90.0}
 
     def test_where_the_walk_ended(self, tree):
         reading = tree.walk('fleet f1 dock nearest')
@@ -164,7 +214,7 @@ class TestReading:
         ('line', 'says'),
         [
             ('log 0', r'Log\.n: must be >= 1'),
-            ('fleet f1 mine --for soon', r"cannot deserialize 'soon' as timedelta"),
+            ('handheld connect dock r7 --host h --port 70000', r'HandheldConnect\.port: must be <= 65535'),
             ('handheld connect dock r7', r'HandheldConnect\.host: required key missing'),
         ],
     )
@@ -215,13 +265,15 @@ class TestRefusals:
 class TestFarlandiasCases:
     """farlandia's own reading cases (``tests/client/test_tree.py``), on this fixture's commands.
 
-    Lifted: words, slots and flags anywhere after the first word; a slot of several words; the refusals that are the
-    walk's. Changed on purpose: ``--quiet yes`` reads ``yes`` as a word, since the tree knows ``--quiet`` is a
-    switch. Later: did-you-mean and the hints (the structured errors), durations and true-or-false (the word forms),
-    names alone (names), chains and subjects, ``--help``, completion, usage, schemas and ``render``.
+    Lifted: words, slots and flags anywhere after the first word; a slot of several words; a span of time and true or
+    false; the refusals that are the walk's. Changed on purpose: ``--quiet yes`` reads ``yes`` as a word, since the
+    tree knows ``--quiet`` is a switch. Later: did-you-mean and the hints (the structured errors), a share's ``off``
+    or percent (a kind of its own), names alone (names), chains and subjects, ``--help``, completion, usage, schemas
+    and ``render``.
     """
 
     def test_words_slots_and_flags_anywhere_after_the_first_word(self, tree):
+        assert tree.read('fleets start true') == farlandia.FleetsStart(on=True)
         assert tree.read('fleets merge --into f2 f1') == farlandia.FleetsMerge(fleet='f1', into='f2')
         assert tree.read('fleets merge f1 --into f2 --quiet') == farlandia.FleetsMerge(
             fleet='f1', into='f2', quiet=True
@@ -238,7 +290,9 @@ class TestFarlandiasCases:
             ('fleet f1 mine --into f2', 'takes --for'),
             ('fleet f1 mine --for 1h --for 2h', 'given twice'),
             ('fleet f1 mine --for', 'needs a value'),
+            ('fleet f1 mine --for soon', 'not a span of time'),
             ('fleet f1', 'then what'),
+            ('fleets start maybe', 'true or false'),
             ('fleet f1 dock nearest now', 'left over'),
         ],
     )

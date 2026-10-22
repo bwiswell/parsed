@@ -23,7 +23,13 @@ lines as it lands, and the entry is dated when that version is released.
 - **Reading a line:** `Tree.read(line)` gives the command's instance, and `Tree.walk(line)` stops short of it, at
   a `Reading` that keeps each field's words and where they stand. Words split on whitespace, double quotes holding
   spaces; a literal matches case aside, and a quoted word is never a literal or a flag. A slot of several words
-  takes them up to a literal after them. seared loads the words into the instance, and names are kept as typed.
+  takes them up to a literal after them. seared loads the instance, and names are kept as typed.
+- **Word forms:** each word is read by its field's kind to the field's wire value, before seared checks it. A number
+  may group its thousands by commas (`1,000`); a span of time says its units (`90s`, `10m`, `1h30m`); an `Enum`'s
+  value reads case aside; `true` or `false` for a `Bool` said as a word; ISO 8601 for dates and times; a `UUID`
+  checked. A word its kind can't read is a `ReadError` naming the phrase or the flag. `Kind.read(word, field)` is
+  each kind's.
+- **`Reading.load` refuses a key the command doesn't know.**
 - **Flags anywhere after the first word,** `--name=value`, and `--` to end them. A list's flag may be given again.
   parsed's own (`--help`, `--json`, `--yes`, `--dry-run`) are switches every command takes, kept apart from the
   fields.

@@ -132,7 +132,7 @@ def tree(commands: int = COMMANDS) -> list[type[Command]]:
 
 
 #: What :func:`lines` gives each flag the tree's commands take.
-_FLAG_VALUES = {'for_': '90', 'n': '3'}
+_FLAG_VALUES = {'for_': '90s', 'n': '3'}
 
 
 def lines(commands: list[type[Command]]) -> list[str]:
