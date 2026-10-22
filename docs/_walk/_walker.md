@@ -83,7 +83,8 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
 | gives a key twice | `… {variables**}: ore is given twice` | |
 
-A hint is a usage ([`_hints.md`](_hints.md)): the command's, or the line so far with a `<slot>` where a value goes.
+A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the
+rest of the one command's usage past it (flags and all), or the slot's `<…>` where several lie past it.
 Since a switch takes no value, `--quiet yes` reads `yes` as a word, which the command may not take.
 
 **seared's refusals** of a value, once read (its bounds, lengths or pattern), come back from `load` as a

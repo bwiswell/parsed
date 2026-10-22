@@ -14,8 +14,14 @@ slot, then its flags. A refusal gives it as its hint.
 | a switch | `[--quiet]`, or `[--no-stop]` for one negated |
 
 So `fleets merge {fleet}`, with a required `into` and a `quiet` switch, is
-`fleets merge <fleet> --into <into> [--quiet]`. Where a line stops at a slot, the hint is the line so far with the
-slot's `<…>`, then `…` if more must follow: `fleet f1 jump <system>`, `fleet <fleet> …`.
+`fleets merge <fleet> --into <into> [--quiet]`. `usage(…, start=n)` begins at the phrase's `n`th part, for the
+rest of a line that has said the parts before it.
+
+Where a line stops at a slot, the hint is the line so far, then:
+
+- **where one command lies past the slot,** the rest of its usage, flags and all: `fleets init` hints
+  `fleets init <ships> … [--name <name>]`, and `fleet f1 jump` hints `fleet f1 jump <system>`;
+- **where several do,** the slot's `<…>`, then `…` if more must follow: `fleet <fleet> …`.
 
 **`close(word, candidates)`** is up to three candidates close to a word, the closest first, by the standard
 library's `difflib`: the did-you-mean of a word no command says, or a flag no command takes.
