@@ -8,7 +8,7 @@ a tree's root, keeping each field's words; ``_complete.py`` offers what may come
 """
 
 from ._complete import Completion, complete
-from ._render import render
+from ._render import key, render
 from ._terms import RESERVED, Arity, SlotKind
 from ._walker import Given, Reading, walk
 from ._words import Token, split
@@ -22,6 +22,7 @@ __all__ = [
     'SlotKind',
     'Token',
     'complete',
+    'key',
     'render',
     'split',
     'walk',

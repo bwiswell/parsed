@@ -18,12 +18,14 @@ from seared import Seared
 from seared.doc import SchemaDoc, is_seared_class
 from seared.doc import introspect as _seared_introspect
 
+from parsed._phrase import Word
 from parsed.command import Command, declaration
 from parsed.tree import Arity, Tree
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from parsed._phrase import Bound
     from parsed.effect import Effect
     from parsed.kinds import Kind
 
@@ -80,6 +82,7 @@ class CommandDoc:
         schema: seared's ``SchemaDoc`` of its fields.
         phrase: Its ``PHRASE``.
         extra_phrases: Its ``EXTRA_PHRASES``.
+        keys: Each phrase's key template, for policy (:mod:`parsed.doc.keys`): ``fleet/{fleet}/mine``.
         slots: Every slot of its phrases, each name once, in the order they first stand.
         flags: Its flags, in the order its fields are declared.
         kinds: Each field's kind, by attribute name.
@@ -96,6 +99,7 @@ class CommandDoc:
     schema: SchemaDoc
     phrase: str
     extra_phrases: tuple[str, ...]
+    keys: tuple[str, ...]
     slots: tuple[SlotDoc, ...]
     flags: tuple[FlagDoc, ...]
     kinds: Mapping[str, Kind]
@@ -155,6 +159,7 @@ def introspect_command(cls: type[Command]) -> CommandDoc:
         schema=_seared_introspect(cls),
         phrase=found.phrase or '',
         extra_phrases=found.extra_phrases,
+        keys=tuple(_key_template(bound) for bound in found.phrases),
         slots=tuple(slots.values()),
         flags=flags,
         kinds=MappingProxyType(dict(found.field_kinds)),
@@ -166,6 +171,17 @@ def introspect_command(cls: type[Command]) -> CommandDoc:
         reply=found.reply,
         fields_from=_fields_from(cls),
     )
+
+
+def _key_template(bound: Bound) -> str:
+    """A phrase's key template, as :mod:`parsed.doc.keys` has it: its words, and a ``{slot}`` for each one-word slot."""
+    places = {place.slot: place for place in bound.places}
+    segments = [
+        part.text if isinstance(part, Word) else f'{{{part.name}}}'
+        for part in bound.phrase.parts
+        if isinstance(part, Word) or not (places[part.name].many or places[part.name].rest)
+    ]
+    return '/'.join(segments)
 
 
 def _fields_from(cls: type) -> tuple[type[Seared], ...]:

@@ -27,6 +27,10 @@ lines as it lands, and the entry is dated when that version is released.
   aren't commands (a protocol's request class it inherits). `json_schema(cls)`: seared's load schema, closed, with
   `x-kind` and `x-scope` on a name's property and the command's own `x-` keys (`x-phrase`, `x-effect`, `x-asks` and
   the rest).
+- **Command keys, for policy:** `parsed.doc.command_key(command, names=…)`, an instance's key by the phrase that
+  says it, its words and its slots' values slashed as a topic is (`fleet/f1/dock/vesta`); a slot of several words,
+  the rest of the line, an optional slot at its default and the flags left out. `CommandDoc.keys` holds each
+  phrase's template (`fleet/{fleet}/dock/{station}`).
 
 ## 0.1.3 — 2026-10-21
 

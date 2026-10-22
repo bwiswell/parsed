@@ -50,46 +50,84 @@ def render(tree: Tree, command: Command, names: Mapping[str, Resolver] | None = 
     if found is None:
         msg = f"{cls.__qualname__} is not one of the tree's commands"
         raise RenderError(msg)
-    said = _Saying(tree, found, command, names or {})
-    for bound in found.phrases:
-        line = said.by(bound)
-        if line is not None:
-            return line
-    msg = f'no phrase of {cls.__qualname__} says {command!r}' + (', with the names given' if names else '')
-    raise RenderError(msg)
+    said = _Saying(found, command, names or {})
+    return said.line(tree, said.phrase())
+
+
+def key(found: Declaration, command: Command, names: Mapping[str, Resolver] | None = None) -> str:
+    """``command``'s key, by the phrase that says it: its words and its slots' values, joined by ``/``.
+
+    A slot of several words, the rest of the line, an optional slot at its default and the flags are left out.
+
+    Raises:
+        RenderError: No phrase of it can say it.
+    """
+    said = _Saying(found, command, names or {})
+    return said.key(said.phrase())
 
 
 class _Saying:
     """One instance, said: its fields' values and wire values, and the phrase that can say them."""
 
-    def __init__(self, tree: Tree, found: Declaration, command: Command, names: Mapping[str, Resolver]) -> None:
-        self.tree, self.found, self.command, self.names = tree, found, command, names
+    def __init__(self, found: Declaration, command: Command, names: Mapping[str, Resolver]) -> None:
+        self.found, self.command, self.names = found, command, names
         self.specs: dict[str, FieldSpec] = {spec.attr: spec for spec in found.cls.__seared_fields__}
         self.wire = found.cls.dump(command)
 
-    def by(self, bound: Bound) -> str | None:
-        """The line ``bound``'s phrase says the instance in, or ``None`` when it can't say it."""
+    def phrase(self) -> Bound:
+        """The first of the command's phrases that can say the instance.
+
+        Raises:
+            RenderError: None can.
+        """
+        found = next((bound for bound in self.found.phrases if self._can_say(bound)), None)
+        if found is None:
+            cls = self.found.cls.__qualname__
+            msg = f'no phrase of {cls} says {self.command!r}' + (', with the names given' if self.names else '')
+            raise RenderError(msg)
+        return found
+
+    def _can_say(self, bound: Bound) -> bool:
+        """Whether its left-out fields are at their defaults, and the names know each value it says."""
         if any(not self._at_default(field) for field in bound.left_out):
-            return None
+            return False
+        return all(self._known(place) for place in bound.places if not self._skipped(place))
+
+    def _skipped(self, place: Place) -> bool:
+        """Whether an optional slot is left out, holding its field's default, on the route that leaves it out."""
+        return not place.required and self._at_default(place.field)
+
+    def line(self, tree: Tree, bound: Bound) -> str:
+        """The line ``bound``'s phrase says the instance in, each word quoted where the tree would read it otherwise."""
         places = {place.slot: place for place in bound.places}
         words: list[str] = []
-        node = self.tree.root
+        node = tree.root
         for part in bound.phrase.parts:
             if isinstance(part, Word):
                 words.append(part.text)
                 node = node.words[part.text]
                 continue
             place = places[part.name]
-            if not place.required and self._at_default(place.field):
-                continue  # left out, on the route that leaves it out
-            if not self._known(place):
-                return None
             edge = node.slot
-            if edge is None:  # a phrase compiled into the tree has its slot's edge
-                return None
+            if self._skipped(place) or edge is None:  # a compiled phrase has its slot's edge
+                continue
             words += self._slot_words(place, edge.kind, node, edge.node)
             node = edge.node
-        return ' '.join([*words, *self._flags()])
+        return ' '.join([*words, *self._flags(tree)])
+
+    def key(self, bound: Bound) -> str:
+        """The key ``bound``'s phrase says the instance by: its words, and each one-word slot's value as written."""
+        places = {place.slot: place for place in bound.places}
+        segments: list[str] = []
+        for part in bound.phrase.parts:
+            if isinstance(part, Word):
+                segments.append(part.text)
+                continue
+            place = places[part.name]
+            if place.many or place.rest or self._skipped(place):
+                continue
+            segments.append(' '.join(self._spelled(place.field, self.found.kind_of(place))))
+        return '/'.join(segments)
 
     def _at_default(self, attr: str) -> bool:
         field = self.specs[attr].field
@@ -128,10 +166,10 @@ class _Saying:
             return [word for item in value for word in kind.write(item, field)]
         return kind.write(value, field)
 
-    def _flags(self) -> list[str]:
+    def _flags(self, tree: Tree) -> list[str]:
         """The flags not at their defaults, in the order the command declares its fields."""
         words: list[str] = []
-        for flag in self.tree.flags_of(self.found.cls).values():
+        for flag in tree.flags_of(self.found.cls).values():
             if self._at_default(flag.field):
                 continue
             if flag.arity is Arity.SWITCH:
