@@ -461,12 +461,27 @@ class TestRefusalsAsData:
             ('log --into f2', 'log [<n>]'),
             ('fleet f1 mine --for', '--for <for>'),
             ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <into>'),
+            ('fleets merge', 'fleets merge <fleet> --into <into> [--quiet]'),  # one command past it: its usage
+            ('ships make s1 add', 'ships make s1 add <part>'),
+            ('fleet f1 sell', 'fleet f1 sell <goods> …'),
+            (
+                'handheld connect',
+                'handheld connect <source> <reader_id> --host <host> [--port <port>] [--label <label>]',
+            ),
         ],
     )
     def test_a_hint_says_how_to_say_it(self, tree, line, hint):
         found = _refusal(tree, line)
         assert found.hint == hint
         assert str(found).endswith(f' `{hint}`')
+
+    def test_a_slot_after_an_optional_one_left_out(self):
+        found = _one(
+            'pick {x} then {y}', x=parsed.Str(default=None), y=parsed.Str(required=True), n=parsed.Int(default=1)
+        )
+        with pytest.raises(ReadError) as caught:
+            found.walk('pick then')
+        assert caught.value.hint == 'pick then <y> [--n <n>]'
 
     @pytest.mark.parametrize(
         ('line', 'suggestions'),

@@ -35,6 +35,12 @@ lines as it lands, and the entry is dated when that version is released.
   `key value` pairs: each key by the app's `PairsResolver`, and each value by the resolver it gives that key. A
   command is refused when `Pairs` reads a field that isn't keyed or isn't the rest of the line.
 
+### Changed
+
+- **A slot left empty hints the rest of the command's usage,** flags and all, where one command lies past it:
+  ``fleets merge: which fleet? `fleets merge <fleet> --into <into> [--quiet]` `` (the hint was the slot alone).
+  Where several commands lie past it, the hint is the slot and `…`, as before.
+
 ### Fixed
 
 - **`Tree.collect` takes commands in the order they're declared,** not by class name, so the words a refusal lists

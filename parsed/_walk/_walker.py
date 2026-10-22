@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, NamedTuple, cast
 
 from seared import ValidationError
 
-from parsed._phrase import Place
+from parsed._phrase import Place, Slot
 from parsed.errors import ReadError
 from parsed.kinds import NOT_LITERAL, Name, Named, Pairs
 
@@ -284,7 +284,7 @@ class _Walker:
                 raise self._unknown(node, said, words[at])
             taken = _taken(edge.kind, edge.node, words, at)
             if not taken:
-                raise self._which(edge, said, words[at])
+                raise self._which(edge, said, words[at], len(slots))
             slots.append(taken)
             said += taken
             node = edge.node
@@ -292,7 +292,7 @@ class _Walker:
         if node.end is not None:
             return node.end, slots
         if node.slot is not None:
-            raise self._which(node.slot, said, None)
+            raise self._which(node.slot, said, None, len(slots))
         words_next = list(node.words)
         msg = f'{_said(said)}: then what? {" | ".join(words_next)}'
         raise self.refuse(msg, suggestions=words_next)
@@ -309,9 +309,24 @@ class _Walker:
         words_next = list(node.words)
         return self.refuse(f'no command {asked!r}: {" | ".join(words_next)}', word=word, suggestions=words_next)
 
-    def _which(self, edge: Edge, said: list[Token], word: Token | None) -> ReadError:
-        """A slot left empty: which value, and the line so far with a ``<slot>`` where it goes."""
-        hint = ' '.join([*(token.raw for token in said), f'<{edge.slot}>', *([] if edge.node.end else ['…'])])
+    def _which(self, edge: Edge, said: list[Token], word: Token | None, before: int) -> ReadError:
+        """A slot left empty: which value, and the line so far with the rest of how it's said.
+
+        Where one command lies past the slot, the hint is the rest of its usage, flags and all; where several do, the
+        slot's ``<…>``, and ``…`` if more must follow. ``before`` counts the slots the line has given.
+        """
+        past = {(end.declaration.cls, end.bound.phrase.text): end for end in _ends(edge.node)}
+        if len(past) == 1:
+            end = next(iter(past.values()))
+            name = end.places[before].slot
+            parts = end.bound.phrase.parts
+            start = next(at for at, part in enumerate(parts) if isinstance(part, Slot) and part.name == name)
+            fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
+            flags = self.tree.flags_of(end.declaration.cls).values()
+            rest = [usage(end.bound, flags, fields, start=start)]
+        else:
+            rest = [f'<{edge.slot}>', *([] if edge.node.end else ['…'])]
+        hint = ' '.join([*(token.raw for token in said), *rest])
         return self.refuse(f'{_said(said)}: which {edge.slot}?', word=word, hint=hint)
 
     def _usage(self, end: End) -> str:
@@ -469,6 +484,16 @@ def _flag(token: Token) -> tuple[str, Token | None] | None:
         return head[2:].lower(), None
     at = len(head) + 1  # the head has no quotes, so the text and the raw word agree up to the `=`
     return head[2:].lower(), Token(text=token.text[at:], start=token.start + at, raw=token.raw[at:])
+
+
+def _ends(node: Node) -> list[End]:
+    """Every command the walk may still end at, from ``node``: its own first, then those below it, in order."""
+    found = [node.end] if node.end is not None else []
+    for child in node.words.values():
+        found += _ends(child)
+    if node.slot is not None:
+        found += _ends(node.slot.node)
+    return found
 
 
 def _literal(node: Node, word: Token) -> Node | None:

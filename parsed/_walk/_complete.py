@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, NamedTuple, cast
 from parsed.kinds import Name, Named, Pairs
 
 from ._terms import RESERVED, Arity, SlotKind
-from ._walker import _flag, _literal, _taken
+from ._walker import _ends, _flag, _literal, _taken
 from ._words import Token, split
 
 if TYPE_CHECKING:
@@ -234,16 +234,6 @@ class _Completer:
             text, scope_kind = cast('Token', given[flag.name]).text, found.field_kinds[flag.field]
         resolver = self.names.get(scope_kind.category) if isinstance(scope_kind, Name) else None
         return text if resolver is None else resolver.lookup(text, None) or text
-
-
-def _ends(node: Node) -> list[End]:
-    """Every command the walk may still end at, from ``node``: its own first, then those below it, in order."""
-    found = [node.end] if node.end is not None else []
-    for child in node.words.values():
-        found += _ends(child)
-    if node.slot is not None:
-        found += _ends(node.slot.node)
-    return found
 
 
 def _field(end: End, attr: str) -> Field:
