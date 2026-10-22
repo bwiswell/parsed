@@ -1,7 +1,7 @@
 """Tests for ``parsed/errors.py``: one base for every error parsed raises."""
 
 import parsed
-from parsed.errors import DeclarationError, ParsedError, ReadError
+from parsed.errors import DeclarationError, ParsedError, ReadError, RenderError
 
 
 def test_exported():
@@ -56,3 +56,9 @@ class TestReadError:
         found = ReadError("no command 'flet'", line='flet', word='flet', suggestions=('fleet',)).to_json()
         assert (found['word'], found['suggestions']) == ('flet', ['fleet'])
         assert 'field' not in found
+
+
+def test_a_render_error_is_parsed_s_and_a_value_error():
+    assert parsed.RenderError is RenderError
+    assert issubclass(RenderError, ParsedError)
+    assert issubclass(RenderError, ValueError)

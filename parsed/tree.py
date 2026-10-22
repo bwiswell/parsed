@@ -195,6 +195,19 @@ class Tree:
         """
         return _walk.complete(self, text, names)
 
+    def render(self, command: Command, names: Mapping[str, Resolver] | None = None) -> str:
+        """The line that says ``command``, which reads back to it: the first of its phrases that can say it.
+
+        Args:
+            command: An instance of one of the tree's commands.
+            names: The app's resolvers, by category: with them, a phrase's names must be keys they know, so a
+                polymorphic command is said by the twin its value belongs to.
+
+        Raises:
+            RenderError: ``command`` isn't one of the tree's, or none of its phrases can say it.
+        """
+        return _walk.render(self, command, names)
+
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__
         node, said = self.root, []

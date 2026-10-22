@@ -261,6 +261,45 @@ class TestOffers:
         assert kind.offers(field) == offers
 
 
+class TestWriting:
+    # A wire value back to its words, which read to it again.
+    @pytest.mark.parametrize(
+        ('kind', 'field', 'value', 'words'),
+        [
+            (Word(), seared.Str(), "Vruba'a Belt 1", ["Vruba'a Belt 1"]),
+            (Number(), seared.Int(), 1000, ['1000']),
+            (Number(), seared.Float(), 30.0, ['30']),
+            (Number(), seared.Float(), 0.1, ['0.1']),
+            (Number(), seared.Float(), 1e20, ['1e+20']),
+            (Number(), seared.Decimal(), '1234.50', ['1234.50']),
+            (Number(suffix='%', words={'off': None}), seared.Float(nullable=True), None, ['off']),
+            (Switch(), seared.Bool(), False, ['false']),
+            (Choice(), seared.Enum(enum=Colour), 'green', ['green']),
+            (Duration(), seared.TimeDelta(), 5400.0, ['1h30m']),
+            (Duration(), seared.TimeDelta(), 90.5, ['1m30.5s']),
+            (Duration(), seared.TimeDelta(), 0.0, ['0s']),
+            (Duration(), seared.TimeDelta(), 7200, ['2h']),
+            (Moment(), seared.Date(), '2026-10-21', ['2026-10-21']),
+            (Name('fleet'), seared.Str(), 'f1', ['f1']),
+            (
+                Pairs('variable'),
+                seared.Str(keyed=True),
+                {'ore': 'iron', 'home': 'vesta'},
+                ['ore', 'iron', 'home', 'vesta'],
+            ),
+        ],
+    )
+    def test_a_value_s_words(self, kind, field, value, words):
+        assert kind.write(value, field) == words
+        if not isinstance(kind, Pairs):
+            assert kind.read(words[0], field) == value
+
+    def test_a_literal_by_its_value_and_type(self):
+        on = Number(words={'on': 1})
+        assert on.write(1, seared.Int()) == ['on']
+        assert on.write(value=True, field=seared.Int()) == ['True']  # `True == 1`, but `on` reads as `1`
+
+
 def test_every_kind_is_a_kind():
     for kind in (Word(), Number(), Switch(), Choice(), Duration(), Moment(), Name('fleet')):
         assert isinstance(kind, Kind)

@@ -41,6 +41,7 @@ _ROWS = (
     ('reading', 'walk', "a line's flags split off, its words walked, each read by its kind"),
     ('reading', 'read', 'a line on to its instance, which seared loads from the values'),
     ('completing', 'complete', "what may come after a line's words but its last"),
+    ('rendering', 'render', 'an instance back to its line: its phrase picked, its values spelled, its flags given'),
 )
 
 #: Run counts the prose spells out; anything else stays a numeral.
@@ -151,6 +152,11 @@ def completing_table(results: Results) -> str:
     return _suite_table(results, 'completing', 'Every line', 'Per line')
 
 
+def rendering_table(results: Results) -> str:
+    """The rendering suite: its case's median time for an instance of each command, and per command."""
+    return _suite_table(results, 'rendering', 'Every command', 'Per command')
+
+
 def spread_table(results: Results) -> str:
     """How far each case's rate moved between runs; ``n/a`` for one run."""
     rows = [['Case', 'Spread']]
@@ -192,6 +198,7 @@ def blocks(report: Report) -> dict[str, str]:
         'declaring': f'\n{declaring_table(r)}\n',
         'reading': f'\n{reading_table(r)}\n',
         'completing': f'\n{completing_table(r)}\n',
+        'rendering': f'\n{rendering_table(r)}\n',
         'spread': f'\n{spread_table(r)}\n',
         # Inline blocks: the provenance, then the numbers the prose quotes.
         'run': run_line(report),
@@ -204,6 +211,7 @@ def blocks(report: Report) -> dict[str, str]:
         'walk-us': _fmt(r.us_per_command(walk), lambda v: f'~{v:.0f} µs'),
         'read-us': _fmt(r.us_per_command(read), lambda v: f'~{v:.0f} µs'),
         'complete-us': _fmt(r.us_per_command(('completing', 'complete')), lambda v: f'~{v:.0f} µs'),
+        'render-us': _fmt(r.us_per_command(('rendering', 'render')), lambda v: f'~{v:.0f} µs'),
     }
 
 
