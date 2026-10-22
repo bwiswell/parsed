@@ -115,6 +115,10 @@ class Kind:
         """
         return word
 
+    def offers(self, field: Field) -> tuple[str, ...]:  # noqa: ARG002 -- every kind offers alike
+        """The words completion offers for the field besides the literal words: here, none, since any may do."""
+        return ()
+
 
 @dataclass(frozen=True, slots=True)
 class Word(Kind):
@@ -172,6 +176,10 @@ class Switch(Kind):
             raise ValueError(msg)
         return found
 
+    def offers(self, field: Field) -> tuple[str, ...]:  # noqa: ARG002 -- every kind offers alike
+        """Both."""
+        return ('true', 'false')
+
 
 @dataclass(frozen=True, slots=True)
 class Choice(Kind):
@@ -189,6 +197,10 @@ class Choice(Kind):
             raise ValueError(msg)
         return found[0]
 
+    def offers(self, field: Field) -> tuple[str, ...]:
+        """The ``Enum``'s values, as they're written."""
+        return tuple(str(member.value) for member in getattr(field, 'enum', ()))
+
 
 @dataclass(frozen=True, slots=True)
 class Duration(Kind):
@@ -202,6 +214,10 @@ class Duration(Kind):
             raise ValueError(msg)
         hours, minutes, seconds = (float(part or 0) for part in found.groups())
         return hours * 3600 + minutes * 60 + seconds
+
+    def offers(self, field: Field) -> tuple[str, ...]:  # noqa: ARG002 -- every kind offers alike
+        """A few spans to start from."""
+        return ('10m', '30m', '1h')
 
 
 #: What a moment's word is read by, and what one looks like, by its field's type.

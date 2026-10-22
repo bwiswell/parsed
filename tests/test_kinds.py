@@ -243,6 +243,24 @@ class TestNamed:
         assert Name('fleet').form('Prospector', seared.Str()) == 'Prospector'
 
 
+class TestOffers:
+    # What completion offers for a kind besides its literal words.
+    @pytest.mark.parametrize(
+        ('kind', 'field', 'offers'),
+        [
+            (Choice(), seared.Enum(enum=Colour), ('red', 'green', 'blue')),
+            (Switch(), seared.Bool(), ('true', 'false')),
+            (Duration(), seared.TimeDelta(), ('10m', '30m', '1h')),
+            (Word(), seared.Str(), ()),
+            (Number(), seared.Int(), ()),
+            (Moment(), seared.Date(), ()),
+            (Name('fleet'), seared.Str(), ()),  # a name's are its resolver's
+        ],
+    )
+    def test_each_kind_s_own(self, kind, field, offers):
+        assert kind.offers(field) == offers
+
+
 def test_every_kind_is_a_kind():
     for kind in (Word(), Number(), Switch(), Choice(), Duration(), Moment(), Name('fleet')):
         assert isinstance(kind, Kind)

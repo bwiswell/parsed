@@ -71,6 +71,12 @@ a command whose field isn't is refused. `Number(suffix='%')` lets its suffix fol
 
 `kind.literal(word)` gives a literal word's value, or `parsed.kinds.NOT_LITERAL` for a word that isn't one.
 
+## What a kind offers
+
+Completion offers a kind's literal words, then `kind.offers(field)`: a `Choice`'s values, `true` and `false` for a
+`Switch`, and `10m`, `30m` and `1h` for a `Duration`. The others offer nothing of their own, since any word may do;
+a name's are its resolver's `options`. A kind of an app's own may override `offers`.
+
 ## `Name`
 
 `parsed.Name(category, scope=None)` is one of an app's names: a fleet, a station, a good. Its words read to the

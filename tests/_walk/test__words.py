@@ -47,6 +47,18 @@ class TestSplitting:
             split('fleet "Vruba mine')
 
 
+class TestPartial:
+    # A line being typed: a quote left open holds the last word as far as it goes.
+    def test_an_open_quote_holds_the_last_word(self):
+        assert split('dock "Vruba\'a ', partial=True) == [
+            Token(text='dock', start=0, raw='dock'),
+            Token(text="Vruba'a ", start=5, raw='"Vruba\'a '),
+        ]
+
+    def test_a_closed_line_splits_as_ever(self):
+        assert split('dock vesta', partial=True) == split('dock vesta')
+
+
 class TestQuoted:
     @pytest.mark.parametrize(('line', 'quoted'), [('nearest', False), ('"nearest"', True), ('a"b"', True)])
     def test_any_quote_makes_a_word_a_value(self, line, quoted):

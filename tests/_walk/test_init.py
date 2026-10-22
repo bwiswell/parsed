@@ -2,14 +2,26 @@
 
 import parsed.tree
 from parsed import _walk
-from parsed._walk import _terms, _walker, _words
+from parsed._walk import _complete, _terms, _walker, _words
 
 
 def test_it_gathers_its_modules():
     assert _walk.split is _words.split
     assert _walk.walk is _walker.walk
     assert _walk.Arity is _terms.Arity
-    assert set(_walk.__all__) == {'RESERVED', 'Arity', 'Given', 'Reading', 'SlotKind', 'Token', 'split', 'walk'}
+    assert _walk.complete is _complete.complete
+    assert set(_walk.__all__) == {
+        'RESERVED',
+        'Arity',
+        'Completion',
+        'Given',
+        'Reading',
+        'SlotKind',
+        'Token',
+        'complete',
+        'split',
+        'walk',
+    }
 
 
 def test_the_tree_speaks_the_walk_s_terms():
@@ -18,3 +30,4 @@ def test_the_tree_speaks_the_walk_s_terms():
     assert parsed.tree.Arity is _walk.Arity
     assert parsed.tree.SlotKind is _walk.SlotKind
     assert parsed.tree.Reading is _walk.Reading
+    assert parsed.tree.Completion is _walk.Completion

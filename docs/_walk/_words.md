@@ -19,7 +19,8 @@
 | `Vruba'a` | `Vruba'a`: a single quote is a plain character |
 
 There are no escapes, so a word can't hold a double quote. A quote left open is refused with a `ReadError` naming
-its column.
+its column, unless the line is still being typed (`split(line, partial=True)`, for completion): then it holds the
+last word as far as it goes.
 
 **A quoted word is a value,** never a literal or a flag: `jump "nearest"` names a system called nearest, and
 `say "--loud"` says it.

@@ -26,6 +26,7 @@ DECORATE = ('declaring', 'decorate')
 DECLARE = ('declaring', 'declare')
 WALK = ('reading', 'walk')
 READ = ('reading', 'read')
+COMPLETE = ('completing', 'complete')
 
 
 def _m(case: tuple[str, str], us: float, run: int = 0, per: int = 100) -> Measurement:
@@ -107,6 +108,11 @@ class TestBlocks:
         assert (found['commands'], found['decorate-ms'], found['declare-ms']) == ('263', '~63 ms', '~5 ms')
         assert found['runs'] == 'from one run'
         assert found['spread-max'] == 'n/a'
+
+    def test_the_completing_suite(self):
+        found = blocks(_report(_m(COMPLETE, 2_630.0, per=263)))
+        assert '`complete`' in found['completing']
+        assert found['complete-us'] == '~10 µs'
 
     def test_the_inline_numbers_per_line(self):
         found = blocks(_report(_m(WALK, 2_400.0, per=263), _m(READ, 3_500.0, per=263)))
