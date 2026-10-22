@@ -12,6 +12,10 @@ any value, bounds and all. A word a kind can't read raises a ``ValueError`` sayi
 (``Number(suffix='%', words={'off': None})`` for a share that may be off). A quoted word is never one. Then the
 kind's own form (:meth:`Kind.form`), which a kind of an app's own overrides.
 
+**Writing a value back** (:meth:`Kind.write`) is the other way: a wire value as the words a line says it in, a
+literal word first (``None`` back to ``off``), else the kind's own spelling (:meth:`Kind.spell`), which reads back to
+the same value.
+
 **A named kind** (:class:`Named`) is read through the app: a :class:`Name` by the resolver the app gives for its
 category, and :class:`Pairs`, a keyed field's ``key value`` pairs, by one that reads each key and gives its values
 their own (:mod:`parsed.names`).
@@ -59,6 +63,9 @@ _WHOLE = re.compile(r'[+-]?\d+')
 _DECIMAL = re.compile(r'[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?')
 _SPAN = re.compile(r'(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?')
 _LITERAL = re.compile(r'[a-z0-9][a-z0-9_-]*')
+
+#: Below this, a whole float is spelled as an integer's digits; above it, Python's ``repr`` keeps it exact.
+_WHOLE_UP_TO = 1e15
 
 #: What :meth:`Kind.literal` gives for a word that isn't one of the kind's literal words.
 NOT_LITERAL = object()
@@ -119,6 +126,17 @@ class Kind:
         """The words completion offers for the field besides the literal words: here, none, since any may do."""
         return ()
 
+    def write(self, value: object, field: Field) -> list[str]:
+        """A wire value as the words a line says it in: the literal word that reads to it, else :meth:`spell`'s."""
+        for word, said in self.words.items():
+            if said == value and type(said) is type(value):  # `True == 1`, but `on` isn't `1`
+                return [word]
+        return self.spell(value, field)
+
+    def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
+        """The kind's own words for a wire value, which :meth:`form` reads back to it: here, the value as a word."""
+        return [str(value)]
+
 
 @dataclass(frozen=True, slots=True)
 class Word(Kind):
@@ -163,6 +181,12 @@ class Number(Kind):
             raise ValueError(msg)
         return text if field_kind(field) is FieldKind.DECIMAL else float(text)
 
+    def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
+        """The number as digits: a whole float without its ``.0``, any other as Python writes it, exactly."""
+        if isinstance(value, float) and value.is_integer() and abs(value) < _WHOLE_UP_TO:
+            return [str(int(value))]
+        return [repr(value) if isinstance(value, float) else str(value)]
+
 
 @dataclass(frozen=True, slots=True)
 class Switch(Kind):
@@ -179,6 +203,10 @@ class Switch(Kind):
     def offers(self, field: Field) -> tuple[str, ...]:  # noqa: ARG002 -- every kind offers alike
         """Both."""
         return ('true', 'false')
+
+    def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
+        """``true`` or ``false``."""
+        return ['true' if value else 'false']
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +246,16 @@ class Duration(Kind):
     def offers(self, field: Field) -> tuple[str, ...]:  # noqa: ARG002 -- every kind offers alike
         """A few spans to start from."""
         return ('10m', '30m', '1h')
+
+    def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
+        """Seconds as a span: hours, minutes and seconds, those that aren't nought (``5400.0`` as ``1h30m``)."""
+        total = float(value)  # ty: ignore[invalid-argument-type] -- a TimeDelta's wire value is a number
+        hours, rest = divmod(total, 3600)
+        minutes, seconds = divmod(rest, 60)
+        seconds = round(seconds, 6)
+        parts = [f'{int(hours)}h' if hours else '', f'{int(minutes)}m' if minutes else '']
+        parts.append(f'{seconds:g}s' if seconds or not (hours or minutes) else '')
+        return [''.join(parts)]
 
 
 #: What a moment's word is read by, and what one looks like, by its field's type.
@@ -284,6 +322,11 @@ class Pairs(Named):
     (:class:`parsed.names.PairsResolver`). With none, keys and values read as typed. A literal word or a form of its
     own isn't a pair's: :meth:`form` reads a value as typed.
     """
+
+    def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
+        """Each pair's key and its value, in turn."""
+        pairs = value.items() if isinstance(value, dict) else ()
+        return [str(word) for pair in pairs for word in pair]
 
 
 _DEFAULTS: dict[FieldKind, Kind] = {

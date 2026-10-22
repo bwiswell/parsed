@@ -66,6 +66,18 @@ tree.complete('fleet f1 mine --f')
 # Completion(words=['--for'], replace=3)
 ```
 
+## Writing a line back
+
+`tree.render(command, names=…)` is reading's other way: the line that says an instance, which reads back to it. It
+takes the first of the command's phrases that can say the instance (with names, one whose names the resolvers
+know), writes each value by its field's kind, quoting a word where the line would read it otherwise, then the flags
+not at their defaults ([`_walk/_render.md`](_walk/_render.md)):
+
+```python
+tree.render(FleetDock(fleet='f1', station='nearest'))
+# 'fleet f1 dock "nearest"'
+```
+
 ## Flags
 
 A flag stands anywhere after the line's first word: `--for 10m`, or `--for=10m`. `--` ends the flags, so every word

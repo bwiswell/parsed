@@ -71,6 +71,22 @@ a command whose field isn't is refused. `Number(suffix='%')` lets its suffix fol
 
 `kind.literal(word)` gives a literal word's value, or `parsed.kinds.NOT_LITERAL` for a word that isn't one.
 
+## Writing a value
+
+`kind.write(value, field)` is reading's other way: a wire value as the words a line says it in, which read back to
+it. A literal word comes first, for a value one reads to (`None` as `off`, matched by value and type, so `True`
+isn't a literal for `1`); else `kind.spell(value, field)`, the kind's own spelling:
+
+| Kind | Spells |
+|---|---|
+| `Number` | a whole float as an integer's digits (`30.0` as `30`), any other as Python writes it, exactly |
+| `Switch` | `true` or `false` |
+| `Duration` | seconds as hours, minutes and seconds, those that aren't nought: `5400.0` as `1h30m`, `0` as `0s` |
+| `Pairs` | each pair's key and value, in turn |
+| the others | the value as a word |
+
+A kind of an app's own that overrides `form` overrides `spell` too, so its values write back.
+
 ## What a kind offers
 
 Completion offers a kind's literal words, then `kind.offers(field)`: a `Choice`'s values, `true` and `false` for a

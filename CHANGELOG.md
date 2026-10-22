@@ -7,6 +7,21 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.4 — unreleased
+
+**Writing back and describing.**
+
+### Added
+
+- **Rendering:** `tree.render(command, names=…)` writes the line that says an instance, which reads back to it. It
+  takes the first of the command's phrases that can say it (with names, one whose names the resolvers know, so a
+  twin's key is said by its twin), writes each value by its field's kind, quotes a word where the line would read
+  it otherwise (`dock "nearest"`), and gives the flags not at their defaults. `parsed.RenderError` for an instance
+  no phrase can say.
+- **`Kind.write(value, field)`:** a wire value as the words a line says it in, a literal word first, else
+  `Kind.spell`, each kind's own (`5400.0` seconds as `1h30m`).
+- **A rendering benchmark** times writing an instance of each command back to its line.
+
 ## 0.1.3 — 2026-10-21
 
 **Names and completion.** A line is read with the app's own names, by the resolver it gives for each category, a

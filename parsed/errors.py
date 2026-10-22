@@ -78,3 +78,10 @@ class ReadError(ParsedError, ValueError):
         if self.suggestions:
             out['suggestions'] = list(self.suggestions)
         return out
+
+
+class RenderError(ParsedError, ValueError):
+    """An instance no phrase of its command can say: a value no line can hold, or one the app's names don't know.
+
+    Its message names the command and why. It's a ``ValueError`` too, as a value that can't be written is.
+    """
