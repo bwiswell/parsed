@@ -86,6 +86,31 @@ app that gathers several packages imports none of their runtimes to read a line 
 `app.handler(Cls)` is the app's own. Looking up a path that doesn't import, or names nothing in its module, raises
 an `ImportError` naming the command and the path; one that names something that isn't callable, a `TypeError`.
 
+## Hooks
+
+Hooks run around each command's handler, for what every command shares: an audit line, a timer, a check:
+
+```python
+app.before(audit)                          # every command: audit(command, ctx)
+app.before(check_funds, FleetBuyShip)      # that command alone
+app.after(log_line)                        # log_line(command, ctx, found)
+app.on_error(report)                       # report(command, ctx, error)
+```
+
+| Stage | Called as | Runs |
+|---|---|---|
+| `before` | `hook(command, ctx)` | before the handler; one that raises stops the line, its handler not run |
+| `after` | `hook(command, ctx, found)` | after it, `found` what it came to: its reply, text, nothing, or the question it stopped at |
+| `on_error` | `hook(command, ctx, error)` | when a before hook, the handler, a question's answer or an after hook raises; the error goes on after |
+
+**The order is stated:** before hooks run the app's, then the command's; after and on-error hooks the command's,
+then the app's. Each scope's run in the order they were added, and `app.hooks(Cls)` lists them so. A hook may be
+async, and is awaited. Every hook of a line is given the context its handler is (the same object), so a hook sees a
+dry run as the handler does.
+
+No hook runs for a line that doesn't read, a line that gives `--help`, or a command with no handler: none of them
+reaches a handler. Hooks are the app's; a mount's own come later.
+
 ## Sessions
 
 `app.open(state=None, verbosity=0, answer=None)` gives a `Session`, used once, as
@@ -143,6 +168,7 @@ Each is a `DeclarationError`, made when the app is put together:
 | an `under` that isn't words (`'Relay'`, `'relay {x}'`) | a prefix is words, as a phrase's are |
 | a mount that would make a line read two ways | it names both mounts and the words they share |
 | `on` of a class that isn't a command, or a handler that isn't a callable or a path (`'pkg.module:function'`) | |
+| `before`, `after` or `on_error` of a hook that isn't callable, or for a class that isn't a command | |
 | `mount.on` of a command the mount doesn't hold | bind it on the app, or on the mount that has it |
 | a second handler for a command, or a second resolver for a category, on the app or on one mount | bind each once |
 | `names` of a category that isn't a name, or a resolver without `lookup`, `suggest` and `options` | |

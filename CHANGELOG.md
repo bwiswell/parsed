@@ -42,6 +42,12 @@ lines as it lands, and the entry is dated when that version is released.
 - **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
   (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
   it (a twin's wording told from its command's), `dry_run`, and the session's `verbosity`.
+- **Hooks:** `app.before(hook)`, `app.after(hook)` and `app.on_error(hook)` run around each command's handler, or,
+  with commands named, around theirs alone, in a stated order: before hooks the app's then the command's, after
+  and on-error hooks the command's then the app's, each scope's in the order added (`app.hooks(Cls)`). An after hook
+  sees what the handler came to; an on-error hook sees a failure in any of them, which then goes on.
+- **The running benchmark** times a line run in a session, routed, read, its handler called between hooks, and its
+  envelope made.
 - **Names on the app:** `app.names(category, resolver)` reads a category's names in every mount, and
   `mount.names(category, resolver)` in that mount alone, over the app's.
 - **A tree under a prefix:** `Tree(commands, under='relay')` and `Tree.collect(…, under=…)` put every phrase after
