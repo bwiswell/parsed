@@ -54,7 +54,7 @@ from .kinds import Kind, Name
 from .names import Resolver
 from .tree import Tree
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 __all__ = [
     'UUID',
