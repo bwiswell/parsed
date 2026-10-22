@@ -9,6 +9,7 @@ import pytest
 
 import parsed
 from parsed._walk import Completion
+from parsed._walk._complete import being_typed
 from parsed.command import Command
 from parsed.tree import Tree
 
@@ -198,3 +199,18 @@ class Board(Command):
 
     station: str = parsed.Str(required=True)
     fleet: str | None = parsed.Str(default=None)
+
+
+@pytest.mark.parametrize(
+    ('text', 'before', 'typing'),
+    [
+        ('', [], None),
+        ('fleet f', ['fleet'], 'f'),
+        ('fleet f1 ', ['fleet', 'f1'], None),
+        ('fleet "Vruba', ['fleet'], 'Vruba'),  # an open quote holds the word being typed, spaces and all
+    ],
+)
+def test_the_word_being_typed(text, before, typing):
+    tokens, partial = being_typed(text)
+    assert [token.text for token in tokens] == before
+    assert (partial.text if partial else None) == typing

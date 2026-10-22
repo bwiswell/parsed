@@ -25,6 +25,10 @@ written ``--no-…`` when its field defaults to ``True``.
 Every command is declared first (:func:`parsed.command.declaration`), so a tree that builds holds only commands whose
 declarations check.
 
+**Under a prefix** (``Tree(commands, under='relay')``), every phrase follows the prefix's words, so the tree reads,
+completes and writes whole lines (``relay run``), and its refusals and hints say the prefix too. An app mounts each
+tree it holds under one (:mod:`parsed.app`).
+
 **A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words, read
 by its kind to its wire value. A name is read by the resolver the app gives for its category (:mod:`parsed.names`),
 or kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads from those values.
@@ -42,8 +46,9 @@ from typing import TYPE_CHECKING
 from seared.doc import collect
 
 from . import _walk
-from ._phrase import Word
+from ._phrase import Word, parse
 from ._walk import RESERVED, Arity, Completion, Reading, SlotKind
+from ._walk._hints import usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
@@ -114,20 +119,32 @@ class Tree:
     Args:
         commands: The command classes. A base, which has no ``PHRASE``, is left out, and a class given twice counts
             once.
+        under: A prefix of words every phrase follows (``'rio relay'``); none by default.
+
+    Attributes:
+        commands: Each command's declaration, in the order given.
+        under: The prefix, its words separated by single spaces; ``''`` for none.
+        root: Where every line's walk begins.
+        top: Where every phrase begins: the node after the prefix's words, or the root.
+        flags: Every flag's name, and whether it takes a value, across the tree.
 
     Raises:
-        DeclarationError: A command's declaration doesn't check, two phrases would read a line two ways, or a flag
-            would mean two things. The message names the commands and the phrases.
+        DeclarationError: A command's declaration doesn't check, two phrases would read a line two ways, a flag
+            would mean two things, or the prefix isn't words. The message names the commands and the phrases.
     """
 
-    def __init__(self, commands: Iterable[type]) -> None:
-        """Declare each command, compile its phrases, and check the whole."""
+    def __init__(self, commands: Iterable[type], *, under: str = '') -> None:
+        """Declare each command, compile its phrases under the prefix, and check the whole."""
         found: dict[type, Declaration] = {}
         for cls in commands:
             if cls not in found:
                 found[cls] = declaration(cls)
         self.commands: tuple[Declaration, ...] = tuple(d for d in found.values() if d.is_command)
+        self.under = _prefix(under)
         self.root = Node()
+        self.top = self.root
+        for word in self.under.split():
+            self.top = self.top.words.setdefault(word, Node())
         self._flags: dict[type, Mapping[str, Flag]] = {}
         arities: dict[str, tuple[Arity, str]] = {}
         for found_declaration in self.commands:
@@ -141,12 +158,14 @@ class Tree:
         self.flags: Mapping[str, Arity] = MappingProxyType({name: arity for name, (arity, _) in arities.items()})
 
     @classmethod
-    def collect(cls, *targets: str) -> Tree:
+    def collect(cls, *targets: str, under: str = '') -> Tree:
         """The tree of every command in ``targets``: modules or packages, by name, their submodules included.
 
         The commands are taken in the order they're declared: each target's in turn, its modules by name, and a
         module's by where each class begins. So a node's words, which a refusal lists and completion offers, come in
         the order the commands that say them were written.
+
+        ``under`` is a prefix of words every phrase follows, as the constructor takes it.
 
         Raises:
             DeclarationError: As the constructor does.
@@ -155,7 +174,7 @@ class Tree:
         for target in targets:
             importlib.import_module(target)
             classes += sorted((found for found in collect(target) if issubclass(found, Command)), key=_declared)
-        return cls(classes)
+        return cls(classes, under=under)
 
     def flags_of(self, cls: type) -> Mapping[str, Flag]:
         """A command's flags, by name.
@@ -164,6 +183,18 @@ class Tree:
             KeyError: ``cls`` isn't one of the tree's commands.
         """
         return self._flags[cls]
+
+    def usage(self, end: End) -> str:
+        """How the command a walk ended at is said, by its phrase: ``relay run [--config <config>]``.
+
+        The tree's prefix, the phrase's words with a ``<slot>`` for each slot, then the command's flags.
+
+        Args:
+            end: Where a walk ended: a reading's ``end``.
+        """
+        fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
+        said = usage(end.bound, self.flags_of(end.declaration.cls).values(), fields)
+        return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
         """What ``line`` says: the command, and each field's words and wire value, before seared loads them.
@@ -211,7 +242,7 @@ class Tree:
 
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__
-        node, said = self.root, []
+        node, said = self.top, []
         read = {place.slot: place for place in places}
         for part in bound.phrase.parts:
             if isinstance(part, Word):
@@ -237,6 +268,24 @@ class Tree:
         if node.end is not None:
             raise DeclarationError(_same_lines(node.end, end))
         node.end = end
+
+
+def _prefix(under: str) -> str:
+    """A prefix's words, separated by single spaces: refused unless each is a word, as a phrase's are."""
+    if not isinstance(under, str):
+        msg = f'under={under!r}: a prefix is a string of words'
+        raise DeclarationError(msg)
+    if not under.strip():
+        return ''
+    try:
+        said = parse(under)
+    except ValueError as e:
+        msg = f'under={under!r}: {e}'
+        raise DeclarationError(msg) from None
+    if said.slots:
+        msg = f'under={under!r}: a prefix is words only; a slot belongs to a phrase'
+        raise DeclarationError(msg)
+    return said.text
 
 
 def _declared(cls: type) -> tuple[str, float, str]:

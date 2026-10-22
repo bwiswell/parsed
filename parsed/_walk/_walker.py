@@ -338,8 +338,7 @@ class _Walker:
         return self.refuse(f'{_said(said)}: which {edge.slot}?', word=word, hint=hint)
 
     def _usage(self, end: End) -> str:
-        fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
-        return usage(end.bound, self.tree.flags_of(end.declaration.cls).values(), fields)
+        return self.tree.usage(end)
 
     # --- the values --------------------------------------------------------------------------------------------
 

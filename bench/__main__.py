@@ -20,7 +20,7 @@ import parsed
 from . import tables
 from .harness import Report, environment, time_case
 
-_SUITES = ['suite_declaring', 'suite_reading', 'suite_completing', 'suite_rendering']
+_SUITES = ['suite_declaring', 'suite_reading', 'suite_completing', 'suite_rendering', 'suite_running']
 _DEFAULT_OUT = tables.RESULTS
 
 

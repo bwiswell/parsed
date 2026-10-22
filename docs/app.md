@@ -1,0 +1,176 @@
+# `app.py`: a program's trees, mounted, with their handlers and names, and the sessions that run them
+
+`parsed.App(prog)` holds a program's commands, each tree of them mounted under a prefix of words. It binds the
+handler each command runs with, and the resolvers its lines are read with; a session runs lines against the app's
+state:
+
+```python
+import parsed
+
+app = parsed.App('farlandia')
+app.names('fleet', Fleets())
+
+app.mount('farm.commands')                                   # at the root: `fleet f1 mine`
+relay = app.mount('service.cli', under='relay', params=RelaySettings())
+gateway = app.mount('service.cli', under='gateway', params=GatewaySettings())
+
+app.on(FleetMine, mine)                                      # in every mount that holds it
+app.on(Run, 'service.runtime:run')                           # imported when it's first looked up
+gateway.on(Run, 'gateway.runtime:run')                       # this mount's own, which wins here
+
+app.read('relay run --config relay.toml')                    # Run(config=PosixPath('relay.toml'))
+
+async with app.open(Link(galaxy)) as session:                # the link is opened, and closed after
+    result = await session.run('fleet f1 mine')              # mine(FleetMine(fleet='f1'), ctx)
+    result.text, result.code                                 # 'f1 mines', 0
+
+app.run('relay run', settings)                               # one line, in a session of its own
+```
+
+## Mounting
+
+`app.mount(target, under='', params=None)` mounts a tree, or a module or package of commands by name (collected as
+[`Tree.collect`](tree.md) collects them), and returns its `Mount`:
+
+- **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'rio relay'`. None mounts it at the
+  root. A tree with a prefix of its own keeps it, beneath `under`.
+- **`params`** is what its handlers are given beside the command: a service's settings, say. It's the mount's, so
+  one package can be mounted several times, each with its own prefix and its own settings: one group serves many
+  apps, or one app twice.
+
+A `Mount` has its `app`, its `tree` (under its prefix), its `under`, its `params` and its `source`: the module or
+package named, or a tree's first command's module. Its `label` (`service.cli under 'relay'`) is how a refusal names
+it, and `holds(cls)` says whether a command is one of its own. `app.mounts` lists them, in the order they were made.
+
+**A mount that would make a line read two ways is refused** with a `DeclarationError` naming both mounts and the
+words they share ([`_walk/_route.md`](_walk/_route.md)):
+
+```
+service.cli under 'relay' and service.cli under 'relay' both say 'relay run': a line would read two ways
+logs is mounted where farm.commands at the root says 'fleet': a line would read two ways
+```
+
+Two mounts may share a prefix, the root among them, as long as no word begins a command in both.
+
+## Reading a line
+
+A line goes to its mount by its first words, then the mount's tree reads the whole line, with the mount's names:
+
+| Call | Gives |
+|---|---|
+| `app.walk(line, placeholders=False)` | a `Routed`: its `mount`, its `reading` ([`Reading`](_walk/_walker.md#reading)), its `command` class, and `load()` |
+| `app.read(line)` | the command, loaded |
+| `app.complete(text)` | what may come next on a line being typed: its mount's tree's offers, or, short of a mount, the words that may follow |
+| `app.render(command, mount=None)` | the line that says an instance, by its mount's tree, prefix and all |
+
+A line that reaches no mount is refused as a tree refuses one: `no command 'rela'; did you mean relay?`, or
+`relay: then what? run | validate-config | status`. parsed's own flags (`--yes`, `--json`, …) may stand among the
+words that route a line; a command's own flags follow them, since only its mount's tree knows whether one takes a
+value.
+
+**`render` needs the mount** where its command is mounted more than once (`mount=gateway`), and refuses a command
+mounted nowhere, or not in the mount given, with a `RenderError`.
+
+## Handlers
+
+A handler is called as `handler(command, ctx)`, `ctx` a [`Context`](context.md), and awaited if it's async. It
+returns its command's `REPLY`, text, or nothing ([`reply.md`](reply.md)).
+`app.on(Cls, handler)` binds the handler a command runs with, in every mount that holds it. `mount.on(Cls, handler)`
+binds one for that mount alone, which wins there, so a group mounted twice can run differently in each.
+
+**A handler is a callable, or the path to one,** `'pkg.module:function'` (a dotted name after the colon reaches an
+attribute: `'pkg.module:Service.run'`). A path is imported the first time its handler is looked up, and kept, so an
+app that gathers several packages imports none of their runtimes to read a line or show help.
+
+`mount.handler(Cls)` is the handler `Cls` runs with in that mount: its own, else the app's, else `None`.
+`app.handler(Cls)` is the app's own. Looking up a path that doesn't import, or names nothing in its module, raises
+an `ImportError` naming the command and the path; one that names something that isn't callable, a `TypeError`.
+
+## Hooks
+
+Hooks run around each command's handler, for what every command shares: an audit line, a timer, a check:
+
+```python
+app.before(audit)                          # every command: audit(command, ctx)
+app.before(check_funds, FleetBuyShip)      # that command alone
+app.after(log_line)                        # log_line(command, ctx, found)
+app.on_error(report)                       # report(command, ctx, error)
+```
+
+| Stage | Called as | Runs |
+|---|---|---|
+| `before` | `hook(command, ctx)` | before the handler; one that raises stops the line, its handler not run |
+| `after` | `hook(command, ctx, found)` | after it, `found` what it came to: its reply, text, nothing, or the question it stopped at |
+| `on_error` | `hook(command, ctx, error)` | when a before hook, the handler, a question's answer or an after hook raises; the error goes on after |
+
+**The order is stated:** before hooks run the app's, then the command's; after and on-error hooks the command's,
+then the app's. Each scope's run in the order they were added, and `app.hooks(Cls)` lists them so. A hook may be
+async, and is awaited. Every hook of a line is given the context its handler is (the same object), so a hook sees a
+dry run as the handler does.
+
+No hook runs for a line that doesn't read, a line that gives `--help`, or a command with no handler: none of them
+reaches a handler. Hooks are the app's; a mount's own come later.
+
+## Sessions
+
+`app.open(state=None, verbosity=0, answer=None)` gives a `Session`, used once, as
+`async with app.open(state) as session`:
+
+- **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
+  async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
+  it's left when the session closes, told of any error the session's body raised. Anything else is kept as it is.
+- **`verbosity`** is how much handlers should say (`ctx.verbosity`): `0` by default, more for more.
+- **`answer`** answers a question a line asks, when `--yes` doesn't: yes or no from the question, sync or async.
+  `parsed.reply.terminal` prompts a person (`Buy a hauler for 1,200 credits? [y/N]`). With none, a question is
+  left unanswered.
+
+`await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
+handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
+of it as a [`Result`](reply.md), the envelope every parsed app answers with: its reply or text, whether it went
+well, whether it was done, and any error, with its exit code. Nothing the line or its handler does is raised.
+
+`await session.call(line)` runs it the same way and gives what the handler returned, letting every error through: a
+`ReadError` for a line that doesn't read, a `LookupError` for a command with no handler, a `TypeError` for a
+handler that returned something besides its `REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
+
+**A handler asks first** by returning `parsed.Ask(question, then)`, having done nothing yet
+([`reply.md`](reply.md#asking-first)). Each question is answered yes by `--yes` on the line, or `yes=True` given to
+`run` or `call`; else by the session's `answer`. A yes runs `then`, which may ask again. A question left unanswered,
+or answered no, leaves the line undone: `run` gives a result with the question as its `asks`, exit code `0`, and
+`call` gives back the `Ask` itself.
+
+**A line that gives `--help` runs nothing.** It's answered with its command's usage
+([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
+
+**`app.run(line, state=None, verbosity=0, yes=False, answer=None)`** runs one line in a session of its own,
+opened around it and closed after, and gives its `Result`: for a program that runs one line and exits. It runs an
+event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
+
+`session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
+line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
+is opening a session twice. An error the session's body raises goes on past it, whatever the state makes of it.
+
+## Names
+
+`app.names(category, resolver)` gives the resolver a category's names are read by ([`names.md`](names.md)), in every
+mount; `mount.names(category, resolver)` gives one for that mount alone, which wins there. `app.resolvers` and
+`mount.resolvers` are read-only views: the app's, and the mount's merged over them. Resolvers given after mounting
+count, as each line is read with them as they stand.
+
+## What it refuses
+
+Each is a `DeclarationError`, made when the app is put together:
+
+| Refused | Because |
+|---|---|
+| `App('')`, or a `prog` that isn't a string | it's the program's name, as it's typed |
+| a target that isn't a tree or a module's name; a tree with no commands | |
+| an `under` that isn't words (`'Relay'`, `'relay {x}'`) | a prefix is words, as a phrase's are |
+| a mount that would make a line read two ways | it names both mounts and the words they share |
+| `on` of a class that isn't a command, or a handler that isn't a callable or a path (`'pkg.module:function'`) | |
+| `before`, `after` or `on_error` of a hook that isn't callable, or for a class that isn't a command | |
+| `mount.on` of a command the mount doesn't hold | bind it on the app, or on the mount that has it |
+| a second handler for a command, or a second resolver for a category, on the app or on one mount | bind each once |
+| `names` of a category that isn't a name, or a resolver without `lookup`, `suggest` and `options` | |
+
+A module named that doesn't import raises its `ImportError`.

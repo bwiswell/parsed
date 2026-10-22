@@ -16,11 +16,29 @@ tree.read('fleet prospector mine --for 1h30m')
 # FleetMine(fleet='prospector', for_=datetime.timedelta(seconds=5400))
 ```
 
+## Under a prefix
+
+`Tree(commands, under='relay')`, or `Tree.collect('service.cli', under='relay')`, puts every phrase after the
+prefix's words. The tree then reads, completes and writes whole lines, and says the prefix in its refusals and
+hints:
+
+```python
+tree = parsed.Tree.collect('service.cli', under='relay')
+tree.read('relay run')        # Run(config=None)
+tree.read('relay')            # ReadError: relay: then what? run | validate-config | status
+```
+
+A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'rio relay'`). `tree.root` is where a
+line's walk begins, and `tree.top` where every phrase does, past the prefix. An [app](app.md) mounts each tree it
+holds under one.
+
 ## Reading a line
 
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
+`tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all:
+`fleets merge <fleet> --into <into> [--quiet]`.
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:

@@ -8,6 +8,7 @@ A private subpackage, gathered by its `__init__.py`:
 - [`_complete.py`](_complete.md) offers what may come next on a line being typed;
 - [`_render.py`](_render.md) writes an instance back to the line that says it;
 - [`_hints.py`](_hints.md) writes a refusal's hint and did-you-mean;
+- [`_route.py`](_route.md) sends a line to the mount whose tree reads it, for an [app](../app.md);
 - `_terms.py` holds the walk's terms, which the tree builds by too: `RESERVED`, parsed's own flags; `SlotKind`,
   what a slot takes; and `Arity`, whether a flag takes a value.
 

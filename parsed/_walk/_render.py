@@ -100,8 +100,8 @@ class _Saying:
     def line(self, tree: Tree, bound: Bound) -> str:
         """The line ``bound``'s phrase says the instance in, each word quoted where the tree would read it otherwise."""
         places = {place.slot: place for place in bound.places}
-        words: list[str] = []
-        node = tree.root
+        words: list[str] = tree.under.split()
+        node = tree.top
         for part in bound.phrase.parts:
             if isinstance(part, Word):
                 words.append(part.text)
