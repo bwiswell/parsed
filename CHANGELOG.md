@@ -21,6 +21,13 @@ lines as it lands, and the entry is dated when that version is released.
 - **A word no name answers to** is a `ReadError` at that word, with the resolver's suggestions and the command's
   usage.
 - **A command whose scopes go round is refused** when it's declared.
+- **Literal words:** any kind may take `words`, each a word read to a value of its own before the kind's form, case
+  aside and never quoted (`Number(suffix='%', words={'off': None})` reads `off` as `None`). A literal for `None`
+  wants a `nullable` field. A kind of an app's own overrides `form`; `read` keeps the literals first.
+- **A number's suffix:** `Number(suffix='%')` reads `30%` as `30`.
+- **Pairs:** `parsed.kinds.Pairs(category, scope=…)` reads a keyed field's words, said as the rest of the line, as
+  `key value` pairs: each key by the app's `PairsResolver`, and each value by the resolver it gives that key. A
+  command is refused when `Pairs` reads a field that isn't keyed or isn't the rest of the line.
 
 ## 0.1.2 — 2026-10-21
 

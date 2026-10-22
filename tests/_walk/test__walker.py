@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import ClassVar
 
@@ -163,6 +164,9 @@ class _Recording:
     def options(self, scope):
         return self.inner.options(scope)
 
+    def values(self, key, scope):
+        return self.inner.values(key, scope)
+
 
 @parsed.parsed
 class Board(Command):
@@ -232,6 +236,82 @@ class TestNames:
         found = _refusal(tree, 'fleet f1 sell iron gold', names=farlandia.NAMES)
         assert (found.word, found.column, found.field) == ('gold', 19, 'goods')
         assert found.message.startswith("fleet {fleet} sell {goods}: no good 'gold'")
+
+
+class TestLiteralWords:
+    def test_a_share_in_percent_or_off(self, tree):
+        assert tree.read('fleet f1 retreat 30%').share == 30.0
+        assert tree.read('fleet f1 retreat 30').share == 30.0
+        assert tree.read('fleet f1 retreat OFF') == farlandia.FleetRetreat(fleet='f1', share=None)
+        assert tree.walk('fleet f1 retreat off').data() == {'fleet': 'f1', 'share': None}
+
+    def test_a_quoted_word_is_never_a_literal(self, tree):
+        with pytest.raises(ReadError, match=r"retreat \{share\}: 'off' is not a number"):
+            tree.walk('fleet f1 retreat "off"')
+
+    def test_the_share_s_bounds_are_seared_s(self, tree):
+        with pytest.raises(ReadError, match=r'retreat \{share\}: must be >= 5, got 2\.0'):
+            tree.read('fleet f1 retreat 2%')
+
+    def test_a_name_s_literal_comes_before_its_resolver(self):
+        @parsed.parsed
+        class Dock(Command):
+            PHRASE = 'dock {station}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', words={'here': None})}
+
+            station: str | None = parsed.Str(required=True, nullable=True)
+
+        docks = Tree([Dock])
+        assert docks.read('dock here', names=farlandia.NAMES).station is None
+        assert docks.read('dock Vesta', names=farlandia.NAMES).station == 'vesta'
+        with pytest.raises(ReadError, match=r"no station 'here'"):  # quoted: a station's name, not the literal
+            docks.read('dock "here"', names=farlandia.NAMES)
+
+
+class TestPairs:
+    def test_each_key_and_its_value_read_by_its_own_names(self, tree):
+        found = tree.read('fleet Prospector run Mining ore Iron home "Vruba\'a Belt 1"', names=farlandia.NAMES)
+        assert found == farlandia.FleetRun(
+            fleet='f1', routine='mining', variables={'ore': 'iron', 'home': 'vrubaa-belt-1'}
+        )
+
+    def test_the_keys_scoped_by_the_routine(self):
+        variables = _Recording(farlandia.NAMES['variable'])
+        names = {**farlandia.NAMES, 'variable': variables}
+        Tree.collect('_support_farlandia').read('fleet f1 run Mining ore iron', names=names)
+        assert variables.asked == [('ore', 'mining')]
+
+    def test_a_key_whose_values_read_as_typed(self, tree):
+        assert tree.read('fleet f1 run patrol route North', names=farlandia.NAMES).variables == {'route': 'North'}
+
+    def test_with_no_resolver_as_typed(self, tree):
+        assert tree.read('fleet f1 run mining ore Iron').variables == {'ore': 'Iron'}
+
+    def test_none_given(self, tree):
+        assert tree.read('fleet f1 run mining', names=farlandia.NAMES).variables == {}
+
+    @pytest.mark.parametrize(
+        ('line', 'says', 'word'),
+        [
+            (
+                'fleet f1 run mining ore iron hme vesta',
+                r"no variable 'hme' for routine 'mining'; did you mean home\? `fleet <fleet> run <routine>",
+                'hme',
+            ),
+            ('fleet f1 run mining home mars', r"run \{routine\} \{variables\*\*\}: no home 'mars'", 'mars'),
+            ('fleet f1 run mining ore iron home', r"'home' and its value\? pairs come in twos", 'home'),
+            ('fleet f1 run mining ore iron ore coal', r'ore is given twice', 'ore'),
+        ],
+    )
+    def test_what_doesn_t_read(self, tree, line, says, word):
+        found = _refusal(tree, line, names=farlandia.NAMES)
+        assert re.search(says, str(found))
+        assert (found.word, found.field) == (word, 'variables')
+
+    def test_a_plain_resolver_for_pairs_is_a_mistake_in_the_app(self, tree):
+        names = {**farlandia.NAMES, 'variable': farlandia.Table({'ore': 'ore'})}
+        with pytest.raises(TypeError, match=r'the resolver for variable reads pairs, so it gives values'):
+            tree.read('fleet f1 run mining ore iron', names=names)
 
 
 class TestFlags:
@@ -311,7 +391,7 @@ class TestRefusals:
             ('--', r'no command: the line has no words'),
             ('frobnicate', r"no command 'frobnicate'"),
             ('fleet', r'fleet: which fleet\?'),
-            ('fleet f1', r'fleet f1: then what\? buy \| dock \| jump \| mine \| sell'),
+            ('fleet f1', r'fleet f1: then what\? buy \| dock \| jump \| mine \| retreat \| run \| sell'),
             ('fleet f1 jump', r'fleet f1 jump: which system\?'),
             ('fleet f1 jump nearest', r'fleet f1 jump nearest: which ore\?'),
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
@@ -393,8 +473,8 @@ class TestRefusalsAsData:
         [
             ('flet f1 mine', ('fleet', 'fleets')),
             ('fleet f1 mien', ('mine',)),
-            ('fleet f1 xyz', ('buy', 'dock', 'jump', 'mine', 'sell')),
-            ('fleet f1', ('buy', 'dock', 'jump', 'mine', 'sell')),
+            ('fleet f1 xyz', ('buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell')),
+            ('fleet f1', ('buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell')),
             ('log --fro 3', ('--for',)),
             ('log --jsno', ('--json',)),
         ],
@@ -404,7 +484,10 @@ class TestRefusalsAsData:
 
     def test_did_you_mean_is_in_the_text_and_a_list_isn_t_doubled(self, tree):
         assert str(_refusal(tree, 'log --fro 3')) == 'no command takes --fro; did you mean --for?'
-        assert str(_refusal(tree, 'fleet f1 xyz')) == "no command 'fleet f1 xyz': buy | dock | jump | mine | sell"
+        assert (
+            str(_refusal(tree, 'fleet f1 xyz'))
+            == "no command 'fleet f1 xyz': buy | dock | jump | mine | retreat | run | sell"
+        )
 
     def test_the_field_where_the_walk_knows_it(self, tree):
         assert _refusal(tree, 'log many').field == 'n'

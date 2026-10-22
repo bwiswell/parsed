@@ -11,6 +11,10 @@ every name it may be, for completion. Each takes the scope: the value of the fie
 that field is read (``Name('station', scope='fleet')`` looks for a station given the fleet's key), or ``None`` when
 the ``Name`` has no scope or the line leaves its scope out.
 
+**Pairs** (:class:`~parsed.kinds.Pairs`, a keyed field's ``key value`` words, as a routine's variables) take a
+:class:`PairsResolver`: a resolver for the keys, which gives each key's values a resolver of their own, since which
+names a value may be depends on its key, and on the scope (the routine named).
+
 **A category with no resolver reads as typed:** parsed never invents a key, since a normalization it guessed would
 drift from the app's. So a line read with no names at all (a loose read, for a check or a render) keeps every name as
 its words say it.
@@ -40,4 +44,15 @@ class Resolver(Protocol):
 
     def options(self, scope: str | None) -> Sequence[str]:
         """Every name it may be, for completion."""
+        ...
+
+
+class PairsResolver(Resolver, Protocol):
+    """What an app gives for a :class:`~parsed.kinds.Pairs` category: its keys, and a resolver for each key's values.
+
+    Its own ``lookup``, ``suggest`` and ``options`` read the keys.
+    """
+
+    def values(self, key: str, scope: str | None) -> Resolver | None:
+        """The resolver for ``key``'s values, or ``None`` to keep them as typed."""
         ...

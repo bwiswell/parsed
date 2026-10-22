@@ -33,6 +33,19 @@ as the fleet field's value once it's read, as a string: its key, when the fleet 
 - **A command whose scopes go round** (a station scoped by a berth that's scoped by the station) is refused when
   it's declared, since neither could be read first.
 
+## Pairs
+
+A [`Pairs`](kinds.md#pairs) category's resolver is a `parsed.names.PairsResolver`: a resolver for the keys (a
+routine's variables, scoped by the routine), with one method more.
+
+| Method | Gives |
+|---|---|
+| `values(key, scope)` | the resolver for `key`'s values, or `None` to keep them as typed |
+
+Which names a value may be depends on its key, and on the scope: `ore` takes a good and `home` a station. Each value
+is read by the resolver `values` gives, with no scope of its own, since `values` knew the key and the scope when it
+gave it. A plain `Resolver` given for a `Pairs` category is a mistake in the app, and raises a `TypeError`.
+
 ## With no resolver
 
 A category with no resolver reads as typed. parsed never invents a key: a normalization it guessed would drift from
@@ -50,4 +63,8 @@ fleet {fleet} dock {station}: no station 'vesta' for fleet 'Hauler' `fleet <flee
 ```
 
 A renamed slot reads by its own category, so a polymorphic twin's word is refused as that category's:
-`detachment {detachment} mine: no detachment 'Prospector'`.
+`detachment {detachment} mine: no detachment 'Prospector'`. A pair's key is refused as its category's
+(`no variable 'hme' for routine 'mining'`), and its value by its key (`no home 'mars'`).
+
+A [literal word](kinds.md#literal-words) comes before the resolver: `Name('station', words={'here': None})` reads
+`here` as `None`, and only `"here"`, quoted, is looked up.

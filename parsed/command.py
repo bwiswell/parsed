@@ -41,7 +41,7 @@ from seared.doc import is_seared_class
 from ._phrase import Binding, Bound, Place, bind
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
-from .kinds import Kind, Name, default_kind
+from .kinds import Kind, Named, Pairs, default_kind
 
 _CACHE = '__parsed_declaration__'
 
@@ -310,10 +310,13 @@ def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrase
 
 
 def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], binding: Binding) -> Mapping[str, Kind]:
-    """Each field's kind, and a check that every ``Name`` the command reads by is scoped by another of its fields."""
+    """Each field's kind, checked against its field and its phrase, and every scope against the other fields."""
     found: dict[str, Kind] = {}
     for spec in cls.__seared_fields__:
         kind = kinds.get(spec.attr) or default_kind(spec.field)
+        if kind is None and spec.field.keyed:
+            msg = f"{name}.{spec.attr} is keyed, so its words are pairs: give it parsed.kinds.Pairs('…') in KINDS"
+            raise DeclarationError(msg)
         if kind is None:
             what = type(spec.field).__name__
             msg = (
@@ -330,9 +333,10 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
         for place in bound.places
         if place.renamed
     ]
+    _check_forms(cls, name, read, binding)
     scopes: dict[str, set[str]] = {}  # each field, and the fields its names are scoped by
     for said, field, kind in read:
-        if not isinstance(kind, Name) or kind.scope is None:
+        if not isinstance(kind, Named) or kind.scope is None:
             continue
         if kind.scope not in found or kind.scope == field:
             msg = (
@@ -349,6 +353,34 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
         )
         raise DeclarationError(msg)
     return MappingProxyType(found)
+
+
+def _check_forms(cls: type[Command], name: str, read: list[tuple[str, str, Kind]], binding: Binding) -> None:
+    """Refuse a kind its field can't take.
+
+    That's pairs for a field that isn't keyed or isn't the rest of the line, a keyed field read any other way, and a
+    literal word for ``None`` on a field seared would drop it from.
+    """
+    fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
+    rest = {place.field for place in binding.phrases[0].places if place.rest} if binding.phrases else set()
+    for said, field, kind in read:
+        keyed = fields[field].keyed
+        if isinstance(kind, Pairs) and not keyed:
+            msg = f'{name}: {said!r} is read as Pairs, but {field} is not keyed: give it keyed=True'
+            raise DeclarationError(msg)
+        if keyed and not isinstance(kind, Pairs):
+            msg = f"{name}.{field} is keyed, so its words are pairs: give it parsed.kinds.Pairs('…') in KINDS"
+            raise DeclarationError(msg)
+        if isinstance(kind, Pairs) and field not in rest:
+            msg = f'{name}.{field} is read as Pairs, so PHRASE says it as the rest of the line: {{{field}**}}'
+            raise DeclarationError(msg)
+        nothing = [word for word, value in kind.words.items() if value is None]
+        if nothing and not fields[field].nullable:
+            msg = (
+                f'{name}: {said!r} reads {nothing[0]!r} as None, which seared drops unless {field} is nullable: give '
+                f'it nullable=True'
+            )
+            raise DeclarationError(msg)
 
 
 def _scopes_around(scopes: Mapping[str, set[str]]) -> list[str]:

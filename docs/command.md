@@ -144,3 +144,6 @@ put it right:
 | a field whose type has no word form, and no `KINDS` entry | it couldn't be said on a line |
 | a `Name` whose `scope` is no other field of the command | |
 | scopes that go round (`a` scoped by `b`, `b` by `a`) | a scope is read before the names it narrows |
+| a `keyed` field read by any kind but `Pairs`, or `Pairs` reading a field that isn't keyed | a keyed field's words are pairs |
+| a `Pairs` field that `PHRASE` doesn't say as the rest of the line | `{variables**}` |
+| a literal word that reads to `None`, on a field that isn't `nullable` | seared would drop the `null` |

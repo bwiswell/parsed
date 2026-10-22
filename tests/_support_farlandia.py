@@ -12,8 +12,11 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - an optional positional, a slot of several words, and the rest of the line;
 - a read with a typed reply, a command that asks first, and an interactive command with the form an agent says
   instead;
-- the app's names, as resolvers over fixed tables (:class:`Table`, :data:`NAMES`): fleets, detachments, goods, and
-  stations within a fleet's reach, one with an apostrophe in its name.
+- a share in percent, or off (`fleet {fleet} retreat {share}`), and a routine taken up with its variables, each
+  read by the variable's own names (`fleet {fleet} run {routine} {variables**}`);
+- the app's names, as resolvers over fixed tables (:class:`Table`, :class:`Variables`, :data:`NAMES`): fleets,
+  detachments, goods, stations within a fleet's reach (one with an apostrophe in its name), routines, and each
+  routine's variables.
 """
 
 import difflib
@@ -55,15 +58,35 @@ class Table:
         return list(self._keys(scope))
 
 
+class Variables(Table):
+    """Each routine's variables, as a pairs resolver: the variables by routine, and each one's own names."""
+
+    def __init__(self, routines: dict[str, dict[str, parsed.Resolver | None]]) -> None:
+        variables = {variable for held in routines.values() for variable in held}
+        super().__init__(
+            {variable: variable for variable in variables}, within={r: set(v) for r, v in routines.items()}
+        )
+        self.routines = routines
+
+    def values(self, key: str, scope: str | None) -> parsed.Resolver | None:
+        held = [self.routines[scope]] if scope in self.routines else list(self.routines.values())
+        return next((found[key] for found in held if key in found), None)
+
+
+GOODS = Table({'Iron': 'iron', 'Coal': 'coal'})
+STATIONS = Table(
+    {'Vesta': 'vesta', "Vruba'a Belt 1": 'vrubaa-belt-1', 'Ceres': 'ceres'},
+    within={'f1': {'vesta', 'vrubaa-belt-1'}, 'f2': {'ceres'}},
+)
+
 #: The app's names, by category, as a line is read with them.
 NAMES: dict[str, parsed.Resolver] = {
     'fleet': Table({'Prospector': 'f1', 'Hauler': 'f2'}),
     'detachment': Table({'Scouts': 'd2'}),
-    'good': Table({'Iron': 'iron', 'Coal': 'coal'}),
-    'station': Table(
-        {'Vesta': 'vesta', "Vruba'a Belt 1": 'vrubaa-belt-1', 'Ceres': 'ceres'},
-        within={'f1': {'vesta', 'vrubaa-belt-1'}, 'f2': {'ceres'}},
-    ),
+    'good': GOODS,
+    'station': STATIONS,
+    'routine': Table({'Mining': 'mining', 'Patrol': 'patrol'}),
+    'variable': Variables({'mining': {'ore': GOODS, 'home': STATIONS}, 'patrol': {'route': None}}),
 }
 
 
@@ -125,6 +148,32 @@ class FleetJumpNearest(FleetCommand):
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'ore': parsed.Name('good')}
 
     ore: str = parsed.Str(required=True, doc='the ore')
+
+
+@parsed.parsed
+class FleetRetreat(FleetCommand):
+    """Set the share of its hull at which a fleet retreats, or turn retreating off."""
+
+    PHRASE = 'fleet {fleet} retreat {share}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'share': parsed.kinds.Number(suffix='%', words={'off': None})}
+
+    share: float | None = parsed.Float(
+        required=True, nullable=True, ge=5, le=95, doc='the share, in percent; off, never'
+    )
+
+
+@parsed.parsed
+class FleetRun(FleetCommand):
+    """Take up a routine, its variables given."""
+
+    PHRASE = 'fleet {fleet} run {routine} {variables**}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {
+        'routine': parsed.Name('routine'),
+        'variables': parsed.kinds.Pairs('variable', scope='routine'),
+    }
+
+    routine: str = parsed.Str(required=True, doc='the routine')
+    variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict, doc="the routine's variables")
 
 
 @parsed.parsed
