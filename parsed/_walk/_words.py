@@ -57,8 +57,9 @@ def split(line: str) -> list[Token]:
             start = at if start < 0 else start
             text.append(ch)
     if opened >= 0:
-        msg = f'the quote at column {opened + 1} is never closed: {line[opened:]}'
-        raise ReadError(msg)
+        hint = f'{line}"'
+        msg = f'the quote at column {opened + 1} is never closed: {line[opened:]} `{hint}`'
+        raise ReadError(msg, line=line, column=opened, hint=hint)
     if start >= 0:
         tokens.append(Token(text=''.join(text), start=start, raw=line[start:]))
     return tokens

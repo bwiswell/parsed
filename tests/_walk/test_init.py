@@ -2,12 +2,13 @@
 
 import parsed.tree
 from parsed import _walk
-from parsed._walk import _walker, _words
+from parsed._walk import _terms, _walker, _words
 
 
-def test_it_gathers_both_modules():
+def test_it_gathers_its_modules():
     assert _walk.split is _words.split
     assert _walk.walk is _walker.walk
+    assert _walk.Arity is _terms.Arity
     assert set(_walk.__all__) == {'RESERVED', 'Arity', 'Given', 'Reading', 'SlotKind', 'Token', 'split', 'walk'}
 
 
