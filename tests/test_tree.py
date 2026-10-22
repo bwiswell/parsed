@@ -39,6 +39,7 @@ class TestCompiling:
             'FleetBuyShip',
             'FleetsMerge',
             'FleetsShow',
+            'FleetsStart',
             'Log',
             'Say',
             'ShipsMakeAdd',
@@ -212,13 +213,13 @@ class TestFlags:
 class TestReading:
     # The walk itself is tested in `tests/_walk/`; these pin the tree's two doors to it.
     def test_walk_says_what_a_line_says(self, fixtures):
-        reading = fixtures.walk('fleet f1 mine --for 90 --yes')
+        reading = fixtures.walk('fleet f1 mine --for 90s --yes')
         assert reading.command is farlandia.FleetMine
-        assert reading.data() == {'fleet': 'f1', 'for': '90'}
+        assert reading.data() == {'fleet': 'f1', 'for': 90.0}
         assert reading.own == {'yes'}
 
     def test_read_goes_on_to_the_instance(self, fixtures):
-        assert fixtures.read('fleet f1 mine --for 90') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
+        assert fixtures.read('fleet f1 mine --for 90s') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
 
     def test_a_line_that_doesn_t_read(self, fixtures):
         with pytest.raises(ReadError, match=r'no command'):

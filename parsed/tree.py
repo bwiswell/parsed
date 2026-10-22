@@ -25,8 +25,9 @@ written ``--no-…`` when its field defaults to ``True``.
 Every command is declared first (:func:`parsed.command.declaration`), so a tree that builds holds only commands whose
 declarations check.
 
-**A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words. A name
-is kept as typed. :meth:`Tree.read` goes on to the instance, loaded by seared from those words.
+**A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words, read
+by its kind to its wire value. A name is kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads
+from those values.
 """
 
 from __future__ import annotations
@@ -159,20 +160,20 @@ class Tree:
         return self._flags[cls]
 
     def walk(self, line: str) -> Reading:
-        """What ``line`` says: the command, and each field's words, before seared loads them.
+        """What ``line`` says: the command, and each field's words and wire value, before seared loads them.
 
         Raises:
-            ReadError: The line doesn't read; the message says why, with the words read up to it.
+            ReadError: The line doesn't read, or a word its kind can't read; the message says why, with the words
+                read up to it.
         """
         return _walk.walk(self, line)
 
     def read(self, line: str) -> Command:
-        """The command ``line`` says, loaded by seared from its words.
+        """The command ``line`` says, loaded by seared from its fields' values.
 
         Raises:
-            ReadError: The line doesn't read.
-            ValidationError: A word seared doesn't read as its field's type, or a required field the line leaves
-                out.
+            ReadError: The line doesn't read, or a word its kind can't read.
+            ValidationError: A value out of its field's bounds or pattern, or a required field the line leaves out.
         """
         return self.walk(line).load()
 

@@ -38,8 +38,8 @@ _ROWS = (
     ('declaring', 'declare', "each command's first `declaration`"),
     ('declaring', 'reread', '`declaration` again, kept on the class'),
     ('declaring', 'build', 'the `Tree` from them: their phrases compiled, the whole checked'),
-    ('reading', 'walk', "a line's flags split off, its words walked, each field's words kept"),
-    ('reading', 'read', 'a line on to its instance, loaded by seared from its words'),
+    ('reading', 'walk', "a line's flags split off, its words walked, each read by its kind"),
+    ('reading', 'read', 'a line on to its instance, which seared loads from the values'),
 )
 
 #: Run counts the prose spells out; anything else stays a numeral.

@@ -24,6 +24,10 @@ takes that branch, case aside and never quoted; else the node's slot takes it. A
 to a word that's a literal after them, or the end; the rest of the line takes every word left, joined by single
 spaces (or as a list, for a list's field).
 
+**Each word is read by its field's kind** ([`kinds.md`](../kinds.md#reading-a-word)), once the walk knows its
+command: `1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A renamed slot reads by
+its own `KINDS` entry. The rest of the line is read once, joined; a list's words are read one by one.
+
 ## `Reading`
 
 | Attribute | Holds |
@@ -34,12 +38,14 @@ spaces (or as a list, for a list's field).
 | `command` | the command class (a property) |
 
 Each of `given` is a `Given`: `by`, the slot (a `Place`) or the flag (a `Flag`) that took the words; `words`, every
-`Token` that went into the field, flags and all, in the line's order; and `value`, what seared loads for it: a
-word, a list of words, or a switch's `True` (`False` for a `--no-…` switch).
+`Token` that went into the field, flags and all, in the line's order; and `value`, what seared loads for it: each
+word read by the field's kind, a list of them for a list's field, or a switch's `True` (`False` for a `--no-…`
+switch).
 
-`reading.data()` is the values by wire name, as seared's `load` takes them; `reading.load()` loads the command from
-them. A word seared doesn't read as its field's type raises its `ValidationError`, as does a required field the
-line leaves out.
+`reading.data()` is the values by wire name, as seared's `load` takes them and a tool call would send them:
+`{'fleet': 'f1', 'for': 5400.0}`. `reading.load()` loads the command from them, refusing any key the command
+doesn't know. A value out of its field's bounds, lengths or pattern raises seared's `ValidationError`, as does a
+required field the line leaves out.
 
 ## What it refuses
 
@@ -59,5 +65,7 @@ A `ReadError`, its message saying what's wrong with the words read up to it:
 | stops at a slot | `fleet f1 jump: which system?` |
 | stops at a word that isn't a command | `fleet f1: then what? buy \| dock \| jump \| mine \| sell` |
 | gives a flag its command doesn't take | `fleet {fleet} mine takes --for, not --into` |
+| gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` |
+| gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` |
 
 Since a switch takes no value, `--quiet yes` reads `yes` as a word, which the command may not take.
