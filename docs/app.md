@@ -143,8 +143,10 @@ or answered no, leaves the line undone: `run` gives a result with the question a
 
 **A line that waits** (`--until`, on a read with a `REPLY`: [`wait.md`](wait.md#waiting)) reads again until its
 reply meets every condition, or its bound passes: at once when `session.changed()` says the app's state moved, else
-every `interval`. The result's `met` says whether it was met, and its reply is the last read. Its handler returns
-its `REPLY`, since a wait reads it, and hooks run once around the whole wait.
+every `interval`. Met, the result is the reply with `met` true, exit 0; past the bound, the last reply with `met`
+false and a `timeout` error, exit 7 ([`wait.md`](wait.md#how-it-ends)), and `call` raises `parsed.TimedOutError`.
+`waited` says how long it waited. Its handler returns its `REPLY`, since a wait reads it, and hooks run once around
+the whole wait.
 
 **`session.changed()`** says the app's state moved, from any thread: wire it where the app learns of a change
 (`controls.on_change = session.changed`). Every wait on the session reads again at once; a change while a read is

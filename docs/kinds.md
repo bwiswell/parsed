@@ -44,8 +44,8 @@ hold on a line as they do on the wire:
 | `Name` | any word | its key, by the app's resolver ([`names.md`](names.md)); else the word, as typed |
 
 A comma in a number groups its thousands, three digits each, so `1,00` and `1,5` aren't numbers; neither are `inf`
-and `nan`. A span of time says its unit, so `90` isn't one; `parsed.kinds.span(word)` reads one to its seconds. A
-word a kind can't read raises a `ValueError` saying what one should be
+and `nan`. A span of time says its unit, so `90` isn't one; `parsed.kinds.span(word)` reads one to its seconds,
+and `spell_span(seconds)` writes one. A word a kind can't read raises a `ValueError` saying what one should be
 (`'soon' is not a span of time: say 90s, 10m, 2h or 1h30m`); on a line, the walk refuses it as a `ReadError` naming
 the phrase or the flag.
 

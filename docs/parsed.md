@@ -12,7 +12,7 @@ so a module that declares commands needs no other import.
 | Kinds | `Kind` and `Name` ([`kinds.md`](kinds.md)); the default kinds stay `parsed.kinds.*` |
 | Names | `Resolver` ([`names.md`](names.md)), what an app gives for a category of its names |
 | The tree | `Tree` ([`tree.md`](tree.md)) |
-| Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RenderError` ([`errors.md`](errors.md)) |
+| Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RenderError`, `TimedOutError` ([`errors.md`](errors.md)) |
 | Version | `__version__` |
 
 **seared's:**

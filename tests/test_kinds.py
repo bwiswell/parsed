@@ -23,6 +23,8 @@ from parsed.kinds import (
     Switch,
     Word,
     default_kind,
+    span,
+    spell_span,
 )
 
 
@@ -309,3 +311,12 @@ def test_exported():
     assert parsed.Kind is Kind
     assert parsed.Name is Name
     assert parsed.kinds.Word is Word
+
+
+@pytest.mark.parametrize(
+    ('seconds', 'said'),
+    [(0.0, '0s'), (0.05, '0.05s'), (90.0, '1m30s'), (120.0, '2m'), (5400.0, '1h30m'), (3600.0, '1h')],
+)
+def test_a_span_spelled_as_it_reads(seconds, said):
+    assert spell_span(seconds) == said
+    assert span(said) == seconds

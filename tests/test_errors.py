@@ -1,7 +1,7 @@
 """Tests for ``parsed/errors.py``: one base for every error parsed raises."""
 
 import parsed
-from parsed.errors import DeclarationError, ParsedError, ReadError, RenderError
+from parsed.errors import DeclarationError, ParsedError, ReadError, RenderError, TimedOutError
 
 
 def test_exported():
@@ -62,3 +62,20 @@ def test_a_render_error_is_parsed_s_and_a_value_error():
     assert parsed.RenderError is RenderError
     assert issubclass(RenderError, ParsedError)
     assert issubclass(RenderError, ValueError)
+
+
+def test_a_timed_out_error_is_parsed_s_and_a_timeout_error():
+    # A wait that runs out is a TimeoutError in Python, so a caller catching that still catches this one.
+    assert parsed.TimedOutError is TimedOutError
+    assert issubclass(TimedOutError, ParsedError)
+    assert issubclass(TimedOutError, TimeoutError)
+
+
+def test_a_timed_out_error_carries_the_last_reply_and_the_time_waited():
+    found = TimedOutError('fleets show {fleet}: docked=true not met within 30s', reply=3, waited=30.0)
+    assert (str(found), found.message, found.reply, found.waited) == (
+        'fleets show {fleet}: docked=true not met within 30s',
+        'fleets show {fleet}: docked=true not met within 30s',
+        3,
+        30.0,
+    )

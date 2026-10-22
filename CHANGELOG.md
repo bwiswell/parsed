@@ -25,9 +25,13 @@ lines as it lands, and the entry is dated when that version is released.
 - **Waiting:** a session runs a line that waits again until its reply meets every condition, or the bound passes:
   at once when the app says its state moved, `session.changed()`, from any thread
   (`controls.on_change = session.changed`); else every `interval` seconds (`app.open(state, interval=…)`, 1 s by
-  default, `None` for an app that signals every change). `result.met` says whether it was met; past the bound,
-  it's the last reply, with `met` false. Its handler returns its `REPLY`, and hooks run once around the whole wait.
-- **`parsed.kinds.span(word)`:** a span of time's seconds, as `Duration` reads one.
+  default, `None` for an app that signals every change). Its handler returns its `REPLY`, and hooks run once
+  around the whole wait.
+- **How a wait ends:** met, the reply, `met` true and exit 0; past the bound, the last reply, `met` false, and a
+  `timeout` error, exit 7, naming every condition (`fleets show {fleet}: docked=true not met within 30s`).
+  `result.waited` says how long it waited. `session.call` raises `parsed.TimedOutError`, a `TimeoutError` carrying
+  the last reply and the time waited.
+- **`parsed.kinds.span(word)` and `spell_span(seconds)`:** a span of time read to its seconds, and written back.
 
 ## 0.1.5 — 2026-10-22
 
