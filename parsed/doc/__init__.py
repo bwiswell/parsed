@@ -4,7 +4,9 @@ Mirrors ``zeared.doc`` where the meaning matches, so a tool reads a command as i
 
 - :func:`is_command_class`, and :func:`introspect_command` giving a :class:`CommandDoc`, with its :class:`SlotDoc`
   and :class:`FlagDoc` entries (``introspect.py``);
-- :func:`json_schema`, a command's arguments as a closed JSON Schema (``json_schema.py``).
+- :func:`json_schema`, a command's arguments as a closed JSON Schema (``json_schema.py``);
+- :func:`command_key`, an instance's key for policy, slashed as a topic is, and each phrase's template in
+  ``CommandDoc.keys`` (``keys.py``).
 
 Discovery is seared's: ``seared.doc.collect(target)`` gives a package's seared classes, and ``is_command_class``
 keeps the commands.
@@ -12,5 +14,14 @@ keeps the commands.
 
 from .introspect import CommandDoc, FlagDoc, SlotDoc, introspect_command, is_command_class
 from .json_schema import json_schema
+from .keys import command_key
 
-__all__ = ['CommandDoc', 'FlagDoc', 'SlotDoc', 'introspect_command', 'is_command_class', 'json_schema']
+__all__ = [
+    'CommandDoc',
+    'FlagDoc',
+    'SlotDoc',
+    'command_key',
+    'introspect_command',
+    'is_command_class',
+    'json_schema',
+]

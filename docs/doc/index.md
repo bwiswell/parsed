@@ -4,7 +4,8 @@ For the tools that read commands (the family's [tooled](https://github.com/bwisw
 shape of `zeared.doc` wherever the meaning matches, so a tool reads a command as it reads a message:
 
 - [`introspect.py`](introspect.md): `is_command_class(obj)`, and `introspect_command(cls)`, a `CommandDoc`;
-- [`json_schema.py`](json_schema.md): `json_schema(cls)`, a command's arguments as a closed JSON Schema.
+- [`json_schema.py`](json_schema.md): `json_schema(cls)`, a command's arguments as a closed JSON Schema;
+- [`keys.py`](keys.md): `command_key(command)`, an instance's key for policy, slashed as a topic is.
 
 ```python
 import parsed.doc
