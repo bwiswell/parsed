@@ -32,6 +32,12 @@ A line that gives ``--help`` runs nothing: it's answered with its command's usag
 yes runs ``then``, which may ask again: ``--yes`` on the line (or ``yes=True``) answers each question yes; else the
 session's ``answer`` does, if it has one (``app.open(state, answer=parsed.reply.terminal)`` prompts a person). A
 question left unanswered, or answered no, leaves the line undone, its question in the result (``asks``).
+
+**Hooks run around each command,** in a stated order: ``app.before(hook)``, ``app.after(hook)`` and
+``app.on_error(hook)`` for every command, or with commands named (``app.before(hook, FleetBuyShip)``), for those
+alone. Before hooks run the app's, then the command's; after and on-error hooks the command's, then the app's; each
+scope's in the order they were added. A failure in a before hook, the handler, a question's answer or an after hook
+runs the on-error hooks, then goes on.
 """
 
 from __future__ import annotations
@@ -43,7 +49,7 @@ import re
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, AsyncExitStack
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any, NamedTuple, overload
 
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import Reading, Routes
@@ -66,6 +72,22 @@ if TYPE_CHECKING:
 #: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
 #: is awaited if it's awaitable.
 type Handler = Callable[..., object]
+
+#: What runs around a command: ``before(command, ctx)``, ``after(command, ctx, found)`` (what its handler came to:
+#: its reply, text, nothing, or the question it stopped at) or ``on_error(command, ctx, error)``, awaited if async.
+type Hook = Callable[..., object]
+
+
+class Hooks(NamedTuple):
+    """The hooks a command runs with: each stage's, in the order they run."""
+
+    before: tuple[Hook, ...]
+    after: tuple[Hook, ...]
+    on_error: tuple[Hook, ...]
+
+
+#: The stages hooks run at, in the order a line meets them.
+_STAGES = ('before', 'after', 'on_error')
 
 #: The path to a handler: a module's dotted name, ``:``, and a name in it (dotted, for an attribute's).
 _PATH = re.compile(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)*:[A-Za-z_]\w*(\.[A-Za-z_]\w*)*')
@@ -90,6 +112,7 @@ class App:
         self._mounts: list[Mount] = []
         self._routes: Routes[Mount] = Routes()
         self._bound = _Bindings('')
+        self._hooks: dict[str, list[tuple[Hook, frozenset[type]]]] = {stage: [] for stage in _STAGES}
 
     @property
     def mounts(self) -> tuple[Mount, ...]:
@@ -152,6 +175,60 @@ class App:
                 or the category has a resolver here already.
         """
         self._bound.name(category, resolver)
+
+    def before(self, hook: Hook, *commands: type[Command]) -> None:
+        """Run ``hook(command, ctx)`` before each command's handler: every command's, or only ``commands``'.
+
+        A before hook that raises stops the line, its handler not run, as the handler's own failure would.
+
+        Raises:
+            DeclarationError: ``hook`` isn't callable, or one of ``commands`` isn't a command class.
+        """
+        self._hook('before', hook, commands)
+
+    def after(self, hook: Hook, *commands: type[Command]) -> None:
+        """Run ``hook(command, ctx, found)`` after each command's handler: every command's, or only ``commands``'.
+
+        ``found`` is what the handler came to: its reply, text, nothing, or the question it stopped at.
+
+        Raises:
+            DeclarationError: As :meth:`before` does.
+        """
+        self._hook('after', hook, commands)
+
+    def on_error(self, hook: Hook, *commands: type[Command]) -> None:
+        """Run ``hook(command, ctx, error)`` when a command's line fails: every command's, or only ``commands``'.
+
+        It runs for a failure in a before hook, the handler, a question's answer or an after hook; the error goes on
+        after the on-error hooks have run.
+
+        Raises:
+            DeclarationError: As :meth:`before` does.
+        """
+        self._hook('on_error', hook, commands)
+
+    def hooks(self, cls: type[Command]) -> Hooks:
+        """The hooks ``cls`` runs with, each stage's in the order they run.
+
+        Before hooks: the app's, then the command's; after and on-error hooks: the command's, then the app's. Each
+        scope's run in the order they were added.
+        """
+        found: dict[str, tuple[Hook, ...]] = {}
+        for stage in _STAGES:
+            every = [hook for hook, only in self._hooks[stage] if not only]
+            own = [hook for hook, only in self._hooks[stage] if cls in only]
+            found[stage] = tuple(every + own if stage == 'before' else own + every)
+        return Hooks(**found)
+
+    def _hook(self, stage: str, hook: Hook, commands: tuple[type[Command], ...]) -> None:
+        if not callable(hook):
+            msg = f'{stage}({hook!r}, …): a hook is a callable'
+            raise DeclarationError(msg)
+        for cls in commands:
+            if not (isinstance(cls, type) and issubclass(cls, Command)) or not declaration(cls).is_command:
+                msg = f'{stage}(…, {cls!r}): a command class, with a PHRASE'
+                raise DeclarationError(msg)
+        self._hooks[stage].append((hook, frozenset(commands)))
 
     def handler(self, cls: type[Command]) -> Handler | None:
         """The handler bound to ``cls`` by :meth:`on`, imported from its path the first time; ``None`` if none is.
@@ -483,17 +560,26 @@ class Session[S]:
         return await self._handled(routed, routed.load(), yes=yes)
 
     async def _handled(self, routed: Routed, command: Command, *, yes: bool) -> Seared | str | Ask | None:
-        """Call the handler for ``command``, check what it returned, and ask each question it asks, in turn."""
-        handler = routed.mount.handler(routed.command)
+        """Call the handler for ``command`` between its hooks, check what it returned, and ask each question it asks."""
+        cls = routed.command
+        handler = routed.mount.handler(cls)
         if handler is None:
-            msg = f'{routed.command.__qualname__} has no handler in {routed.mount.label}: bind one with app.on'
+            msg = f'{cls.__qualname__} has no handler in {routed.mount.label}: bind one with app.on'
             raise LookupError(msg)
-        found = _checked(await _awaited(handler(command, self.context(routed))), routed.command)
+        hooks, ctx = self.app.hooks(cls), self.context(routed)
         yes = yes or 'yes' in routed.reading.own
-        while isinstance(found, Ask):
-            if not (yes or await self._answered(found.question)):
-                return found
-            found = _checked(await _awaited(found.then()), routed.command)
+        try:
+            for hook in hooks.before:
+                await _awaited(hook(command, ctx))
+            found = _checked(await _awaited(handler(command, ctx)), cls)
+            while isinstance(found, Ask) and (yes or await self._answered(found.question)):
+                found = _checked(await _awaited(found.then()), cls)
+            for hook in hooks.after:
+                await _awaited(hook(command, ctx, found))
+        except Exception as error:
+            for hook in hooks.on_error:
+                await _awaited(hook(command, ctx, error))
+            raise
         return found
 
     async def _answered(self, question: str) -> bool:

@@ -28,6 +28,7 @@ WALK = ('reading', 'walk')
 READ = ('reading', 'read')
 COMPLETE = ('completing', 'complete')
 RENDER = ('rendering', 'render')
+RUN = ('running', 'run')
 
 
 def _m(case: tuple[str, str], us: float, run: int = 0, per: int = 100) -> Measurement:
@@ -119,6 +120,12 @@ class TestBlocks:
         found = blocks(_report(_m(RENDER, 1_315.0, per=263)))
         assert 'Every command' in found['rendering']
         assert found['render-us'] == '~5 µs'
+
+    def test_the_running_suite(self):
+        found = blocks(_report(_m(RUN, 7_890.0, per=263)))
+        assert '`run`' in found['running']
+        assert 'Every line' in found['running']
+        assert found['run-us'] == '~30 µs'
 
     def test_the_inline_numbers_per_line(self):
         found = blocks(_report(_m(WALK, 2_400.0, per=263), _m(READ, 3_500.0, per=263)))

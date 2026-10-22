@@ -774,3 +774,162 @@ class TestTheTerminalGameEndToEnd:
         assert (dry.text, dry.done) == ('f1 mines (dry run)', False)
         assert (wrong.ok, wrong.code) == (False, 2)
         assert (hangar.ships, hangar.credits) == (['hauler'], 800)  # bought once, on the yes
+
+
+class _Log:
+    """Hooks and a handler that write what they see to one log, in order."""
+
+    def __init__(self) -> None:
+        self.lines: list[tuple] = []
+
+    def hook(self, name: str):
+        def hooked(command, ctx, *found):
+            self.lines.append((name, type(command).__name__, *found))
+
+        return hooked
+
+    def handler(self, command, ctx):
+        self.lines.append(('handler', type(command).__name__))
+        return 'ran'
+
+
+class TestHooks:
+    @pytest.fixture
+    def log(self, app) -> _Log:
+        found = _Log()
+        app.on(service.Run, found.handler)
+        app.on(service.Status, found.handler)
+        return found
+
+    async def _run(self, app: App, line: str, **given):
+        async with app.open(**given) as session:
+            return await session.run(line)
+
+    async def test_in_their_stated_order(self, app, log):
+        app.before(log.hook('app before'))
+        app.before(log.hook('run before'), service.Run)
+        app.after(log.hook('app after'))
+        app.after(log.hook('run after'), service.Run)
+        assert (await self._run(app, 'relay run')).text == 'ran'
+        assert log.lines == [
+            ('app before', 'Run'),
+            ('run before', 'Run'),
+            ('handler', 'Run'),
+            ('run after', 'Run', 'ran'),
+            ('app after', 'Run', 'ran'),
+        ]
+
+    async def test_each_scope_s_in_the_order_added(self, app, log):
+        app.before(log.hook('first'))
+        app.before(log.hook('second'))
+        app.after(log.hook('third'))
+        app.after(log.hook('fourth'))
+        await self._run(app, 'relay run')
+        assert [line[0] for line in log.lines] == ['first', 'second', 'handler', 'third', 'fourth']
+
+    async def test_a_command_s_own_for_it_alone(self, app, log):
+        app.before(log.hook('run before'), service.Run, farlandia.Log)
+        await self._run(app, 'relay status')
+        assert log.lines == [('handler', 'Status')]
+
+    async def test_hooks_listed_as_they_run(self, app):
+        def every(*_):
+            return None
+
+        def own(*_):
+            return None
+
+        for stage in (app.before, app.after, app.on_error):
+            stage(every)
+            stage(own, service.Run)
+        assert app.hooks(service.Run) == ((every, own), (own, every), (own, every))
+        assert app.hooks(service.Status) == ((every,), (every,), (every,))
+
+    async def test_one_context_for_the_line(self, app):
+        seen = []
+        app.on(service.Run, lambda command, ctx: seen.append(ctx))
+        app.before(lambda command, ctx: seen.append(ctx))
+        app.after(lambda command, ctx, found: seen.append(ctx))
+        await self._run(app, 'relay run --dry-run')
+        assert len(seen) == 3
+        assert seen[0] is seen[1] is seen[2]
+        assert seen[0].dry_run  # hooks run on a dry run too, and see it
+
+    async def test_after_sees_the_question_a_line_stopped_at(self, app, log):
+        app.on(farlandia.FleetBuyShip, _buy)
+        app.after(log.hook('after'))
+        found = await self._run(app, 'fleet f1 buy ship hauler', state=_Hangar())
+        ((stage, name, asked),) = log.lines
+        assert (stage, name) == ('after', 'FleetBuyShip')
+        assert asked.question == found.asks == 'Buy a hauler for 1,200 credits?'
+
+    async def test_async_hooks_awaited(self, app, log):
+        async def before(command, ctx):
+            await asyncio.sleep(0)
+            log.lines.append(('async before',))
+
+        app.before(before)
+        await self._run(app, 'relay run')
+        assert log.lines == [('async before',), ('handler', 'Run')]
+
+    @pytest.mark.parametrize('where', ['before', 'handler', 'answer', 'after'])
+    async def test_a_failure_runs_the_on_error_hooks_then_goes_on(self, app, log, where):
+        failed = KeyError(where)
+
+        def fail(*_):
+            raise failed
+
+        app.on_error(log.hook('app on error'))
+        app.on_error(log.hook('own on error'), service.Run)
+        relay = _mount(app, 'relay')
+        if where == 'before':
+            app.before(fail)
+        elif where == 'handler':
+            relay.on(service.Run, fail)
+        elif where == 'answer':
+            relay.on(service.Run, lambda command, ctx: parsed.Ask('Run it?', lambda: 'ran'))
+        else:
+            app.after(fail)
+        found = await self._run(app, 'relay run', answer=fail)
+        assert (found.ok, found.code, found.exception) == (False, 1, failed)
+        assert log.lines[-2:] == [('own on error', 'Run', failed), ('app on error', 'Run', failed)]
+        assert (('handler', 'Run') in log.lines) is (where == 'after')  # a failure before it stops the handler
+
+    async def test_a_failing_on_error_hook_s_error_goes_on(self, app):
+        def broken(command, ctx):
+            msg = 'handler'
+            raise KeyError(msg)
+
+        def worse(command, ctx, error):
+            msg = 'hook'
+            raise ValueError(msg)
+
+        app.on(service.Run, broken)
+        app.on_error(worse)
+        async with app.open() as session:
+            with pytest.raises(ValueError, match='hook') as caught:
+                await session.call('relay run')
+        assert isinstance(caught.value.__context__, KeyError)
+
+    @pytest.mark.parametrize('line', ['rela run', 'relay run --help', 'relay validate-config'])
+    async def test_none_run_where_no_handler_does(self, app, log, line):
+        app.before(log.hook('before'))
+        app.on_error(log.hook('on error'))
+        await self._run(app, line)
+        assert log.lines == []
+
+    @pytest.mark.parametrize(
+        ('stage', 'given', 'message'),
+        [
+            ('before', (3,), r'before\(3, …\): a hook is a callable'),
+            (
+                'after',
+                (print, service.ServiceCommand),
+                r'after\(…, .*ServiceCommand.*\): a command class, with a PHRASE',
+            ),
+            ('on_error', (print, 'run'), r"on_error\(…, 'run'\): a command class"),
+        ],
+    )
+    def test_refused(self, app, stage, given, message):
+        with pytest.raises(DeclarationError, match=message):
+            getattr(app, stage)(*given)
