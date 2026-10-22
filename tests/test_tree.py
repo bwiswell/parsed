@@ -278,6 +278,12 @@ class TestReading:
         with pytest.raises(ReadError, match=r'no command'):
             fixtures.read('frobnicate')
 
+    def test_usage_says_the_command_by_the_phrase_it_ended_at(self, fixtures):
+        assert fixtures.usage(fixtures.walk('fleets merge f1 --into f2').end) == (
+            'fleets merge <fleet> --into <into> [--quiet]'
+        )
+        assert fixtures.usage(fixtures.walk('fleet f1 dock nearest').end) == 'fleet <fleet> dock nearest'
+
     def test_exported(self):
         assert parsed.Tree is Tree
 
@@ -316,6 +322,9 @@ class TestUnder:
     def test_completion_offers_it(self, farm):
         assert farm.complete('') == (['farm'], 0)
         assert farm.complete('farm fl').words == ['fleet', 'fleets']
+
+    def test_its_usage_says_it(self, farm):
+        assert farm.usage(farm.walk('farm log').end) == 'farm log [<n>]'
 
     def test_a_line_written_back_begins_with_it(self, farm):
         assert farm.render(farlandia.FleetDock(fleet='f1', station='nearest')) == 'farm fleet f1 dock "nearest"'

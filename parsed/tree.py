@@ -48,6 +48,7 @@ from seared.doc import collect
 from . import _walk
 from ._phrase import Word, parse
 from ._walk import RESERVED, Arity, Completion, Reading, SlotKind
+from ._walk._hints import usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
@@ -182,6 +183,18 @@ class Tree:
             KeyError: ``cls`` isn't one of the tree's commands.
         """
         return self._flags[cls]
+
+    def usage(self, end: End) -> str:
+        """How the command a walk ended at is said, by its phrase: ``relay run [--config <config>]``.
+
+        The tree's prefix, the phrase's words with a ``<slot>`` for each slot, then the command's flags.
+
+        Args:
+            end: Where a walk ended: a reading's ``end``.
+        """
+        fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
+        said = usage(end.bound, self.flags_of(end.declaration.cls).values(), fields)
+        return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
         """What ``line`` says: the command, and each field's words and wire value, before seared loads them.

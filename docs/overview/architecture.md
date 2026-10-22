@@ -38,7 +38,8 @@ seared  <-  zeared
 - **The app** ([`../app.md`](../app.md)): a program's trees, each mounted under a prefix of words with its own
   parameters; a line sent to its mount by its first words; the handlers commands run with, bound by callable or by
   a path imported when first looked up; the names lines are read with; and sessions, which hold the app's state
-  open and call each line's handler with a fresh context ([`../context.md`](../context.md)).
+  open and call each line's handler with a fresh context ([`../context.md`](../context.md)), giving what came of
+  it as one envelope, with its exit code ([`../reply.md`](../reply.md)).
 - **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
   its arguments as a closed JSON Schema, for the tools that read commands; and `python -m parsed check`, a
   package's commands checked in its CI.
@@ -47,6 +48,5 @@ seared  <-  zeared
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
   no line can say.
 
-A command's reply, its result envelope, asking first and hooks arrive in the releases that follow, each adding
-its part here. What each part costs is in
+Asking first and hooks arrive in the releases that follow, each adding its part here. What each part costs is in
 [`benchmarks.md`](benchmarks.md).

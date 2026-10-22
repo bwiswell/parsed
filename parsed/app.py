@@ -16,14 +16,22 @@
 A line goes to its mount by its first words (:mod:`parsed._walk._route`), then the mount's tree reads it, with the
 mount's names: :meth:`App.walk`, :meth:`App.read`, :meth:`App.complete` and :meth:`App.render`, as a tree's.
 
-**A session runs lines** against the app's state: ``async with app.open(state) as session``, then
-``await session.call(line)``. A state that opens and closes (a context manager, as a link to a server is) is entered
-when the session opens and left when it closes, and handlers see what entering it gave. Each line's handler is
-called as ``handler(command, ctx)``, ``ctx`` a fresh :class:`~parsed.context.Context`, and awaited if it's async.
+**A session runs lines** against the app's state: ``async with app.open(state) as session``. A state that opens and
+closes (a context manager, as a link to a server is) is entered when the session opens and left when it closes, and
+handlers see what entering it gave. Each line's handler is called as ``handler(command, ctx)``, ``ctx`` a fresh
+:class:`~parsed.context.Context`, and awaited if it's async; it returns its command's ``REPLY``, text or nothing.
+
+- ``await session.run(line)`` gives what came of it as a :class:`~parsed.reply.Result`, the envelope every parsed
+  app answers with, its error and exit code among it: it raises for nothing the line or its handler does.
+- ``await session.call(line)`` gives what the handler returned, and lets every error through.
+- ``app.run(line, state)`` runs one line in a session of its own, for a program that runs one and exits.
+
+A line that gives ``--help`` runs nothing: it's answered with its command's usage.
 """
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import inspect
 import re
@@ -35,12 +43,15 @@ from typing import TYPE_CHECKING, Any, overload
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import Reading, Routes
 from .command import Command, declaration
-from .errors import DeclarationError, RenderError
+from .errors import DeclarationError, ReadError, RenderError
+from .reply import Result
 from .tree import Tree
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from types import TracebackType
+
+    from seared import Seared
 
     from ._walk import Completion
     from .context import Context
@@ -165,6 +176,30 @@ class App:
             verbosity: How much handlers should say (``ctx.verbosity``): ``0`` by default, more for more.
         """
         return Session(self, state, verbosity=verbosity)
+
+    def run(self, line: str, state: object = None, *, verbosity: int = 0) -> Result:
+        """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
+
+        It gives what :meth:`Session.run` gives. It runs an event loop for the session (``asyncio.run``), so it's
+        called outside one; inside one, open a session.
+
+        Args:
+            line: The line.
+            state: The app's state, as :meth:`open` takes it.
+            verbosity: How much handlers should say, as :meth:`open` takes it.
+
+        Raises:
+            RuntimeError: It's called inside a running event loop.
+        """
+        if _looping():
+            msg = 'app.run(line) runs an event loop of its own; inside one, open a session: async with app.open(state)'
+            raise RuntimeError(msg)
+
+        async def once() -> Result:
+            async with self.open(state, verbosity=verbosity) as session:
+                return await session.run(line)
+
+        return asyncio.run(once())
 
     def walk(self, line: str, *, placeholders: bool = False) -> Routed:
         """The mount ``line`` goes to, and what its tree reads the line to, with the mount's names.
@@ -357,35 +392,79 @@ class Session[S]:
 
     async def __aexit__(
         self, kind: type[BaseException] | None, error: BaseException | None, traceback: TracebackType | None
-    ) -> bool:
-        """Close: leave the state, if it was entered, telling it of any error the session's body raised."""
+    ) -> None:
+        """Close: leave the state, if it was entered, telling it of any error the session's body raised.
+
+        The error goes on past the session, whatever the state makes of it: a session never swallows one.
+        """
         stack, self._stack, self._closed = self._stack, None, True
-        if stack is None:
-            return False
-        return bool(await stack.__aexit__(kind, error, traceback))
+        if stack is not None:
+            await stack.__aexit__(kind, error, traceback)
+
+    async def run(self, line: str) -> Result:
+        """Run ``line`` as :meth:`call` does, and give what came of it: the envelope, its error and exit code among it.
+
+        A line that doesn't read, a value its field refuses, and a handler that fails, has no binding or returns what
+        it shouldn't, each comes back as the result's error, none of them raised.
+
+        Raises:
+            RuntimeError: The session isn't open.
+        """
+        self._check_open()
+        try:
+            routed = self.app.walk(line)
+        except ReadError as e:
+            return Result(line, ok=False, text=str(e), error=e.to_json(), exception=e)
+        said, own = routed.said, routed.reading.own
+        if 'help' in own:
+            return Result(line, said, text=routed.mount.tree.usage(routed.reading.end))
+        try:
+            command = routed.load()
+        except ReadError as e:
+            return Result(line, said, ok=False, text=str(e), error=e.to_json(), exception=e)
+        try:
+            found = await self._handled(routed, command)
+        except Exception as e:  # noqa: BLE001 -- a handler's failure is the result's, never the caller's
+            message = f'{type(e).__name__}: {e}' if str(e) else type(e).__name__
+            return Result(
+                line, said, ok=False, text=message, error={'error': 'handler', 'message': message}, exception=e
+            )
+        done = 'dry-run' not in own
+        if found is None or isinstance(found, str):
+            return Result(line, said, done=done, text=found)
+        return Result(line, said, done=done, reply=found, text=str(found))
 
     async def call(self, line: str) -> object:
         """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
 
         The line goes to its mount and is loaded there (:meth:`App.walk`); its handler is the mount's, else the
-        app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async.
+        app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async. It returns its
+        command's ``REPLY``, text or nothing. A line that gives ``--help`` runs nothing: it gives the command's usage.
 
         Raises:
             RuntimeError: The session isn't open.
             ReadError: The line doesn't read.
             LookupError: Its command has no handler.
             ImportError: Its handler's path doesn't import.
+            TypeError: Its handler returned something besides its ``REPLY``, text or nothing.
             Exception: Whatever its handler raises.
         """
         self._check_open()
         routed = self.app.walk(line)
-        command = routed.load()
+        if 'help' in routed.reading.own:
+            return routed.mount.tree.usage(routed.reading.end)
+        return await self._handled(routed, routed.load())
+
+    async def _handled(self, routed: Routed, command: Command) -> Seared | str | None:
+        """Call the handler for ``command``, awaited if it's async, and check what it returned."""
         handler = routed.mount.handler(routed.command)
         if handler is None:
             msg = f'{routed.command.__qualname__} has no handler in {routed.mount.label}: bind one with app.on'
             raise LookupError(msg)
         found = handler(command, self.context(routed))
-        return await found if inspect.isawaitable(found) else found
+        if inspect.isawaitable(found):
+            found = await found
+        return _checked(found, routed.command)
 
     def context(self, routed: Routed) -> Context[S]:
         """The context a line's handler is given, for ``routed``: this session, its mount and its reading."""
@@ -415,6 +494,12 @@ class Routed:
     def command(self) -> type[Command]:
         """The command class it says."""
         return self.reading.command
+
+    @property
+    def said(self) -> str:
+        """The phrase that said it, after its mount's prefix: ``'relay run'``, ``'fleet {fleet} mine'``."""
+        phrase = self.reading.end.bound.phrase.text
+        return f'{self.mount.under} {phrase}' if self.mount.under else phrase
 
     def load(self) -> Command:
         """The command, loaded by seared from its fields' values.
@@ -480,6 +565,28 @@ class _Bindings:
 
     def _here(self) -> str:
         return f' in {self.where}' if self.where else ''
+
+
+def _checked(found: object, cls: type[Command]) -> Seared | str | None:
+    """What a handler returned, if it's its command's ``REPLY``, text or nothing: refused otherwise, naming it."""
+    reply = declaration(cls).reply
+    if found is None or isinstance(found, str) or (reply is not None and isinstance(found, reply)):
+        return found
+    said = f"{cls.__qualname__}'s handler returned a {type(found).__name__}"
+    if reply is None:
+        msg = f'{said}: a handler returns text or nothing, or the REPLY its command declares'
+    else:
+        msg = f'{said}: a handler returns its REPLY ({reply.__name__}), text or nothing'
+    raise TypeError(msg)
+
+
+def _looping() -> bool:
+    """Whether an event loop is running in this thread."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
 
 
 def _imported(path: str, cls: type) -> Handler:
