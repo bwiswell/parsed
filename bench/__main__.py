@@ -20,7 +20,7 @@ import parsed
 from . import tables
 from .harness import Report, environment, time_case
 
-_SUITES = ['suite_declaring']
+_SUITES = ['suite_declaring', 'suite_reading']
 _DEFAULT_OUT = tables.RESULTS
 
 
@@ -55,7 +55,7 @@ def main() -> None:
         for case in cases:
             m = time_case(case, parsed.__version__, run)
             measurements.append(m)
-            print(f'{m.suite:<10} {m.case:<9} {m.us_per_op:>12,.1f} us/op  ({m.us_per_op / m.per:8.2f} us/command)')
+            print(f'{m.suite:<10} {m.case:<9} {m.us_per_op:>12,.1f} us/op  ({m.us_per_op / m.per:8.2f} us each)')
 
     python, plat = environment()
     report = Report(

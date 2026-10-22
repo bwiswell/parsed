@@ -1,4 +1,4 @@
-"""A command tree the size of a real one, generated: what the suites declare and, later, read.
+"""A command tree the size of a real one, generated: what the suites declare and read.
 
 :func:`tree` declares :data:`COMMANDS` commands, as many as a real terminal game's command line has, in twelve
 sections. Each section has a base, decorated, carrying a positional field, an effect and the kinds its commands read
@@ -10,7 +10,8 @@ by. Its commands take the shapes parsed's tests take, in proportions near that g
 - one in nine reads, with a typed reply; one in eleven asks first; one in twenty-three is interactive, with the
   command before it as the form an agent says instead.
 
-Each call declares new classes, so a suite can time declaring from nothing.
+Each call declares new classes, so a suite can time declaring from nothing. :func:`lines` says each command once,
+for the suites that read.
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import parsed
+from parsed._phrase import Word
+from parsed.command import declaration
+from parsed.tree import flag_name
 
 if TYPE_CHECKING:
     from parsed.command import Command
@@ -124,4 +128,20 @@ def tree(commands: int = COMMANDS) -> list[type[Command]]:
         found.append(cls)
         if not cls.__dict__.get('INTERACTIVE', False):
             before = cls
+    return found
+
+
+#: What :func:`lines` gives each flag the tree's commands take.
+_FLAG_VALUES = {'for_': '90', 'n': '3'}
+
+
+def lines(commands: list[type[Command]]) -> list[str]:
+    """A line for each command: its ``PHRASE``, each slot filled with a word, and then each of its flags given."""
+    found = []
+    for cls in commands:
+        said = declaration(cls)
+        words = [part.text if isinstance(part, Word) else f'{part.name}-1' for part in said.phrases[0].phrase.parts]
+        wires = {spec.attr: spec.wire for spec in cls.__seared_fields__}
+        words += [f'--{flag_name(wires[attr])} {_FLAG_VALUES[attr]}' for attr in said.flags]
+        found.append(' '.join(words))
     return found

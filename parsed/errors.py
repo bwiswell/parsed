@@ -17,3 +17,11 @@ class DeclarationError(ParsedError, TypeError):
     It names the class and what's wrong, and says how to put it right. It's a ``TypeError`` too, as a mistake in a
     class's definition is in Python.
     """
+
+
+class ReadError(ParsedError, ValueError):
+    """A line that doesn't read: a word no command says, a slot left empty, a flag the command doesn't take.
+
+    Its message says what's wrong, with the words read up to it. It's a ``ValueError`` too, as a value Python can't
+    read is.
+    """

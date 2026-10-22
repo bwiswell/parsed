@@ -1,12 +1,13 @@
 """Tests for ``bench/tree.py``: the generated tree is the size, and has the shapes, its docstring says.
 
-It's also a test of ``declaration`` at scale: every one of its commands must declare.
+It's also a test of ``declaration`` and reading at scale: every one of its commands must declare, and its line read.
 """
 
 from __future__ import annotations
 
-from bench.tree import COMMANDS, tree
+from bench.tree import COMMANDS, lines, tree
 from parsed.command import declaration
+from parsed.tree import Tree
 
 
 def test_it_declares_every_command():
@@ -29,3 +30,13 @@ def test_each_call_declares_new_classes():
     first, second = tree(3), tree(3)
     assert [cls.PHRASE for cls in first] == [cls.PHRASE for cls in second]
     assert not set(first) & set(second)
+
+
+def test_each_line_reads_to_its_command():
+    commands = tree()
+    built = Tree(commands)
+    said = lines(commands)
+    assert len(said) == COMMANDS
+    assert [built.walk(line).command for line in said] == commands
+    assert any('--for 90' in line for line in said)
+    assert all(isinstance(built.read(line), cls) for line, cls in zip(said, commands, strict=True))

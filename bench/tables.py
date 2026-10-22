@@ -38,6 +38,8 @@ _ROWS = (
     ('declaring', 'declare', "each command's first `declaration`"),
     ('declaring', 'reread', '`declaration` again, kept on the class'),
     ('declaring', 'build', 'the `Tree` from them: their phrases compiled, the whole checked'),
+    ('reading', 'walk', "a line's flags split off, its words walked, each field's words kept"),
+    ('reading', 'read', 'a line on to its instance, loaded by seared from its words'),
 )
 
 #: Run counts the prose spells out; anything else stays a numeral.
@@ -117,20 +119,30 @@ def _table(rows: list[list[str]]) -> str:
     return '\n'.join([line(rows[0]), rule, *(line(r) for r in rows[1:])])
 
 
-def declaring_table(results: Results) -> str:
-    """The declaring suite: each case's median time per tree and per command."""
-    rows = [['Case', 'What it times', 'Per tree', 'Per command']]
+def _suite_table(results: Results, suite: str, whole: str, each: str) -> str:
+    """One suite: each case's median time for the whole, and for each command or line in it."""
+    rows = [['Case', 'What it times', whole, each]]
     rows.extend(
         [
             f'`{case}`',
             what,
-            _fmt(results.us((suite, case)), _time),
-            _fmt(results.us_per_command((suite, case)), lambda v: f'{v:.2f} µs'),
+            _fmt(results.us((found, case)), _time),
+            _fmt(results.us_per_command((found, case)), lambda v: f'{v:.2f} µs'),
         ]
-        for suite, case, what in _ROWS
-        if suite == 'declaring' and results.has((suite, case))
+        for found, case, what in _ROWS
+        if found == suite and results.has((found, case))
     )
     return _table(rows)
+
+
+def declaring_table(results: Results) -> str:
+    """The declaring suite: each case's median time per tree and per command."""
+    return _suite_table(results, 'declaring', 'Per tree', 'Per command')
+
+
+def reading_table(results: Results) -> str:
+    """The reading suite: each case's median time for a line of each command, and per line."""
+    return _suite_table(results, 'reading', 'Every line', 'Per line')
 
 
 def spread_table(results: Results) -> str:
@@ -168,9 +180,11 @@ def blocks(report: Report) -> dict[str, str]:
     """Every generated block by marker name. Table blocks sit on lines of their own."""
     r = Results(report)
     decorate, declare, build = ('declaring', 'decorate'), ('declaring', 'declare'), ('declaring', 'build')
+    walk, read = ('reading', 'walk'), ('reading', 'read')
     return {
         # Table blocks.
         'declaring': f'\n{declaring_table(r)}\n',
+        'reading': f'\n{reading_table(r)}\n',
         'spread': f'\n{spread_table(r)}\n',
         # Inline blocks: the provenance, then the numbers the prose quotes.
         'run': run_line(report),
@@ -180,6 +194,8 @@ def blocks(report: Report) -> dict[str, str]:
         'decorate-ms': _fmt(r.us(decorate), lambda v: f'~{v / 1_000:.0f} ms'),
         'declare-ms': _fmt(r.us(declare), lambda v: f'~{v / 1_000:.0f} ms'),
         'build-ms': _fmt(r.us(build), lambda v: f'~{v / 1_000:.1f} ms'),
+        'walk-us': _fmt(r.us_per_command(walk), lambda v: f'~{v:.0f} µs'),
+        'read-us': _fmt(r.us_per_command(read), lambda v: f'~{v:.0f} µs'),
     }
 
 

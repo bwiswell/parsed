@@ -1,6 +1,8 @@
-"""Tests for ``parsed/tree.py``: the phrases compiled into one trie, and the checks across commands."""
+"""Tests for ``parsed/tree.py``: the phrases compiled into one trie, the checks across commands, and reading."""
 
 from __future__ import annotations
+
+from datetime import timedelta
 
 import _support_farlandia as farlandia
 import _support_rio as rio
@@ -9,7 +11,7 @@ import pytest
 import parsed
 from bench.tree import COMMANDS, tree
 from parsed.command import Command
-from parsed.errors import DeclarationError
+from parsed.errors import DeclarationError, ReadError
 from parsed.tree import RESERVED, Arity, Flag, SlotKind, Tree, flag_name
 
 
@@ -31,8 +33,11 @@ class TestCompiling:
         assert names == {
             'FleetMine',
             'FleetDock',
+            'FleetJump',
+            'FleetJumpNearest',
             'FleetSell',
             'FleetBuyShip',
+            'FleetsMerge',
             'FleetsShow',
             'Log',
             'Say',
@@ -57,7 +62,7 @@ class TestCompiling:
     def test_a_slot_shared_by_the_commands_after_it(self, fixtures):
         fleet = fixtures.root.words['fleet'].slot
         assert fleet.kind is SlotKind.ONE
-        assert sorted(fleet.node.words) == ['buy', 'dock', 'mine', 'sell']
+        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'sell']
 
     def test_a_literal_beside_a_slot(self, fixtures):
         dock = fixtures.root.words['fleet'].slot.node.words['dock']
@@ -165,7 +170,14 @@ class TestFlags:
         assert flags['no-stop'] == Flag(name='no-stop', field='stop', arity=Arity.SWITCH, negated=True)
 
     def test_a_tree_wide_table(self, fixtures):
-        assert fixtures.flags == {'for': Arity.VALUE, 'host': Arity.VALUE, 'port': Arity.VALUE, 'label': Arity.VALUE}
+        assert fixtures.flags == {
+            'for': Arity.VALUE,
+            'into': Arity.VALUE,
+            'quiet': Arity.SWITCH,
+            'host': Arity.VALUE,
+            'port': Arity.VALUE,
+            'label': Arity.VALUE,
+        }
 
     @pytest.mark.parametrize('attr', ['help', 'json', 'yes', 'dry_run'])
     def test_parsed_s_own_are_reserved(self, attr):
@@ -195,3 +207,22 @@ class TestFlags:
     def test_not_one_of_the_tree_s_commands(self, fixtures):
         with pytest.raises(KeyError):
             fixtures.flags_of(farlandia.FleetCommand)
+
+
+class TestReading:
+    # The walk itself is tested in `tests/_walk/`; these pin the tree's two doors to it.
+    def test_walk_says_what_a_line_says(self, fixtures):
+        reading = fixtures.walk('fleet f1 mine --for 90 --yes')
+        assert reading.command is farlandia.FleetMine
+        assert reading.data() == {'fleet': 'f1', 'for': '90'}
+        assert reading.own == {'yes'}
+
+    def test_read_goes_on_to_the_instance(self, fixtures):
+        assert fixtures.read('fleet f1 mine --for 90') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
+
+    def test_a_line_that_doesn_t_read(self, fixtures):
+        with pytest.raises(ReadError, match=r'no command'):
+            fixtures.read('frobnicate')
+
+    def test_exported(self):
+        assert parsed.Tree is Tree

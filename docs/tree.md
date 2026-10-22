@@ -1,32 +1,47 @@
-# `tree.py`: every command's phrases, compiled and checked as a whole
+# `tree.py`: every command's phrases, compiled and checked as a whole, and the lines it reads
 
-`parsed.tree.Tree(commands)` declares each command class, compiles every phrase into one trie of words, and checks
-the whole. `Tree.collect('pkg.commands', …)` builds one from every command in some modules or packages, their
+`parsed.Tree(commands)` declares each command class, compiles every phrase into one trie of words, and checks the
+whole. `Tree.collect('pkg.commands', …)` builds one from every command in some modules or packages, their
 submodules included. A base, which has no `PHRASE`, is left out, as is any class that isn't a command.
 
 ```python
-from parsed.tree import Tree
+import parsed
 
-tree = Tree.collect('farm.commands')
+tree = parsed.Tree.collect('farm.commands')
+tree.read('fleet prospector mine --for 600')
+# FleetMine(fleet='prospector', for_=datetime.timedelta(seconds=600))
 ```
 
-## How a line will walk it
+## Reading a line
 
-A line is read from the root, a word at a time:
+`tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
+[`Reading`](_walk/_walker.md#reading): the command, and each field's words.
 
-- **a word that is a literal child** of the node takes that branch: a literal beats a slot, so with
-  `jump {system}` beside `jump nearest {ore}`, `jump nearest coal` reads the second;
-- **else the node's slot** takes it: one word, several (until a word that's a literal after them, or the end), or
+The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
+split off. Then it's read from the root, a word at a time:
+
+- **a word that is a literal child** of the node takes that branch, case aside: a literal beats a slot, so with
+  `jump {system}` beside `jump nearest {ore}`, `jump nearest coal` reads the second. A quoted word is never a
+  literal, so `jump "nearest"` reads the first;
+- **else the node's slot** takes it: one word, several (up to a word that's a literal after them, or the end), or
   the rest of the line. A node has one slot at most.
 
 An optional slot is compiled both with it and without it, so `log {n}` ends at `log` (its `n` left at its
 default) and at `log 40`. Where a walk ends, one phrase ends at most (`node.end`): the command, the phrase, and the
 slots read on the way.
 
+**seared loads the words,** reading each as its field's type: `40` for an `Int`, `iron` for an `Enum` whose value
+it is, an ISO date for a `Date`. A name is kept as typed. A word seared doesn't read raises its `ValidationError`,
+as does a required field the line leaves out.
+
+A line that doesn't read raises a `ReadError` saying why, with the words read up to it:
+[`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each.
+
 ## Flags
 
-Flags are split off a line before the walk, since they may stand anywhere after the first word and the walk doesn't
-yet know its command. So a flag's name says whether it takes a value, across the whole tree:
+A flag stands anywhere after the line's first word: `--for 600`, or `--for=600`. `--` ends the flags, so every word
+after it is a word. Flags are split off a line before the walk, which doesn't yet know its command, so a flag's name
+says whether it takes a value, across the whole tree:
 
 - **a flag is its field's wire name,** `_` written `-`: `max_bytes` is `--max-bytes`, and a field with
   `data_key='for'` is `--for`;
@@ -34,7 +49,8 @@ yet know its command. So a flag's name says whether it takes a value, across the
 - **every other flag takes a value.**
 
 `tree.flags` is the tree-wide table, name to arity; `tree.flags_of(cls)` is one command's flags, each with its name,
-its field, its arity and whether it's negated.
+its field, its arity and whether it's negated. parsed's own, `--help`, `--json`, `--yes` and `--dry-run`, are
+switches every command takes, kept apart from its fields (`Reading.own`).
 
 ## What the build refuses
 

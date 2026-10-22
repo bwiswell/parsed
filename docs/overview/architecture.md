@@ -29,8 +29,10 @@ seared  <-  zeared
   names, and a default for each seared type that has a word form.
 - **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal
   beating a slot, with the checks across commands: no line read two ways, no flag meaning two things.
+- **The walk** ([`../_walk/index.md`](../_walk/index.md)): a line split into words, its flags split off, and its
+  words walked from the tree's root to a `Reading`, each field's words kept for seared to load.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
-- **Errors** ([`../errors.md`](../errors.md)): `ParsedError` and `DeclarationError`.
+- **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError` and `ReadError`.
 
-Reading a line by the tree, and the docs a command describes itself with, arrive in the releases that follow, each
-adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).
+Names read against an app's own, running a command, and the docs a command describes itself with, arrive in the
+releases that follow, each adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).

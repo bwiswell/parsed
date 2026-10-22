@@ -1,6 +1,6 @@
-"""The tree: every command's phrases, compiled into one trie of words, and checked as a whole.
+"""The tree: every command's phrases, compiled into one trie of words, checked as a whole, and the lines it reads.
 
-A line is read by walking the tree from its root, a word at a time:
+A line is read by walking the tree from its root, a word at a time (:mod:`parsed._walk`):
 
 - **a word that is a literal child** of the node takes that branch: a literal beats a slot;
 - **else the node's slot** takes it: one word, several (until a word that's a literal after them, or the end), or
@@ -24,11 +24,13 @@ written ``--no-…`` when its field defaults to ``True``.
 
 Every command is declared first (:func:`parsed.command.declaration`), so a tree that builds holds only commands whose
 declarations check.
+
+**A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words. A name
+is kept as typed. :meth:`Tree.read` goes on to the instance, loaded by seared from those words.
 """
 
 from __future__ import annotations
 
-import enum
 import importlib
 import re
 from dataclasses import dataclass, field
@@ -37,7 +39,9 @@ from typing import TYPE_CHECKING
 
 from seared.doc import collect
 
+from . import _walk
 from ._phrase import Word
+from ._walk import RESERVED, Arity, Reading, SlotKind
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
@@ -47,28 +51,9 @@ if TYPE_CHECKING:
 
     from ._phrase import Bound, Place
 
-#: Flags parsed takes for itself on every command, which no field may be named for.
-RESERVED = ('help', 'json', 'yes', 'dry-run')
-
 _FLAG = re.compile(r'[a-z0-9][a-z0-9-]*')
 
-
-class SlotKind(enum.StrEnum):
-    """What a slot takes."""
-
-    ONE = 'one'  # one word
-    MANY = 'many'  # one word or more, until a literal after them or the end
-    REST = 'rest'  # the rest of the line
-
-
 _SAID = {SlotKind.ONE: 'one word', SlotKind.MANY: 'several words', SlotKind.REST: 'the rest of the line'}
-
-
-class Arity(enum.StrEnum):
-    """Whether a flag takes a value."""
-
-    SWITCH = 'switch'  # given or not: --loud
-    VALUE = 'value'  # the word after it, or after `=`: --for 10m, --for=10m
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,10 +87,11 @@ class End:
 
 @dataclass(slots=True)
 class Edge:
-    """A node's slot: what it takes, the node after it, and the phrase that made it, for messages."""
+    """A node's slot: what it takes, the node after it, and the slot, phrase and command that made it, for messages."""
 
     kind: SlotKind
     node: Node
+    slot: str
     phrase: str
     command: str
 
@@ -120,7 +106,7 @@ class Node:
 
 
 class Tree:
-    """Every command's phrases, compiled into one trie, and checked as a whole (see the module's docstring).
+    """Every command's phrases, compiled into one trie and checked as a whole; the lines it reads (see the module).
 
     Args:
         commands: The command classes. A base, which has no ``PHRASE``, is left out, and a class given twice counts
@@ -172,6 +158,24 @@ class Tree:
         """
         return self._flags[cls]
 
+    def walk(self, line: str) -> Reading:
+        """What ``line`` says: the command, and each field's words, before seared loads them.
+
+        Raises:
+            ReadError: The line doesn't read; the message says why, with the words read up to it.
+        """
+        return _walk.walk(self, line)
+
+    def read(self, line: str) -> Command:
+        """The command ``line`` says, loaded by seared from its words.
+
+        Raises:
+            ReadError: The line doesn't read.
+            ValidationError: A word seared doesn't read as its field's type, or a required field the line leaves
+                out.
+        """
+        return self.walk(line).load()
+
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__
         node, said = self.root, []
@@ -187,7 +191,7 @@ class Tree:
             kind = SlotKind.REST if place.rest else SlotKind.MANY if place.many else SlotKind.ONE
             edge = node.slot
             if edge is None:
-                edge = node.slot = Edge(kind=kind, node=Node(), phrase=bound.phrase.text, command=name)
+                edge = node.slot = Edge(kind=kind, node=Node(), slot=place.slot, phrase=bound.phrase.text, command=name)
             elif edge.kind is not kind:
                 msg = (
                     f'after {" ".join(said)!r}, {edge.phrase!r} ({edge.command}) takes {_SAID[edge.kind]} and '
