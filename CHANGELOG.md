@@ -7,6 +7,53 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.3 — 2026-10-21
+
+**Names and completion.** A line is read with the app's own names, by the resolver it gives for each category, a
+scope read before the names it narrows. Any kind may take literal words, and a keyed field its pairs. Completion
+offers what may come next on a line being typed, from the same tree. A slot's other name is an alias now, declared
+in `ALIASES`, where 0.1.2 took it from its place.
+
+### Added
+
+- **Names read by the app's resolvers:** `tree.read(line, names={'fleet': …})` and `tree.walk(…, names=…)` read
+  each `Name` by the resolver given for its category, to the key it returns. `parsed.Resolver` is the protocol:
+  `lookup(word, scope)`, `suggest(word, scope)` and `options(scope)`. A category with no resolver reads as typed.
+- **Scopes read first:** a scoped name's resolver is given its scope's value, read before it whatever their order on
+  the line; a scope the line leaves out is `None`. A slot by an alias reads by its own category.
+- **A word no name answers to** is a `ReadError` at that word, with the resolver's suggestions and the command's
+  usage.
+- **A command whose scopes go round is refused** when it's declared.
+- **Literal words:** any kind may take `words`, each a word read to a value of its own before the kind's form, case
+  aside and never quoted (`Number(suffix='%', words={'off': None})` reads `off` as `None`). A literal for `None`
+  wants a `nullable` field. A kind of an app's own overrides `form`; `read` keeps the literals first.
+- **A number's suffix:** `Number(suffix='%')` reads `30%` as `30`.
+- **Pairs:** `parsed.kinds.Pairs(category, scope=…)` reads a keyed field's words, said as the rest of the line, as
+  `key value` pairs: each key by the app's `PairsResolver`, and each value by the resolver it gives that key. A
+  command is refused when `Pairs` reads a field that isn't keyed or isn't the rest of the line.
+- **Completion:** `tree.complete(text, names=…)` offers what may come next on a line being typed, up to the cursor:
+  the words that may follow, a slot's values (its kind's literal words and offers, a name's resolver's `options`,
+  given its scope), a whole command's flags (in the rest of the line too), a flag's values, and a pair's keys, then
+  a key's values. It gives the candidates, quoted where one holds a space, and how many characters each replaces.
+  `Kind.offers(field)` is each kind's; `split(line, partial=True)` holds an open quote's word.
+- **The completing benchmark** times completing a line for each command.
+
+### Changed
+
+- **Breaking: `ALIASES` replaces renaming a slot by its place.** A slot named after no field is an alias in
+  `ALIASES` (`{'detachment': 'fleet'}`), merged along the bases as `KINDS` is, and fills the field it gives by
+  name. So a twin may leave out an optional slot (`detachment {detachment} dock nearest`), slots may come in any
+  order, and `PHRASE` may say one (`detachment {detachment} rejoin`). An alias reads by its own `KINDS` entry, if it
+  has one, else by its field's kind. A twin written for 0.1.2 needs its base's `ALIASES`.
+- **A slot left empty hints the rest of the command's usage,** flags and all, where one command lies past it:
+  ``fleets merge: which fleet? `fleets merge <fleet> --into <into> [--quiet]` `` (the hint was the slot alone).
+  Where several commands lie past it, the hint is the slot and `…`, as before.
+
+### Fixed
+
+- **`Tree.collect` takes commands in the order they're declared,** not by class name, so the words a refusal lists
+  and completion offers come as written (`mine | dock | jump`, where they read `buy | dock | jump`).
+
 ## 0.1.2 — 2026-10-21
 
 **Reading a line.** A tree compiles every command's phrases and checks them as a whole, then reads a line to its

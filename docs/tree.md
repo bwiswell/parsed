@@ -4,6 +4,10 @@
 whole. `Tree.collect('pkg.commands', …)` builds one from every command in some modules or packages, their
 submodules included. A base, which has no `PHRASE`, is left out, as is any class that isn't a command.
 
+The commands are compiled in the order given; `Tree.collect` gives them in the order they're declared (each target
+in turn, its modules by name, and a module's by where each class begins). A node's words follow that order, so a
+refusal lists them, and completion offers them, as the commands that say them were written.
+
 ```python
 import parsed
 
@@ -31,8 +35,11 @@ default) and at `log 40`. Where a walk ends, one phrase ends at most (`node.end`
 slots read on the way.
 
 **Each word is read by its field's kind** ([`kinds.md`](kinds.md#reading-a-word)) to the field's wire value:
-`1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A name is kept as typed. Then
-seared loads the values, so a field's bounds and pattern hold on a line too.
+`1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. Then seared loads the values, so
+a field's bounds and pattern hold on a line too.
+
+**A name is read by the app's resolver** for its category, given with the line: `tree.read(line, names={…})`
+([`names.md`](names.md)). A scoped name is read after its scope, and a category with no resolver reads as typed.
 
 **A line that doesn't read raises one error,** a `ReadError`, whichever part refused it: the walk, a kind, or
 seared, whose refusal comes back as the word that gave the value. Its message says what's wrong, with the words
@@ -46,6 +53,18 @@ log {n}: must be >= 1, got 0
 ```
 
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
+
+## Completing a line
+
+`tree.complete(text, names=…)` offers what may come next on a line being typed, up to the cursor: the words that
+may follow, a slot's values (a name's from its resolver's `options`), the command's flags, a flag's values, and a
+pair's keys and values. It gives the candidates, as they'd be typed, and how many characters before the cursor each
+replaces ([`_walk/_complete.md`](_walk/_complete.md)):
+
+```python
+tree.complete('fleet f1 mine --f')
+# Completion(words=['--for'], replace=3)
+```
 
 ## Flags
 

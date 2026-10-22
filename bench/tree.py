@@ -4,8 +4,8 @@
 sections. Each section has a base, decorated, carrying a positional field, an effect and the kinds its commands read
 by. Its commands take the shapes parsed's tests take, in proportions near that game's:
 
-- every fourth has a twin that renames its first slot, as a game's detachment does a fleet's verb;
-- one in seven has an optional last slot, and an alias that leaves it out;
+- every fourth has a twin that says its first slot by an alias, as a game's detachment does a fleet's verb;
+- one in seven has an optional last slot, and another wording that leaves it out;
 - one in six takes a second positional, and one in three or five a flag;
 - one in nine reads, with a typed reply; one in eleven asks first; one in twenty-three is interactive, with the
   command before it as the form an agent says instead.
@@ -71,6 +71,7 @@ def _base(noun: str, tag: str) -> type[Command]:
             '__annotations__': {noun: str},
             'EFFECT': parsed.Effect.WRITE,
             'KINDS': {noun: parsed.Name(noun), twin: parsed.Name(twin)},
+            'ALIASES': {twin: noun},
             noun: parsed.Str(required=True, doc=f'the {noun}'),
         },
     )

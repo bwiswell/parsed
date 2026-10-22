@@ -145,7 +145,7 @@ class TestExtraPhrases:
         with pytest.raises(DeclarationError, match=r'\{message\} is the rest of the line in PHRASE'):
             declaration(Say)
 
-    def test_an_alias_in_another_order(self):
+    def test_another_wording_in_another_order(self):
         @parsed.parsed
         class Move(Command):
             PHRASE = 'move {fleet} to {site}'
@@ -157,48 +157,38 @@ class TestExtraPhrases:
         assert _places(Move, 1) == [('site', 'site'), ('fleet', 'fleet')]
 
 
-class TestRenaming:
-    def test_a_renamed_slot_fills_phrase_s_field_at_its_place(self):
+class TestAliases:
+    def test_a_slot_by_an_alias_fills_the_field_it_gives(self):
         found = declaration(farlandia.FleetMine).phrases[1]
         assert found.places == (Place(slot='detachment', field='fleet', required=True, many=False, rest=False),)
         assert found.renames
         assert found.places[0].renamed
 
-    def test_it_needs_a_kinds_entry_by_its_name(self):
+    def test_given_by_a_base_and_merged(self):
+        assert declaration(farlandia.FleetMine).aliases == {'detachment': 'fleet'}
+
+    def test_phrase_may_say_one(self):
         @parsed.parsed
-        class Mine(Command):
-            PHRASE = 'fleet {fleet} mine'
-            EXTRA_PHRASES = ('detachment {detachment} mine',)
+        class Rejoin(farlandia.FleetCommand):
+            PHRASE = 'detachment {detachment} rejoin'
 
-            fleet: str = parsed.Str(required=True)
+        assert _places(Rejoin) == [('detachment', 'fleet')]
+        assert declaration(Rejoin).flags == ()
 
-        with pytest.raises(
-            DeclarationError,
-            match=r"\{detachment\} names no field, so it renames \{fleet\}, and needs a KINDS entry 'detachment'",
-        ):
-            declaration(Mine)
-
-    def test_a_base_s_kinds_entry_serves(self):
-        assert declaration(farlandia.FleetMine).kinds['detachment'] == farlandia.DETACHMENT
-
-    def test_it_keeps_phrase_s_slots(self):
-        class Base(Command):
-            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
-
+    def test_bound_by_name_so_an_optional_slot_may_be_left_out(self):
         @parsed.parsed
-        class Transfer(Base):
-            PHRASE = 'fleet {fleet} transfer {ship}'
-            EXTRA_PHRASES = ('detachment {detachment} transfer',)
+        class Dock(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} dock {station}'
+            EXTRA_PHRASES = ('fleet {fleet} dock nearest', 'detachment {detachment} dock nearest')
 
-            fleet: str = parsed.Str(required=True)
-            ship: str = parsed.Str(default='')
+            station: str | None = parsed.Str(default=None)
 
-        with pytest.raises(DeclarationError, match=r'it renames a slot, so it keeps the 2 slots of PHRASE, not 1'):
-            declaration(Transfer)
+        assert _places(Dock, 2) == [('detachment', 'fleet')]
+        assert declaration(Dock).phrases[2].left_out == ('station',)
 
-    def test_in_phrase_s_order(self):
+    def test_in_any_order(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
+            ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
 
         @parsed.parsed
         class Transfer(Base):
@@ -208,22 +198,105 @@ class TestRenaming:
             fleet: str = parsed.Str(required=True)
             ship: str = parsed.Str(required=True)
 
-        with pytest.raises(DeclarationError, match=r"\{ship\} stands where PHRASE has \{fleet\}; .*in PHRASE's order"):
-            declaration(Transfer)
+        assert _places(Transfer, 1) == [('ship', 'ship'), ('detachment', 'fleet')]
 
-    def test_with_the_others_kept_in_place(self):
+    def test_it_reads_by_its_own_kind_or_its_field_s(self):
         class Base(Command):
-            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
+            ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet', 'squadron': 'fleet'}
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': farlandia.FLEET, 'detachment': farlandia.DETACHMENT}
 
         @parsed.parsed
-        class Transfer(Base):
-            PHRASE = 'fleet {fleet} transfer {ship}'
-            EXTRA_PHRASES = ('detachment {detachment} transfer {ship}',)
+        class Mine(Base):
+            PHRASE = 'fleet {fleet} mine'
+            EXTRA_PHRASES = ('detachment {detachment} mine', 'squadron {squadron} mine')
 
             fleet: str = parsed.Str(required=True)
-            ship: str = parsed.Str(required=True)
 
-        assert _places(Transfer, 1) == [('detachment', 'fleet'), ('ship', 'ship')]
+        found = declaration(Mine)
+        assert found.kind_of(found.phrases[1].places[0]) == farlandia.DETACHMENT
+        assert found.kind_of(found.phrases[2].places[0]) == farlandia.FLEET  # no entry of its own: the field's
+
+    def test_a_slot_that_s_neither_a_field_nor_an_alias(self):
+        @parsed.parsed
+        class Mine(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} mine'
+            EXTRA_PHRASES = ('squadron {squadron} mine',)
+
+        with pytest.raises(
+            DeclarationError,
+            match=r'\{squadron\} names no field of .*Mine \(its fields: fleet; its ALIASES: detachment\)',
+        ):
+            declaration(Mine)
+
+    def test_an_alias_to_no_field(self):
+        class Base(Command):
+            ALIASES: ClassVar[dict[str, str]] = {'detachment': 'flet'}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'detachment {detachment} mine'
+
+            fleet: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r"ALIASES gives \{detachment\} to 'flet', which is no field"):
+            declaration(Mine)
+
+    def test_an_alias_that_s_a_field_already(self):
+        class Base(Command):
+            ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'fleet {fleet} mine'
+
+            fleet: str = parsed.Str(required=True)
+            detachment: str = parsed.Str(default='')
+
+        with pytest.raises(DeclarationError, match=r"gives 'detachment' to 'fleet', but 'detachment' is a field"):
+            declaration(Mine)
+
+    def test_two_slots_for_one_field(self):
+        @parsed.parsed
+        class Mine(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} mine with {detachment}'
+
+        with pytest.raises(DeclarationError, match=r'\{fleet\} and \{detachment\} both fill fleet'):
+            declaration(Mine)
+
+    def test_an_extra_phrase_s_alias_for_a_flag(self):
+        class Base(Command):
+            ALIASES: ClassVar[dict[str, str]] = {'span': 'hours'}
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'mine'
+            EXTRA_PHRASES = ('mine {span}',)
+
+            hours: float = parsed.Float(default=1.0)
+
+        with pytest.raises(DeclarationError, match=r'\{span\}, for hours, is a flag in PHRASE'):
+            declaration(Mine)
+
+    @pytest.mark.parametrize(
+        ('aliases', 'says'),
+        [
+            (['detachment'], r'a mapping of slot names to field names'),
+            ({'a b': 'fleet'}, r"'a b' is not a slot name"),
+            ({'detachment': 3}, r"\['detachment'\] = 3: the name of the field it fills"),
+        ],
+    )
+    def test_what_aliases_may_be(self, aliases, says):
+        class Base(Command):
+            ALIASES = aliases
+
+        @parsed.parsed
+        class Mine(Base):
+            PHRASE = 'fleet {fleet} mine'
+
+            fleet: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=says):
+            declaration(Mine)
 
 
 class TestPolymorphic:
@@ -231,7 +304,7 @@ class TestPolymorphic:
         assert declaration(farlandia.FleetDock).polymorphic is None
         assert declaration(farlandia.FleetMine).polymorphic is True
 
-    def test_true_wants_a_renamed_slot(self):
+    def test_true_wants_a_slot_by_an_alias(self):
         @parsed.parsed
         class Dock(Command):
             PHRASE = 'dock {station}'
@@ -240,24 +313,19 @@ class TestPolymorphic:
 
             station: str | None = parsed.Str(default=None)
 
-        with pytest.raises(DeclarationError, match=r'Dock\.POLYMORPHIC is True, but no extra phrase renames a slot'):
+        with pytest.raises(DeclarationError, match=r'Dock\.POLYMORPHIC is True, but no phrase says a slot by an alias'):
             declaration(Dock)
 
     def test_false_refuses_one(self):
-        class Base(Command):
-            KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment')}
-
         @parsed.parsed
-        class Mine(Base):
+        class Mine(farlandia.FleetCommand):
             PHRASE = 'fleet {fleet} mine'
             EXTRA_PHRASES = ('detachment {detachment} mine',)
             POLYMORPHIC = False
 
-            fleet: str = parsed.Str(required=True)
-
         with pytest.raises(
             DeclarationError,
-            match=r"POLYMORPHIC is False, but 'detachment \{detachment\} mine' renames \{fleet\} as \{detachment\}",
+            match=r"POLYMORPHIC is False, but 'detachment \{detachment\} mine' says \{fleet\} as \{detachment\}",
         ):
             declaration(Mine)
 
@@ -273,12 +341,12 @@ class TestOwnKinds:
 
         with pytest.raises(
             DeclarationError,
-            match=r"Mine\.KINDS names 'flet', which is no field of .*Mine and no slot its phrases rename",
+            match=r"Mine\.KINDS names 'flet', which is no field of .*Mine and none of its ALIASES",
         ):
             declaration(Mine)
 
     def test_a_base_s_entries_may_go_unused(self):
-        # FleetCommand's `detachment` serves FleetMine's renamed slot; FleetBuyShip has none, and needn't.
+        # FleetCommand's `detachment` serves FleetMine's alias; FleetBuyShip has none, and needn't.
         assert 'detachment' in declaration(farlandia.FleetBuyShip).kinds
 
     def test_an_entry_for_a_flag_is_fine(self):

@@ -25,10 +25,14 @@ if TYPE_CHECKING:
     from parsed.tree import Flag
 
 
-def usage(bound: Bound, flags: Iterable[Flag], fields: Mapping[str, Field]) -> str:
-    """How a command is said by ``bound``'s phrase: its words, a ``<slot>`` for each slot, then its flags."""
+def usage(bound: Bound, flags: Iterable[Flag], fields: Mapping[str, Field], *, start: int = 0) -> str:
+    """How a command is said by ``bound``'s phrase: its words, a ``<slot>`` for each slot, then its flags.
+
+    ``start`` is where in the phrase's parts to begin, for the rest of a line that says the parts before it.
+    """
     places = {place.slot: place for place in bound.places}
-    words = [part.text if isinstance(part, Word) else slot(places[part.name]) for part in bound.phrase.parts]
+    parts = bound.phrase.parts[start:]
+    words = [part.text if isinstance(part, Word) else slot(places[part.name]) for part in parts]
     return ' '.join([*words, *(_flag(flag, fields[flag.field]) for flag in flags)])
 
 

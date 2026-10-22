@@ -26,13 +26,14 @@ Every command is declared first (:func:`parsed.command.declaration`), so a tree 
 declarations check.
 
 **A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words, read
-by its kind to its wire value. A name is kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads
-from those values.
+by its kind to its wire value. A name is read by the resolver the app gives for its category (:mod:`parsed.names`),
+or kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads from those values.
 """
 
 from __future__ import annotations
 
 import importlib
+import math
 import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -42,7 +43,7 @@ from seared.doc import collect
 
 from . import _walk
 from ._phrase import Word
-from ._walk import RESERVED, Arity, Reading, SlotKind
+from ._walk import RESERVED, Arity, Completion, Reading, SlotKind
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from ._phrase import Bound, Place
+    from .names import Resolver
 
 _FLAG = re.compile(r'[a-z0-9][a-z0-9-]*')
 
@@ -142,13 +144,17 @@ class Tree:
     def collect(cls, *targets: str) -> Tree:
         """The tree of every command in ``targets``: modules or packages, by name, their submodules included.
 
+        The commands are taken in the order they're declared: each target's in turn, its modules by name, and a
+        module's by where each class begins. So a node's words, which a refusal lists and completion offers, come in
+        the order the commands that say them were written.
+
         Raises:
             DeclarationError: As the constructor does.
         """
         classes: list[type] = []
         for target in targets:
             importlib.import_module(target)
-            classes += [found for found in collect(target) if issubclass(found, Command)]
+            classes += sorted((found for found in collect(target) if issubclass(found, Command)), key=_declared)
         return cls(classes)
 
     def flags_of(self, cls: type) -> Mapping[str, Flag]:
@@ -159,23 +165,35 @@ class Tree:
         """
         return self._flags[cls]
 
-    def walk(self, line: str) -> Reading:
+    def walk(self, line: str, names: Mapping[str, Resolver] | None = None) -> Reading:
         """What ``line`` says: the command, and each field's words and wire value, before seared loads them.
 
-        Raises:
-            ReadError: The line doesn't read, or a word its kind can't read; the message says why, with the words
-                read up to it.
-        """
-        return _walk.walk(self, line)
-
-    def read(self, line: str) -> Command:
-        """The command ``line`` says, loaded by seared from its fields' values.
+        Args:
+            line: The line.
+            names: The app's resolvers, by category: a ``Name`` of a category with none reads as typed.
 
         Raises:
-            ReadError: The line doesn't read, a word its kind can't read, or a value seared refuses (``'validation'``,
-                at the word that gave it).
+            ReadError: The line doesn't read, a word its kind can't read, or a name no resolver answers to; the
+                message says why, with the words read up to it.
         """
-        return self.walk(line).load()
+        return _walk.walk(self, line, names)
+
+    def read(self, line: str, names: Mapping[str, Resolver] | None = None) -> Command:
+        """The command ``line`` says, loaded by seared from its fields' values; ``names`` as :meth:`walk` takes it.
+
+        Raises:
+            ReadError: As :meth:`walk` does, or a value seared refuses (``'validation'``, at the word that gave it).
+        """
+        return self.walk(line, names).load()
+
+    def complete(self, text: str, names: Mapping[str, Resolver] | None = None) -> Completion:
+        """What may come next on ``text``, a line up to the cursor: the candidates, and how much each replaces.
+
+        Args:
+            text: The line, up to the cursor.
+            names: The app's resolvers, by category, whose ``options`` a name's slot or flag offers.
+        """
+        return _walk.complete(self, text, names)
 
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__
@@ -205,6 +223,12 @@ class Tree:
         if node.end is not None:
             raise DeclarationError(_same_lines(node.end, end))
         node.end = end
+
+
+def _declared(cls: type) -> tuple[str, float, str]:
+    """Where a class is declared: its module, then its first line; one made without a ``class`` statement, after."""
+    # From the class's own namespace: one made by `type()` would otherwise take its base's first line.
+    return cls.__module__, vars(cls).get('__firstlineno__', math.inf), cls.__qualname__
 
 
 def _routes(bound: Bound) -> list[tuple[Place, ...]]:

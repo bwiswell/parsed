@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import timedelta
 
 import _support_farlandia as farlandia
@@ -12,7 +13,7 @@ import parsed
 from bench.tree import COMMANDS, tree
 from parsed.command import Command
 from parsed.errors import DeclarationError, ReadError
-from parsed.tree import RESERVED, Arity, Flag, SlotKind, Tree, flag_name
+from parsed.tree import RESERVED, Arity, Flag, SlotKind, Tree, _declared, flag_name
 
 
 def _command(phrase: str, **fields: object) -> type[Command]:
@@ -35,6 +36,8 @@ class TestCompiling:
             'FleetDock',
             'FleetJump',
             'FleetJumpNearest',
+            'FleetRetreat',
+            'FleetRun',
             'FleetSell',
             'FleetBuyShip',
             'FleetsMerge',
@@ -63,7 +66,7 @@ class TestCompiling:
     def test_a_slot_shared_by_the_commands_after_it(self, fixtures):
         fleet = fixtures.root.words['fleet'].slot
         assert fleet.kind is SlotKind.ONE
-        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'sell']
+        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell']
 
     def test_a_literal_beside_a_slot(self, fixtures):
         dock = fixtures.root.words['fleet'].slot.node.words['dock']
@@ -85,6 +88,45 @@ class TestCompiling:
         mine = fixtures.root.words['detachment'].slot.node.words['mine'].end
         assert mine.declaration.cls is farlandia.FleetMine
         assert [(p.slot, p.field) for p in mine.places] == [('detachment', 'fleet')]
+
+    def test_collected_in_the_order_declared(self, fixtures):
+        assert [found.cls.__name__ for found in fixtures.commands] == [
+            'FleetMine',
+            'FleetDock',
+            'FleetJump',
+            'FleetJumpNearest',
+            'FleetRetreat',
+            'FleetRun',
+            'FleetSell',
+            'Log',
+            'Say',
+            'FleetBuyShip',
+            'FleetsMerge',
+            'FleetsStart',
+            'FleetsShow',
+            'ShipsMakeAdd',
+            'ShipFit',
+            'HandheldConnect',  # the second target's, after the first's
+        ]
+
+    def test_so_a_node_s_words_come_as_declared(self, fixtures):
+        after = fixtures.root.words['fleet'].slot.node
+        assert list(after.words) == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
+
+    def test_classes_given_keep_the_order_given(self):
+        assert [found.cls for found in Tree([farlandia.Log, farlandia.FleetMine]).commands] == [
+            farlandia.Log,
+            farlandia.FleetMine,
+        ]
+
+    def test_a_class_made_by_type_comes_after_those_written(self):
+        made = _command('made')
+        assert _declared(farlandia.FleetMine) == (
+            '_support_farlandia',
+            farlandia.FleetMine.__firstlineno__,
+            'FleetMine',
+        )
+        assert _declared(made)[1] == math.inf  # not its base's line
 
     def test_a_class_given_twice_counts_once(self):
         assert len(Tree([farlandia.Log, farlandia.Log]).commands) == 1
@@ -117,7 +159,7 @@ class TestAmbiguity:
         ):
             Tree([log, bare])
 
-    def test_one_command_s_alias_alike_its_phrase(self):
+    def test_one_command_s_other_wording_alike_its_phrase(self):
         @parsed.parsed
         class Move(Command):
             PHRASE = 'move {fleet}'
@@ -220,6 +262,14 @@ class TestReading:
 
     def test_read_goes_on_to_the_instance(self, fixtures):
         assert fixtures.read('fleet f1 mine --for 90s') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
+
+    def test_names_by_their_resolvers(self, fixtures):
+        assert fixtures.walk('fleet Prospector mine', names=farlandia.NAMES).given['fleet'].value == 'f1'
+        assert fixtures.read('fleet Prospector mine', names=farlandia.NAMES).fleet == 'f1'
+
+    def test_complete_says_what_may_come_next(self, fixtures):
+        assert fixtures.complete('fleet f1 mine --f') == (['--for'], 3)
+        assert fixtures.complete('fleet ', names=farlandia.NAMES).words == ['Prospector', 'Hauler']
 
     def test_a_line_that_doesn_t_read(self, fixtures):
         with pytest.raises(ReadError, match=r'no command'):

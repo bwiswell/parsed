@@ -12,18 +12,20 @@ Constant           Default                      What it says
 ``EFFECT``         ``None``                     what running it does (:class:`~parsed.effect.Effect`)
 ``ASKS``           ``False``                    whether it may ask before it acts
 ``INTERACTIVE``    ``False``                    whether it's only for a person at the client
-``POLYMORPHIC``    ``None``                     whether its extra phrases rename a slot (checked when declared)
+``POLYMORPHIC``    ``None``                     whether a phrase says a slot by an alias (checked when declared)
 ``INSTEAD``        ``None``                     the command an agent says in place of an interactive one
 ``REPLY``          ``None``                     the seared class its handler returns
 ``KINDS``          empty                        how each field's words are read, by field name
+``ALIASES``        empty                        other names a phrase's slot may fill a field by
+                                                (``{'detachment': 'fleet'}``)
 =================  ===========================  ==============================================================
 
 Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherited like any class attribute, so a base
-can declare one for every command beneath it. ``KINDS`` is merged along the MRO instead: a base's entries and its
-subclasses' all count, a subclass's winning where they name the same field.
+can declare one for every command beneath it. ``KINDS`` and ``ALIASES`` are merged along the MRO instead: a base's
+entries and its subclasses' all count, a subclass's winning where they name the same key.
 
 :func:`declaration` reads a class's constants once, checks each, and returns its :class:`Declaration`, with each
-phrase bound to the fields it fills (:mod:`parsed._phrase`): a field a slot of ``PHRASE`` names is a positional, and
+phrase bound to the fields it fills (:mod:`parsed._phrase`): a field a slot of ``PHRASE`` fills is a positional, and
 every other field a flag. Every field has a kind (:mod:`parsed.kinds`): its ``KINDS`` entry, or its seared type's
 default.
 """
@@ -41,7 +43,7 @@ from seared.doc import is_seared_class
 from ._phrase import Binding, Bound, Place, bind
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
-from .kinds import Kind, Name, default_kind
+from .kinds import Kind, Named, Pairs, default_kind
 
 _CACHE = '__parsed_declaration__'
 
@@ -63,6 +65,7 @@ class Command(Seared):
     INSTEAD: ClassVar[type[Command] | None] = None
     REPLY: ClassVar[type[Seared] | None] = None
     KINDS: ClassVar[Mapping[str, Kind]] = MappingProxyType({})
+    ALIASES: ClassVar[Mapping[str, str]] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,7 @@ class Declaration:
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
+        aliases: ``ALIASES``, merged likewise: a slot's name, to the field it fills.
         field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
             base.
         phrases: ``PHRASE`` and then each of ``EXTRA_PHRASES``, bound to the fields they fill; empty for a base.
@@ -96,6 +100,7 @@ class Declaration:
     instead: type[Command] | None
     reply: type[Seared] | None
     kinds: Mapping[str, Kind]
+    aliases: Mapping[str, str]
     field_kinds: Mapping[str, Kind]
     phrases: tuple[Bound, ...]
     flags: tuple[str, ...]
@@ -106,8 +111,10 @@ class Declaration:
         return self.phrase is not None
 
     def kind_of(self, place: Place) -> Kind:
-        """The kind a slot's words are read by: a renamed slot's own ``KINDS`` entry, else its field's kind."""
-        return self.kinds[place.slot] if place.renamed else self.field_kinds[place.field]
+        """The kind a slot's words are read by: a slot by an alias's own ``KINDS`` entry, else its field's kind."""
+        if place.renamed and place.slot in self.kinds:
+            return self.kinds[place.slot]
+        return self.field_kinds[place.field]
 
 
 def declaration(cls: type) -> Declaration:
@@ -138,7 +145,8 @@ def _read(cls: type) -> Declaration:
     interactive = _flag(cls, name, 'INTERACTIVE')
     polymorphic = _polymorphic(cls, name)
     kinds = _kinds(cls)
-    binding = _bind(cls, name, phrase=phrase, extra=extra, kinds=kinds, polymorphic=polymorphic)
+    aliases = _aliases(cls)
+    binding = _bind(cls, name, phrase=phrase, extra=extra, aliases=aliases, polymorphic=polymorphic)
     field_kinds = _field_kinds(cls, name, kinds, binding) if phrase is not None else MappingProxyType({})
     return Declaration(
         cls=cls,
@@ -151,6 +159,7 @@ def _read(cls: type) -> Declaration:
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
         kinds=kinds,
+        aliases=aliases,
         field_kinds=field_kinds,
         phrases=binding.phrases,
         flags=binding.flags,
@@ -299,21 +308,26 @@ def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrase
     *,
     phrase: str | None,
     extra: tuple[str, ...],
-    kinds: Mapping[str, object],
+    aliases: Mapping[str, str],
     polymorphic: bool | None,
 ) -> Binding:
     if phrase is None:
         return Binding(phrases=(), flags=())
     fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
     own = vars(cls).get('KINDS', {})
-    return bind(fields, name, phrase=phrase, extra_phrases=extra, kinds=kinds, own_kinds=own, polymorphic=polymorphic)
+    return bind(
+        fields, name, phrase=phrase, extra_phrases=extra, aliases=aliases, own_kinds=own, polymorphic=polymorphic
+    )
 
 
 def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], binding: Binding) -> Mapping[str, Kind]:
-    """Each field's kind, and a check that every ``Name`` the command reads by is scoped by another of its fields."""
+    """Each field's kind, checked against its field and its phrase, and every scope against the other fields."""
     found: dict[str, Kind] = {}
     for spec in cls.__seared_fields__:
         kind = kinds.get(spec.attr) or default_kind(spec.field)
+        if kind is None and spec.field.keyed:
+            msg = f"{name}.{spec.attr} is keyed, so its words are pairs: give it parsed.kinds.Pairs('…') in KINDS"
+            raise DeclarationError(msg)
         if kind is None:
             what = type(spec.field).__name__
             msg = (
@@ -322,22 +336,102 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
             )
             raise DeclarationError(msg)
         found[spec.attr] = kind
-    # What reads by a kind: each field, and each renamed slot (by its own entry, for the field it fills).
+    # What reads by a kind: each field, and each slot by an alias with an entry of its own (for the field it fills).
     read: list[tuple[str, str, Kind]] = [(attr, attr, kind) for attr, kind in found.items()]
     read += [
         (place.slot, place.field, kinds[place.slot])
         for bound in binding.phrases
         for place in bound.places
-        if place.renamed
+        if place.renamed and place.slot in kinds
     ]
+    _check_forms(cls, name, read, binding)
+    scopes: dict[str, set[str]] = {}  # each field, and the fields its names are scoped by
     for said, field, kind in read:
-        if isinstance(kind, Name) and kind.scope is not None and (kind.scope not in found or kind.scope == field):
+        if not isinstance(kind, Named) or kind.scope is None:
+            continue
+        if kind.scope not in found or kind.scope == field:
             msg = (
                 f'{name}: {said!r} is read as a {kind.category} scoped by {kind.scope!r}, which is no other field '
                 f'of {name}'
             )
             raise DeclarationError(msg)
+        scopes.setdefault(field, set()).add(kind.scope)
+    around = _scopes_around(scopes)
+    if around:
+        msg = (
+            f'{name}: its scopes go round, {" by ".join(around)}: a scope is read before the names it narrows, so '
+            f'one of them must be read without the other'
+        )
+        raise DeclarationError(msg)
     return MappingProxyType(found)
+
+
+def _check_forms(cls: type[Command], name: str, read: list[tuple[str, str, Kind]], binding: Binding) -> None:
+    """Refuse a kind its field can't take.
+
+    That's pairs for a field that isn't keyed or isn't the rest of the line, a keyed field read any other way, and a
+    literal word for ``None`` on a field seared would drop it from.
+    """
+    fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
+    rest = {place.field for place in binding.phrases[0].places if place.rest} if binding.phrases else set()
+    for said, field, kind in read:
+        keyed = fields[field].keyed
+        if isinstance(kind, Pairs) and not keyed:
+            msg = f'{name}: {said!r} is read as Pairs, but {field} is not keyed: give it keyed=True'
+            raise DeclarationError(msg)
+        if keyed and not isinstance(kind, Pairs):
+            msg = f"{name}.{field} is keyed, so its words are pairs: give it parsed.kinds.Pairs('…') in KINDS"
+            raise DeclarationError(msg)
+        if isinstance(kind, Pairs) and field not in rest:
+            msg = f'{name}.{field} is read as Pairs, so PHRASE says it as the rest of the line: {{{field}**}}'
+            raise DeclarationError(msg)
+        nothing = [word for word, value in kind.words.items() if value is None]
+        if nothing and not fields[field].nullable:
+            msg = (
+                f'{name}: {said!r} reads {nothing[0]!r} as None, which seared drops unless {field} is nullable: give '
+                f'it nullable=True'
+            )
+            raise DeclarationError(msg)
+
+
+def _scopes_around(scopes: Mapping[str, set[str]]) -> list[str]:
+    """A round of scopes, as the fields it passes through, the first again last; empty when there's none."""
+
+    def follow(field: str, path: list[str]) -> list[str]:
+        if field in path:
+            return [*path[path.index(field) :], field]
+        for scope in sorted(scopes.get(field, ())):
+            found = follow(scope, [*path, field])
+            if found:
+                return found
+        return []
+
+    for field in sorted(scopes):
+        found = follow(field, [])
+        if found:
+            return found
+    return []
+
+
+def _aliases(cls: type[Command]) -> Mapping[str, str]:
+    merged: dict[str, str] = {}
+    for base in reversed(cls.__mro__):
+        own = vars(base).get('ALIASES')
+        if own is None:
+            continue
+        where = f'{base.__qualname__}.ALIASES'
+        if not isinstance(own, Mapping):
+            msg = f"{where} = {own!r}: a mapping of slot names to field names, such as {{'detachment': 'fleet'}}"
+            raise DeclarationError(msg)
+        for alias, field in own.items():
+            if not isinstance(alias, str) or not alias.isidentifier():
+                msg = f'{where}: {alias!r} is not a slot name'
+                raise DeclarationError(msg)
+            if not isinstance(field, str) or not field.isidentifier():
+                msg = f'{where}[{alias!r}] = {field!r}: the name of the field it fills'
+                raise DeclarationError(msg)
+            merged[alias] = field
+    return MappingProxyType(merged)
 
 
 def _kinds(cls: type[Command]) -> Mapping[str, Kind]:

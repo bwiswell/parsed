@@ -25,8 +25,15 @@ to a word that's a literal after them, or the end; the rest of the line takes ev
 spaces (or as a list, for a list's field).
 
 **Each word is read by its field's kind** ([`kinds.md`](../kinds.md#reading-a-word)), once the walk knows its
-command: `1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A renamed slot reads by
-its own `KINDS` entry. The rest of the line is read once, joined; a list's words are read one by one.
+command: `1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A slot by an alias
+reads by its own `KINDS` entry, if it has one. The rest of the line is read once, joined; a list's words are read
+one by one.
+
+A kind's [literal words](../kinds.md#literal-words) come first, never for a quoted word. **A name is read by the
+resolver for its category** ([`names.md`](../names.md)), when `walk(tree, line, names)` has one, or as typed; a
+[`Pairs`](../kinds.md#pairs) field's words in twos, each key by its category's resolver and each value by the one it
+gives the key. The walk first gathers each field's words, then reads them in an order that puts a scope before
+the names it narrows, whatever their order on the line, and gives each resolver its scope's value.
 
 ## `Reading`
 
@@ -71,8 +78,14 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <into>` `` | |
 | gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
+| gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]` `` | the resolver's |
+| gives a pair's key no key answers to | `… {variables**}: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
+| gives a pair's value no name answers to | `… {variables**}: no home 'mars'` | the key's resolver's |
+| leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
+| gives a key twice | `… {variables**}: ore is given twice` | |
 
-A hint is a usage ([`_hints.md`](_hints.md)): the command's, or the line so far with a `<slot>` where a value goes.
+A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the
+rest of the one command's usage past it (flags and all), or the slot's `<…>` where several lie past it.
 Since a switch takes no value, `--quiet yes` reads `yes` as a word, which the command may not take.
 
 **seared's refusals** of a value, once read (its bounds, lengths or pattern), come back from `load` as a
