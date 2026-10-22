@@ -26,7 +26,14 @@ lines as it lands, and the entry is dated when that version is released.
 - **Sessions:** `async with app.open(state, verbosity=…) as session` holds the app's state open; a state that's a
   context manager, sync or async, is entered when it opens and left when it closes. `await session.call(line)`
   runs the command a line says by its handler, `handler(command, ctx)`, awaited if it's async, and gives what the
-  handler returns.
+  handler returns: its `REPLY`, text or nothing, anything else refused. A line that gives `--help` runs nothing,
+  and is answered with its command's usage.
+- **`parsed.Result`:** `await session.run(line)` gives what came of a line as one envelope, the same for every
+  parsed app: the `command` that said it, `ok`, `done`, the `reply`, its `text` (a reply's `str()`), and any
+  `error` as data, raising nothing. `result.code` is its exit code: 2 for a line that doesn't read, 4 for a value
+  its field refuses, 1 for a handler's failure. `result.to_json()` writes every key.
+- **`app.run(line, state)`** runs one line in a session of its own, for a program that runs one and exits.
+- **`tree.usage(end)`:** how the command a walk ended at is said, prefix and flags and all.
 - **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
   (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
   it (a twin's wording told from its command's), `dry_run`, and the session's `verbosity`.

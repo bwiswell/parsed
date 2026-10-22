@@ -21,7 +21,10 @@ gateway.on(Run, 'gateway.runtime:run')                       # this mount's own,
 app.read('relay run --config relay.toml')                    # Run(config=PosixPath('relay.toml'))
 
 async with app.open(Link(galaxy)) as session:                # the link is opened, and closed after
-    await session.call('fleet f1 mine')                      # mine(FleetMine(fleet='f1'), ctx)
+    result = await session.run('fleet f1 mine')              # mine(FleetMine(fleet='f1'), ctx)
+    result.text, result.code                                 # 'f1 mines', 0
+
+app.run('relay run', settings)                               # one line, in a session of its own
 ```
 
 ## Mounting
@@ -70,7 +73,8 @@ mounted nowhere, or not in the mount given, with a `RenderError`.
 
 ## Handlers
 
-A handler is called as `handler(command, ctx)`, `ctx` a [`Context`](context.md), and awaited if it's async.
+A handler is called as `handler(command, ctx)`, `ctx` a [`Context`](context.md), and awaited if it's async. It
+returns its command's `REPLY`, text, or nothing ([`reply.md`](reply.md)).
 `app.on(Cls, handler)` binds the handler a command runs with, in every mount that holds it. `mount.on(Cls, handler)`
 binds one for that mount alone, which wins there, so a group mounted twice can run differently in each.
 
@@ -91,14 +95,25 @@ an `ImportError` naming the command and the path; one that names something that 
   it's left when the session closes, told of any error the session's body raised. Anything else is kept as it is.
 - **`verbosity`** is how much handlers should say (`ctx.verbosity`): `0` by default, more for more.
 
-`await session.call(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
-handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what the
-handler returns. It raises a `ReadError` for a line that doesn't read, a `LookupError` for a command with no
-handler, and whatever the handler raises.
+`await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
+handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
+of it as a [`Result`](reply.md), the envelope every parsed app answers with: its reply or text, whether it went
+well, whether it was done, and any error, with its exit code. Nothing the line or its handler does is raised.
+
+`await session.call(line)` runs it the same way and gives what the handler returned, letting every error through: a
+`ReadError` for a line that doesn't read, a `LookupError` for a command with no handler, a `TypeError` for a
+handler that returned something besides its `REPLY`, text or nothing, and whatever the handler raises.
+
+**A line that gives `--help` runs nothing.** It's answered with its command's usage
+([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
+
+**`app.run(line, state=None, verbosity=0)`** runs one line in a session of its own, opened around it and closed
+after, and gives its `Result`: for a program that runs one line and exits. It runs an event loop of its own, so it's
+refused inside one with a `RuntimeError`; there, open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
 line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
-is opening a session twice.
+is opening a session twice. An error the session's body raises goes on past it, whatever the state makes of it.
 
 ## Names
 

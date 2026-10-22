@@ -16,6 +16,7 @@ parsed's own surface:
 - ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
   kinds stay ``parsed.kinds.*``.
 - ``names.py``: :class:`Resolver`, what an app gives for a category of its names.
+- ``reply.py``: :class:`Result`, what running a line comes to, and its exit code.
 - ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
 - ``__main__.py``: ``python -m parsed check``, a package's commands checked in its CI (:mod:`parsed.doc.check`).
 """
@@ -58,6 +59,7 @@ from .effect import Effect, effect_of
 from .errors import DeclarationError, ParsedError, ReadError, RenderError
 from .kinds import Kind, Name
 from .names import Resolver
+from .reply import Result
 from .tree import Tree
 
 __version__ = '0.1.4'
@@ -89,6 +91,7 @@ __all__ = [
     'ReadError',
     'RenderError',
     'Resolver',
+    'Result',
     'SearedError',
     'Str',
     'T',

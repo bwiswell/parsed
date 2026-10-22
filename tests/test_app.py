@@ -372,20 +372,31 @@ class TestSessions:
         assert repr(app.open()) == '<Session of farlandia, not yet open>'
 
 
-def _recorded(command, ctx):
-    return command, ctx
+class _Recorder:
+    """A handler that keeps each command and context it's given, and returns nothing."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, parsed.Context]] = []
+
+    def __call__(self, command, ctx) -> None:
+        self.calls.append((command, ctx))
 
 
-async def _awaited(command, ctx):
-    await asyncio.sleep(0)
-    return command, ctx
+class _AsyncRecorder(_Recorder):
+    """The same, as a coroutine."""
+
+    async def __call__(self, command, ctx) -> None:
+        await asyncio.sleep(0)
+        self.calls.append((command, ctx))
 
 
 class TestCalling:
     async def test_a_line_runs_by_its_handler_with_its_context(self, app):
-        app.on(farlandia.FleetMine, _recorded)
+        recorder = _Recorder()
+        app.on(farlandia.FleetMine, recorder)
         async with app.open('state') as session:
-            command, ctx = await session.call('fleet Prospector mine --for 90s')
+            assert await session.call('fleet Prospector mine --for 90s') is None
+            ((command, ctx),) = recorder.calls
             assert command == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
             assert isinstance(ctx, parsed.Context)
             assert (ctx.session, ctx.state, ctx.mount) == (session, 'state', _mount(app, ''))
@@ -393,18 +404,22 @@ class TestCalling:
             _ = ctx.state  # left when the session closed
 
     async def test_an_async_handler_awaited(self, app):
-        app.on(service.Run, _awaited)
+        recorder = _AsyncRecorder()
+        app.on(service.Run, recorder)
         async with app.open() as session:
-            command, ctx = await session.call('relay run --config c.toml')
+            assert await session.call('relay run --config c.toml') is None
+        ((command, ctx),) = recorder.calls
         assert command == service.Run(config=Path('c.toml'))
         assert ctx.params == service.RelaySettings()
 
     async def test_by_the_mount_s_handler(self, app):
-        app.on(service.Run, _recorded)
+        recorder = _Recorder()
+        app.on(service.Run, recorder)
         _mount(app, 'gateway').on(service.Run, handlers.Service.status)
         async with app.open() as session:
             assert await session.call('gateway run') == 'status of Run(config=None)'
-            assert (await session.call('relay run'))[0] == service.Run()
+            assert await session.call('relay run') is None
+        assert [command for command, _ in recorder.calls] == [service.Run()]
 
     async def test_a_handler_by_its_path(self, app):
         app.on(service.Status, '_support_handlers:run')
@@ -436,3 +451,154 @@ class TestCalling:
             pass
         with pytest.raises(RuntimeError, match=r'closed>: call lines inside `async with app.open\(state\) as session`'):
             await session.call('relay run')
+
+
+def _shown(command, ctx):
+    return farlandia.FleetView(fleet=command.fleet, docked=True)
+
+
+def _said(command, ctx):
+    return f'{command.fleet} mines'
+
+
+class TestRunning:
+    @pytest.fixture
+    def bound(self, app) -> App:
+        app.on(farlandia.FleetsShow, _shown)
+        app.on(farlandia.FleetMine, _said)
+        return app
+
+    async def _run(self, app: App, line: str):
+        async with app.open() as session:
+            return await session.run(line)
+
+    async def test_a_reply(self, bound):
+        found = await self._run(bound, 'fleets show f1')
+        assert found == parsed.Result(
+            'fleets show f1',
+            'fleets show {fleet}',
+            done=True,
+            reply=farlandia.FleetView(fleet='f1', docked=True),
+            text="FleetView(fleet='f1', docked=True)",
+        )
+        assert found.code == 0
+
+    async def test_text(self, bound):
+        found = await self._run(bound, 'fleet f1 mine')
+        assert (found.ok, found.done, found.reply, found.text) == (True, True, None, 'f1 mines')
+
+    async def test_nothing(self, app):
+        app.on(service.Run, lambda command, ctx: None)
+        found = await self._run(app, 'relay run')
+        assert (found.command, found.ok, found.done, found.text) == ('relay run', True, True, None)
+
+    async def test_a_dry_run_is_not_done(self, bound):
+        found = await self._run(bound, 'fleet f1 mine --dry-run')
+        assert (found.ok, found.done, found.text) == (True, False, 'f1 mines')
+
+    async def test_help_runs_nothing(self, bound):
+        found = await self._run(bound, 'relay run --help')
+        assert found == parsed.Result('relay run --help', 'relay run', text='relay run [--config <config>]')
+        found = await self._run(bound, 'log 0 --help')  # its values aren't loaded, so not refused
+        assert (found.ok, found.text) == (True, 'log [<n>]')
+
+    async def test_a_line_that_doesn_t_read(self, bound):
+        found = await self._run(bound, 'rela run')
+        assert (found.command, found.ok, found.done, found.code) == (None, False, False, 2)
+        assert found.text == "no command 'rela'; did you mean relay?"
+        assert found.error == found.exception.to_json()
+        assert isinstance(found.exception, ReadError)
+
+    async def test_a_value_its_field_refuses(self, bound):
+        found = await self._run(bound, 'log 0')
+        assert (found.command, found.ok, found.code) == ('log {n}', False, 4)
+        assert found.error['field'] == 'n'
+
+    async def test_a_handler_that_raises(self, app):
+        def broken(command, ctx):
+            msg = 'nope'
+            raise KeyError(msg)
+
+        app.on(service.Run, broken)
+        found = await self._run(app, 'relay run')
+        assert (found.command, found.ok, found.done, found.code) == ('relay run', False, False, 1)
+        assert found.error == {'error': 'handler', 'message': "KeyError: 'nope'"}
+        assert found.text == "KeyError: 'nope'"
+        assert isinstance(found.exception, KeyError)
+
+    async def test_a_handler_that_raises_without_a_message(self, app):
+        def broken(command, ctx):
+            raise RuntimeError
+
+        app.on(service.Run, broken)
+        assert (await self._run(app, 'relay run')).text == 'RuntimeError'
+
+    async def test_a_command_with_no_handler(self, app):
+        found = await self._run(app, 'relay status')
+        assert found.code == 1
+        assert (
+            found.text == "LookupError: Status has no handler in _support_service under 'relay': bind one with app.on"
+        )
+
+    @pytest.mark.parametrize(
+        ('line', 'returned', 'says'),
+        [
+            (
+                'log',
+                {'lines': []},
+                "Log's handler returned a dict: a handler returns text or nothing, or the REPLY its command declares",
+            ),
+            (
+                'fleets show f1',
+                service.RelaySettings(),
+                (
+                    "FleetsShow's handler returned a RelaySettings: a handler returns its REPLY (FleetView), text "
+                    'or nothing'
+                ),
+            ),
+        ],
+    )
+    async def test_a_handler_that_returns_what_it_shouldn_t(self, app, line, returned, says):
+        app.on(type(app.read(line)), lambda command, ctx: returned)
+        found = await self._run(app, line)
+        assert (found.ok, found.done, found.code) == (False, False, 1)
+        assert found.text == f'TypeError: {says}'
+
+    async def test_only_while_it_s_open(self, app):
+        with pytest.raises(RuntimeError, match=r'not yet open>: call lines inside'):
+            await app.open().run('relay run')
+
+
+class TestCallingWithHelpAndReplies:
+    async def test_help_gives_the_usage_and_runs_nothing(self, app):
+        recorder = _Recorder()
+        app.on(service.Run, recorder)
+        async with app.open() as session:
+            assert await session.call('relay run --help') == 'relay run [--config <config>]'
+        assert recorder.calls == []
+
+    async def test_a_reply_it_shouldn_t_return_is_raised(self, app):
+        app.on(farlandia.Log, lambda command, ctx: 3)
+        async with app.open() as session:
+            with pytest.raises(TypeError, match=r"Log's handler returned a int: a handler returns text or nothing"):
+                await session.call('log')
+
+
+class TestOneLine:
+    def test_a_line_run_in_a_session_of_its_own(self, app):
+        app.on(farlandia.FleetMine, _said)
+        link = _Link()
+        found = app.run('fleet f1 mine', link, verbosity=1)
+        assert (found.ok, found.text) == (True, 'f1 mines')
+        assert link.happened == ['opened', ('closed', None)]
+
+    def test_its_state_seen_by_the_handler(self, app):
+        app.on(service.Run, lambda command, ctx: f'{ctx.state} at {ctx.verbosity}')
+        assert app.run('relay run', 'state', verbosity=2).text == 'state at 2'
+
+    def test_what_it_refuses_is_its_result(self, app):
+        assert app.run('rela run').code == 2
+
+    async def test_not_inside_a_running_loop(self, app):
+        with pytest.raises(RuntimeError, match=r'runs an event loop of its own; inside one, open a session'):
+            app.run('relay run')
