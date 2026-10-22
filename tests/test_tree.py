@@ -280,3 +280,63 @@ class TestReading:
 
     def test_exported(self):
         assert parsed.Tree is Tree
+
+
+@pytest.fixture(scope='module')
+def farm() -> Tree:
+    return Tree.collect('_support_farlandia', under='farm')
+
+
+class TestUnder:
+    # A tree under a prefix reads, completes and writes whole lines, and says the prefix in its refusals.
+    def test_its_lines_begin_with_the_prefix(self, farm):
+        assert farm.under == 'farm'
+        assert farm.read('farm fleet f1 mine --for 90s') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
+        assert farm.root.words.keys() == {'farm'}
+        assert farm.top is farm.root.words['farm']
+
+    def test_a_line_without_it_doesn_t_read(self, farm):
+        with pytest.raises(ReadError, match=r"no command 'fleet': farm"):
+            farm.read('fleet f1 mine')
+
+    @pytest.mark.parametrize(
+        ('line', 'says'),
+        [
+            ('farm', 'farm: then what? fleet | detachment | log'),
+            ('farm flet f1 mine', "no command 'farm flet'; did you mean fleet or fleets?"),
+            ('farm fleet f1 jump', 'farm fleet f1 jump: which system? `farm fleet f1 jump <system>`'),
+            ('farm log 3 4', "farm log 3: '4' is left over `farm log [<n>]`"),
+        ],
+    )
+    def test_its_refusals_and_hints_say_it(self, farm, line, says):
+        with pytest.raises(ReadError) as caught:
+            farm.read(line)
+        assert str(caught.value).startswith(says)
+
+    def test_completion_offers_it(self, farm):
+        assert farm.complete('') == (['farm'], 0)
+        assert farm.complete('farm fl').words == ['fleet', 'fleets']
+
+    def test_a_line_written_back_begins_with_it(self, farm):
+        assert farm.render(farlandia.FleetDock(fleet='f1', station='nearest')) == 'farm fleet f1 dock "nearest"'
+
+    def test_several_words_spaced_once(self):
+        found = Tree([farlandia.Log], under='  rio   relay ')
+        assert found.under == 'rio relay'
+        assert found.read('rio relay log 4') == farlandia.Log(n=4)
+
+    def test_none_by_default(self, fixtures):
+        assert fixtures.under == ''
+        assert fixtures.top is fixtures.root
+
+    @pytest.mark.parametrize(
+        ('under', 'message'),
+        [
+            ('Farm', r"under='Farm': 'Farm' is not a word: a word is lowercase letters"),
+            ('farm {fleet}', r"under='farm \{fleet\}': a prefix is words only; a slot belongs to a phrase"),
+            (3, r'under=3: a prefix is a string of words'),
+        ],
+    )
+    def test_refused_unless_it_s_words(self, under, message):
+        with pytest.raises(DeclarationError, match=message):
+            Tree([farlandia.Log], under=under)

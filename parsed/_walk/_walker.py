@@ -338,8 +338,10 @@ class _Walker:
         return self.refuse(f'{_said(said)}: which {edge.slot}?', word=word, hint=hint)
 
     def _usage(self, end: End) -> str:
+        """How the command at ``end`` is said, the tree's prefix first."""
         fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
-        return usage(end.bound, self.tree.flags_of(end.declaration.cls).values(), fields)
+        said = usage(end.bound, self.tree.flags_of(end.declaration.cls).values(), fields)
+        return f'{self.tree.under} {said}' if self.tree.under else said
 
     # --- the values --------------------------------------------------------------------------------------------
 
