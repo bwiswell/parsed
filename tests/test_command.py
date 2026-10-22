@@ -448,6 +448,36 @@ class TestScopes:
         with pytest.raises(DeclarationError, match=r"'detachment' is read as a detachment scoped by 'system'"):
             declaration(Mine)
 
+    def test_scopes_that_go_round_are_refused(self):
+        @parsed.parsed
+        class Swap(Command):
+            PHRASE = 'swap {a} {b}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {
+                'a': parsed.Name('x', scope='b'),
+                'b': parsed.Name('y', scope='a'),
+            }
+
+            a: str = parsed.Str(required=True)
+            b: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r'Swap: its scopes go round, a by b by a: a scope is read before'):
+            declaration(Swap)
+
+    def test_a_chain_of_scopes_is_fine(self):
+        @parsed.parsed
+        class Dock(Command):
+            PHRASE = 'dock {fleet} {station} {berth}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {
+                'station': parsed.Name('station', scope='fleet'),
+                'berth': parsed.Name('berth', scope='station'),
+            }
+
+            fleet: str = parsed.Str(required=True)
+            station: str = parsed.Str(required=True)
+            berth: str = parsed.Str(required=True)
+
+        assert declaration(Dock).field_kinds['berth'].scope == 'station'
+
     def test_a_base_s_unused_entry_isn_t_held_to_it(self):
         class Base(Command):
             KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='system')}

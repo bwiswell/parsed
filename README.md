@@ -62,6 +62,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/parsed.md`](docs/parsed.md): the package root, and what it re-exports.
 - [`docs/command.md`](docs/command.md): commands, and what they declare.
 - [`docs/kinds.md`](docs/kinds.md): how a field's words are read.
+- [`docs/names.md`](docs/names.md): an app's names, by the resolvers it gives.
 - [`docs/tree.md`](docs/tree.md): every command's phrases, compiled and checked as a whole.
 - [`docs/effect.md`](docs/effect.md): what running a command does.
 - [`docs/errors.md`](docs/errors.md): what can go wrong.

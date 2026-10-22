@@ -12,6 +12,7 @@ parsed's own surface:
   :class:`ReadError`.
 - ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
   kinds stay ``parsed.kinds.*``.
+- ``names.py``: :class:`Resolver`, what an app gives for a category of its names.
 - ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
 """
 
@@ -50,6 +51,7 @@ from .command import Command
 from .effect import Effect, effect_of
 from .errors import DeclarationError, ParsedError, ReadError
 from .kinds import Kind, Name
+from .names import Resolver
 from .tree import Tree
 
 __version__ = '0.1.2'
@@ -77,6 +79,7 @@ __all__ = [
     'Path',
     'PolarsFrame',
     'ReadError',
+    'Resolver',
     'SearedError',
     'Str',
     'T',

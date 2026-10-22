@@ -31,8 +31,11 @@ default) and at `log 40`. Where a walk ends, one phrase ends at most (`node.end`
 slots read on the way.
 
 **Each word is read by its field's kind** ([`kinds.md`](kinds.md#reading-a-word)) to the field's wire value:
-`1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. A name is kept as typed. Then
-seared loads the values, so a field's bounds and pattern hold on a line too.
+`1,000` to `1000`, `1h30m` to `5400.0` seconds, `GREEN` to an `Enum`'s `'green'`. Then seared loads the values, so
+a field's bounds and pattern hold on a line too.
+
+**A name is read by the app's resolver** for its category, given with the line: `tree.read(line, names={…})`
+([`names.md`](names.md)). A scoped name is read after its scope, and a category with no resolver reads as typed.
 
 **A line that doesn't read raises one error,** a `ReadError`, whichever part refused it: the walk, a kind, or
 seared, whose refusal comes back as the word that gave the value. Its message says what's wrong, with the words
