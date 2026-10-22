@@ -7,6 +7,33 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.5 — unreleased
+
+**Running commands.**
+
+### Added
+
+- **`parsed.App(prog)`:** a program's commands, as trees mounted under prefixes of words.
+  `app.mount(target, under=…, params=…)` mounts a tree, or a module or package by name, and returns its `Mount`;
+  one package may be mounted several times, each with its own prefix and its own `params` (a service's settings).
+  A line goes to its mount by its first words, then the mount's tree reads it: `app.walk` (a `Routed`: the mount
+  and the reading), `app.read`, `app.complete` and `app.render`. A mount that would make a line read two ways is
+  refused, naming both.
+- **Handlers:** `app.on(Cls, handler)` binds what a command runs with, in every mount that holds it, and
+  `mount.on(Cls, handler)` one for that mount alone, which wins there. A handler is a callable, or a path,
+  `'pkg.module:function'`, imported when it's first looked up, so an app that gathers several packages imports none
+  of their runtimes to read a line. `mount.handler(Cls)` looks one up.
+- **Names on the app:** `app.names(category, resolver)` reads a category's names in every mount, and
+  `mount.names(category, resolver)` in that mount alone, over the app's.
+- **A tree under a prefix:** `Tree(commands, under='relay')` and `Tree.collect(…, under=…)` put every phrase after
+  the prefix's words; the tree reads, completes and writes whole lines, and says the prefix in its refusals and
+  hints. `tree.top` is where the phrases begin.
+
+### Changed
+
+- **`DeclarationError`** covers a tree's and an app's mistakes too: mounts that would read a line two ways, and a
+  handler or a resolver bound twice.
+
 ## 0.1.4 — 2026-10-22
 
 **Writing back and describing.** An instance is written back to the line that says it, which reads back to it.

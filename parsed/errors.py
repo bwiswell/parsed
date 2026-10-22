@@ -21,10 +21,11 @@ class ParsedError(Exception):
 
 
 class DeclarationError(ParsedError, TypeError):
-    """A command declared in a way parsed can't use: a constant of the wrong kind, or a base it can't read.
+    """A command, a tree or an app declared in a way parsed can't use.
 
-    It names the class and what's wrong, and says how to put it right. It's a ``TypeError`` too, as a mistake in a
-    class's definition is in Python.
+    A constant of the wrong kind, a base it can't read, phrases or mounts that would read a line two ways, or a
+    handler bound twice. It names the class or the mount and what's wrong, and says how to put it right. It's a
+    ``TypeError`` too, as a mistake in a class's definition is in Python.
     """
 
 

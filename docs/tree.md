@@ -16,6 +16,22 @@ tree.read('fleet prospector mine --for 1h30m')
 # FleetMine(fleet='prospector', for_=datetime.timedelta(seconds=5400))
 ```
 
+## Under a prefix
+
+`Tree(commands, under='relay')`, or `Tree.collect('service.cli', under='relay')`, puts every phrase after the
+prefix's words. The tree then reads, completes and writes whole lines, and says the prefix in its refusals and
+hints:
+
+```python
+tree = parsed.Tree.collect('service.cli', under='relay')
+tree.read('relay run')        # Run(config=None)
+tree.read('relay')            # ReadError: relay: then what? run | validate-config | status
+```
+
+A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'rio relay'`). `tree.root` is where a
+line's walk begins, and `tree.top` where every phrase does, past the prefix. An [app](app.md) mounts each tree it
+holds under one.
+
 ## Reading a line
 
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a

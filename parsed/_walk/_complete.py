@@ -58,9 +58,7 @@ class Completion(NamedTuple):
 
 def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None) -> Completion:
     """What may come next on ``text``, a line up to the cursor, as the module's docstring describes."""
-    tokens = split(text, partial=True)
-    typing = bool(tokens) and (text.count('"') % 2 == 1 or not text[-1].isspace())
-    partial = tokens.pop() if typing else None
+    tokens, partial = being_typed(text)
     flagging = partial is not None and not partial.quoted and partial.text.startswith('--')
     found = _Completer(tree, names or {}, flagging=flagging).offers(tokens)
     said = '' if partial is None else partial.text.lower()
@@ -72,6 +70,13 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
             continue
         words.append(typed)
     return Completion(words=words, replace=0 if partial is None else len(text) - partial.start)
+
+
+def being_typed(text: str) -> tuple[list[Token], Token | None]:
+    """A line being typed, up to the cursor: the words before the cursor's, and the word being typed, if one is."""
+    tokens = split(text, partial=True)
+    typing = bool(tokens) and (text.count('"') % 2 == 1 or not text[-1].isspace())
+    return tokens, tokens.pop() if typing else None
 
 
 @dataclass(slots=True)

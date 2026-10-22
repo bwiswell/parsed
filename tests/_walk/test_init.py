@@ -2,7 +2,7 @@
 
 import parsed.tree
 from parsed import _walk
-from parsed._walk import _complete, _terms, _walker, _words
+from parsed._walk import _complete, _route, _terms, _walker, _words
 
 
 def test_it_gathers_its_modules():
@@ -10,12 +10,15 @@ def test_it_gathers_its_modules():
     assert _walk.walk is _walker.walk
     assert _walk.Arity is _terms.Arity
     assert _walk.complete is _complete.complete
+    assert _walk.Routes is _route.Routes
     assert set(_walk.__all__) == {
         'RESERVED',
         'Arity',
         'Completion',
         'Given',
+        'Mounted',
         'Reading',
+        'Routes',
         'SlotKind',
         'Token',
         'complete',
