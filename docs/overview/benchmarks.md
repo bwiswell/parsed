@@ -11,8 +11,8 @@ as a real terminal game's command line has, in twelve sections. Each section has
 positional field, an effect and the kinds its commands read by. Its commands take the shapes parsed's own tests
 take:
 
-- every fourth has a twin that renames its first slot;
-- one in seven has an optional last slot, and an alias that leaves it out;
+- every fourth has a twin that says its first slot by an alias;
+- one in seven has an optional last slot, and another wording that leaves it out;
 - one in six takes a second positional, and one in three or five a flag;
 - one in nine reads, with a typed reply; one in eleven asks first; one in twenty-three is interactive, with the
   command before it as its agent form.

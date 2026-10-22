@@ -43,6 +43,7 @@ class TestDefaults:
             instead=None,
             reply=None,
             kinds=MappingProxyType({}),
+            aliases=MappingProxyType({}),
             field_kinds=MappingProxyType({}),
             phrases=(),
             flags=(),
@@ -505,9 +506,10 @@ class TestScopes:
         ):
             declaration(Dock)
 
-    def test_a_renamed_slot_s_scope_too(self):
+    def test_an_alias_s_scope_too(self):
         class Base(Command):
             KINDS: ClassVar[dict[str, parsed.Kind]] = {'detachment': parsed.Name('detachment', scope='system')}
+            ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
 
         @parsed.parsed
         class Mine(Base):

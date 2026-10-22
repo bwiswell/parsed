@@ -88,8 +88,9 @@ as typed.
 class FleetCommand(parsed.Command):
     KINDS: ClassVar[dict[str, parsed.Kind]] = {
         'fleet': parsed.Name('fleet'),
-        'detachment': parsed.Name('detachment'),    # a renamed slot's kind, for the polymorphic twins
+        'detachment': parsed.Name('detachment'),    # an alias's kind, for the polymorphic twins
     }
+    ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
 
     fleet: str = parsed.Str(required=True)
 
