@@ -1,6 +1,6 @@
 [project]
 name = "parsed"
-version = "0.1.4"
+version = "0.1.5"
 description = "Typed command trees on seared, for people and agents"
 authors = [
     { name = "Benj Wiswell", email = "benjwiswell@gmail.com" },

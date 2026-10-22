@@ -7,18 +7,26 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.5 — unreleased
+## 0.1.5 — 2026-10-22
 
-**Running commands.**
+**Running commands.** An app mounts trees of commands under prefixes of words, binds the handler each command
+runs with, and gives the names its lines are read with. A session holds the app's state open and runs each line by
+its handler, with a context made for it, between hooks; what came of it is one envelope, the same for every parsed
+app, with its exit code. A handler may ask before it acts, answered by `--yes`, by a person, or left undone.
 
 ### Added
 
+- **A tree under a prefix:** `Tree(commands, under='relay')` and `Tree.collect(…, under=…)` put every phrase after
+  the prefix's words; the tree reads, completes and writes whole lines, and says the prefix in its refusals and
+  hints. `tree.top` is where the phrases begin.
 - **`parsed.App(prog)`:** a program's commands, as trees mounted under prefixes of words.
   `app.mount(target, under=…, params=…)` mounts a tree, or a module or package by name, and returns its `Mount`;
   one package may be mounted several times, each with its own prefix and its own `params` (a service's settings).
   A line goes to its mount by its first words, then the mount's tree reads it: `app.walk` (a `Routed`: the mount
   and the reading), `app.read`, `app.complete` and `app.render`. A mount that would make a line read two ways is
   refused, naming both.
+- **Names on the app:** `app.names(category, resolver)` reads a category's names in every mount, and
+  `mount.names(category, resolver)` in that mount alone, over the app's.
 - **Handlers:** `app.on(Cls, handler)` binds what a command runs with, in every mount that holds it, and
   `mount.on(Cls, handler)` one for that mount alone, which wins there. A handler is a callable, or a path,
   `'pkg.module:function'`, imported when it's first looked up, so an app that gathers several packages imports none
@@ -28,6 +36,9 @@ lines as it lands, and the entry is dated when that version is released.
   runs the command a line says by its handler, `handler(command, ctx)`, awaited if it's async, and gives what the
   handler returns: its `REPLY`, text or nothing, anything else refused. A line that gives `--help` runs nothing,
   and is answered with its command's usage.
+- **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
+  (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
+  it (a twin's wording told from its command's), `dry_run`, and the session's `verbosity`.
 - **`parsed.Result`:** `await session.run(line)` gives what came of a line as one envelope, the same for every
   parsed app: the `command` that said it, `ok`, `done`, the `reply`, its `text` (a reply's `str()`), and any
   `error` as data, raising nothing. `result.code` is its exit code: 2 for a line that doesn't read, 4 for a value
@@ -38,21 +49,13 @@ lines as it lands, and the entry is dated when that version is released.
   question yes, on any command; else the session's `answer` does (`app.open(state, answer=…)`), and
   `parsed.reply.terminal` prompts a person. A question left unanswered, or answered no, leaves the line undone: the
   result's `asks` holds it, with exit code 0, and `call` gives the `Ask` back.
-- **`tree.usage(end)`:** how the command a walk ended at is said, prefix and flags and all.
-- **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
-  (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
-  it (a twin's wording told from its command's), `dry_run`, and the session's `verbosity`.
 - **Hooks:** `app.before(hook)`, `app.after(hook)` and `app.on_error(hook)` run around each command's handler, or,
   with commands named, around theirs alone, in a stated order: before hooks the app's then the command's, after
   and on-error hooks the command's then the app's, each scope's in the order added (`app.hooks(Cls)`). An after hook
   sees what the handler came to; an on-error hook sees a failure in any of them, which then goes on.
+- **`tree.usage(end)`:** how the command a walk ended at is said, prefix and flags and all.
 - **The running benchmark** times a line run in a session, routed, read, its handler called between hooks, and its
   envelope made.
-- **Names on the app:** `app.names(category, resolver)` reads a category's names in every mount, and
-  `mount.names(category, resolver)` in that mount alone, over the app's.
-- **A tree under a prefix:** `Tree(commands, under='relay')` and `Tree.collect(…, under=…)` put every phrase after
-  the prefix's words; the tree reads, completes and writes whole lines, and says the prefix in its refusals and
-  hints. `tree.top` is where the phrases begin.
 
 ### Changed
 
