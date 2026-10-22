@@ -7,7 +7,7 @@ A phrase is words separated by spaces, each a literal word or a slot:
 - **``{name}``** is one field's value, as zeared writes a topic's slot;
 - **``{name**}``** is the rest of the line, so it comes last.
 
-A phrase begins with a word, and names each slot once. What a slot's name means, a field or a renamed one, is the
+A phrase begins with a word, and names each slot once. What a slot's name means, a field or an alias of one, is the
 binding's to say (:mod:`._binding`).
 """
 

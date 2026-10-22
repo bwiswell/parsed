@@ -159,7 +159,7 @@ class TestAmbiguity:
         ):
             Tree([log, bare])
 
-    def test_one_command_s_alias_alike_its_phrase(self):
+    def test_one_command_s_other_wording_alike_its_phrase(self):
         @parsed.parsed
         class Move(Command):
             PHRASE = 'move {fleet}'

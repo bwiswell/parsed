@@ -3,7 +3,7 @@
 It grows with each release that needs more of it. So far, the declarations, and the lines they read:
 
 - a base carrying a field, an effect and kinds for the commands beneath it, and names read as the app's own;
-- a fleet's command that a detachment says too, its slot renamed (`fleet {fleet} mine`, `detachment {detachment}
+- a fleet's command that a detachment says too, its slot by an alias (`fleet {fleet} mine`, `detachment {detachment}
   mine`);
 - a station that may be left out (`dock {station}` beside `dock nearest`);
 - a literal beside a slot, in two commands (`jump {system}`, `jump nearest {ore}`);
@@ -112,6 +112,7 @@ class FleetCommand(parsed.Command):
 
     EFFECT = parsed.Effect.WRITE
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET, 'detachment': DETACHMENT}
+    ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
 
     fleet: str = parsed.Str(required=True, doc='the fleet')
 

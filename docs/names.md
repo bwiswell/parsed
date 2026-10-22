@@ -62,7 +62,7 @@ the command's usage:
 fleet {fleet} dock {station}: no station 'vesta' for fleet 'Hauler' `fleet <fleet> dock [<station>]`
 ```
 
-A renamed slot reads by its own category, so a polymorphic twin's word is refused as that category's:
+A slot by an alias reads by its own category, so a polymorphic twin's word is refused as that category's:
 `detachment {detachment} mine: no detachment 'Prospector'`. A pair's key is refused as its category's
 (`no variable 'hme' for routine 'mining'`), and its value by its key (`no home 'mars'`).
 

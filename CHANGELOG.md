@@ -37,6 +37,11 @@ lines as it lands, and the entry is dated when that version is released.
 
 ### Changed
 
+- **Breaking: `ALIASES` replaces renaming a slot by its place.** A slot named after no field is an alias in
+  `ALIASES` (`{'detachment': 'fleet'}`), merged along the bases as `KINDS` is, and fills the field it gives by
+  name. So a twin may leave out an optional slot (`detachment {detachment} dock nearest`), slots may come in any
+  order, and `PHRASE` may say one (`detachment {detachment} rejoin`). An alias reads by its own `KINDS` entry, if it
+  has one, else by its field's kind. A twin written for 0.1.2 needs its base's `ALIASES`.
 - **A slot left empty hints the rest of the command's usage,** flags and all, where one command lies past it:
   ``fleets merge: which fleet? `fleets merge <fleet> --into <into> [--quiet]` `` (the hint was the slot alone).
   Where several commands lie past it, the hint is the slot and `…`, as before.

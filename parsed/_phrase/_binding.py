@@ -1,18 +1,19 @@
 """How a command's phrases bind to its fields.
 
-**``PHRASE`` first.** Each of its slots names a field of the command, which the slot fills: a positional. Every
-other field is a flag. A slot whose field may be left out (it isn't ``required``) is optional, and a ``many`` field's
-slot takes several words; either is followed by a word or ends the phrase, so a line reads one way.
+**Every slot fills a field, by name:** the field it's named after, or, for a slot named in ``ALIASES``, the field the
+alias gives (``ALIASES = {'detachment': 'fleet'}``: ``{detachment}`` fills ``fleet``). A slot that's neither is
+refused, as is a phrase with two slots for one field. A slot by an alias reads by its own ``KINDS`` entry, if it has
+one, else by its field's kind.
 
-**Then each of ``EXTRA_PHRASES``:**
+**``PHRASE`` first.** The fields its slots fill are the positionals; every other field is a flag. A slot whose field
+may be left out (it isn't ``required``) is optional, and a ``many`` field's slot takes several words; either is
+followed by a word or ends the phrase, so a line reads one way.
 
-- **a slot named after a field** fills that field, and the field must be one of ``PHRASE``'s slots;
-- **a slot named after no field renames one:** it needs a ``KINDS`` entry by its own name, and fills the field of
-  ``PHRASE``'s slot at the same place. So a phrase that renames keeps ``PHRASE``'s slots, in their order;
-- **a slot left out** keeps its field's default, so that field must have one.
+**Then each of ``EXTRA_PHRASES``:** each slot fills one of ``PHRASE``'s positionals, in any order, and is the rest of
+the line where ``PHRASE``'s is. A positional it leaves out keeps its default, so that field must have one.
 
-**``POLYMORPHIC``,** when declared, is checked: ``True`` wants a phrase that renames a slot, ``False`` refuses one.
-And a command's own ``KINDS`` names its fields or its renamed slots: an entry that names neither is a typo.
+**``POLYMORPHIC``,** when declared, is checked: ``True`` wants a phrase that says a slot by an alias, ``False``
+refuses one. And a command's own ``KINDS`` names its fields or its aliases: an entry that names neither is a typo.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ class Place:
 
     Attributes:
         slot: The slot's name as the phrase writes it, which is also its ``KINDS`` key.
-        field: The field it fills: the slot's own name, or for a renamed slot, ``PHRASE``'s slot at its place.
+        field: The field it fills: the slot's own name, or the field its alias gives.
         required: Whether the field must be given, so the slot can't be left empty.
         many: Whether it takes several words.
         rest: Whether it takes the rest of the line.
@@ -50,7 +51,7 @@ class Place:
 
     @property
     def renamed(self) -> bool:
-        """Whether the slot renames its field."""
+        """Whether the slot says its field by an alias."""
         return self.slot != self.field
 
 
@@ -70,7 +71,7 @@ class Bound:
 
     @property
     def renames(self) -> bool:
-        """Whether one of its slots renames a field."""
+        """Whether one of its slots says its field by an alias."""
         return any(place.renamed for place in self.places)
 
 
@@ -93,7 +94,7 @@ def bind(  # noqa: PLR0913 — a command's phrases, and what it declares about t
     *,
     phrase: str,
     extra_phrases: tuple[str, ...],
-    kinds: Mapping[str, object],
+    aliases: Mapping[str, str],
     own_kinds: Mapping[str, object],
     polymorphic: bool | None,
 ) -> Binding:
@@ -104,24 +105,25 @@ def bind(  # noqa: PLR0913 — a command's phrases, and what it declares about t
         name: The command class's name, for messages.
         phrase: Its ``PHRASE``.
         extra_phrases: Its ``EXTRA_PHRASES``.
-        kinds: Its ``KINDS``, merged along its bases.
+        aliases: Its ``ALIASES``, merged along its bases: a slot's name, to the field it fills.
         own_kinds: The ``KINDS`` it declares itself.
         polymorphic: ``POLYMORPHIC`` as declared, ``None`` if it isn't.
 
     Raises:
         DeclarationError: A phrase doesn't read or doesn't bind. The message names the class, the phrase, and why.
     """
-    canonical = _bind_canonical(fields, name, phrase)
+    for alias, field in aliases.items():
+        if alias in fields:
+            msg = f'{name}.ALIASES gives {alias!r} to {field!r}, but {alias!r} is a field of {name} already'
+            raise DeclarationError(msg)
+    canonical = _bind_phrase(fields, name, 'PHRASE', phrase, aliases=aliases)
     slotted = {place.field: place for place in canonical.places}
     phrases = [canonical]
-    phrases.extend(
-        _bind_extra(fields, name, text, canonical=canonical, slotted=slotted, kinds=kinds) for text in extra_phrases
-    )
-    _check_polymorphic(name, phrases[1:], polymorphic=polymorphic)
-    renamed = {place.slot for bound in phrases for place in bound.places if place.renamed}
+    phrases.extend(_bind_extra(fields, name, text, slotted=slotted, aliases=aliases) for text in extra_phrases)
+    _check_polymorphic(name, phrases, polymorphic=polymorphic)
     for key in own_kinds:
-        if key not in fields and key not in renamed:
-            msg = f'{name}.KINDS names {key!r}, which is no field of {name} and no slot its phrases rename'
+        if key not in fields and key not in aliases:
+            msg = f'{name}.KINDS names {key!r}, which is no field of {name} and none of its ALIASES'
             raise DeclarationError(msg)
     flags = tuple(attr for attr in fields if attr not in slotted)
     return Binding(phrases=tuple(phrases), flags=flags)
@@ -135,88 +137,60 @@ def _read(name: str, constant: str, text: str) -> Phrase:
         raise DeclarationError(msg) from exc
 
 
-def _bind_canonical(fields: Mapping[str, Field], name: str, text: str) -> Bound:
-    phrase = _read(name, 'PHRASE', text)
+def _bind_phrase(
+    fields: Mapping[str, Field], name: str, constant: str, text: str, *, aliases: Mapping[str, str]
+) -> Bound:
+    """Bind a phrase's slots, each to the field it names or its alias gives, and check their order."""
+    phrase = _read(name, constant, text)
+    where = f'{name}.{constant} {phrase.text!r}'
     places: list[Place] = []
+    filled: dict[str, str] = {}
     for slot in phrase.slots:
-        field = fields.get(slot.name)
-        if field is None:
+        field_name = slot.name if slot.name in fields else aliases.get(slot.name)
+        if field_name is None:
             known = ', '.join(fields) or 'none'
-            msg = f'{name}.PHRASE {phrase.text!r}: {{{slot.name}}} names no field of {name} (its fields: {known})'
+            given = f'; its ALIASES: {", ".join(aliases)}' if aliases else ''
+            msg = f'{where}: {{{slot.name}}} names no field of {name} (its fields: {known}{given})'
             raise DeclarationError(msg)
-        places.append(_place(slot, slot.name, field))
-    _check_order(name, 'PHRASE', phrase, places)
+        if field_name not in fields:
+            msg = f'{where}: ALIASES gives {{{slot.name}}} to {field_name!r}, which is no field of {name}'
+            raise DeclarationError(msg)
+        if field_name in filled:
+            msg = f'{where}: {{{filled[field_name]}}} and {{{slot.name}}} both fill {field_name}'
+            raise DeclarationError(msg)
+        filled[field_name] = slot.name
+        places.append(_place(slot, field_name, fields[field_name]))
+    _check_order(name, constant, phrase, places)
     return Bound(phrase=phrase, places=tuple(places))
 
 
-def _bind_extra(  # noqa: PLR0913 — the phrase, and what it binds against
+def _bind_extra(
     fields: Mapping[str, Field],
     name: str,
     text: str,
     *,
-    canonical: Bound,
     slotted: Mapping[str, Place],
-    kinds: Mapping[str, object],
+    aliases: Mapping[str, str],
 ) -> Bound:
-    phrase = _read(name, 'EXTRA_PHRASES', text)
-    where = f'{name}.EXTRA_PHRASES {phrase.text!r}'
-    if any(slot.name not in fields for slot in phrase.slots):
-        places = _bind_renaming(where, phrase, canonical, kinds, fields)
-        left_out: tuple[str, ...] = ()
-    else:
-        places = []
-        for slot in phrase.slots:
-            if slot.name not in slotted:
-                msg = f"{where}: {{{slot.name}}} is a flag in PHRASE; an extra phrase takes only PHRASE's slots"
-                raise DeclarationError(msg)
-            if slot.rest != slotted[slot.name].rest:
-                said = 'the rest of the line' if slotted[slot.name].rest else 'one value'
-                msg = f'{where}: {{{slot.name}}} is {said} in PHRASE, and is written alike here'
-                raise DeclarationError(msg)
-            places.append(_place(slot, slot.name, fields[slot.name]))
-        named = {place.field for place in places}
-        left_out = tuple(field for field in slotted if field not in named)
-        for field in left_out:
-            if slotted[field].required:
-                msg = (
-                    f'{where}: it leaves out {{{field}}}, which is required; give the field a default, or keep the slot'
-                )
-                raise DeclarationError(msg)
-    _check_order(name, 'EXTRA_PHRASES', phrase, places)
-    return Bound(phrase=phrase, places=tuple(places), left_out=left_out)
-
-
-def _bind_renaming(
-    where: str,
-    phrase: Phrase,
-    canonical: Bound,
-    kinds: Mapping[str, object],
-    fields: Mapping[str, Field],
-) -> list[Place]:
-    """Bind a phrase that renames a slot: it keeps PHRASE's slots, in their order, renaming one or more."""
-    ours, theirs = phrase.slots, canonical.places
-    if len(ours) != len(theirs):
-        msg = f'{where}: it renames a slot, so it keeps the {len(theirs)} slots of PHRASE, not {len(ours)}'
-        raise DeclarationError(msg)
-    places: list[Place] = []
-    for slot, target in zip(ours, theirs, strict=True):
-        if slot.name in fields and slot.name != target.field:
-            msg = (
-                f'{where}: {{{slot.name}}} stands where PHRASE has {{{target.field}}}; a phrase that renames a slot '
-                "keeps the others in PHRASE's order"
-            )
+    """Bind one of ``EXTRA_PHRASES``: its slots PHRASE's positionals, any it leaves out optional."""
+    bound = _bind_phrase(fields, name, 'EXTRA_PHRASES', text, aliases=aliases)
+    where = f'{name}.EXTRA_PHRASES {bound.phrase.text!r}'
+    for place in bound.places:
+        said = f'{{{place.slot}}}' if not place.renamed else f'{{{place.slot}}}, for {place.field},'
+        if place.field not in slotted:
+            msg = f"{where}: {said} is a flag in PHRASE; an extra phrase takes only PHRASE's slots"
             raise DeclarationError(msg)
-        if slot.name not in fields and slot.name not in kinds:
-            msg = (
-                f'{where}: {{{slot.name}}} names no field, so it renames {{{target.field}}}, and needs a KINDS entry '
-                f'{slot.name!r} to say how its words are read'
-            )
+        if place.rest != slotted[place.field].rest:
+            written = 'the rest of the line' if slotted[place.field].rest else 'one value'
+            msg = f'{where}: {said} is {written} in PHRASE, and is written alike here'
             raise DeclarationError(msg)
-        if slot.rest != target.rest:
-            msg = f'{where}: {{{slot.name}}} stands where PHRASE has {{{target.field}{"**" if target.rest else ""}}}'
+    named = {place.field for place in bound.places}
+    left_out = tuple(field for field in slotted if field not in named)
+    for field in left_out:
+        if slotted[field].required:
+            msg = f'{where}: it leaves out {{{field}}}, which is required; give the field a default, or keep the slot'
             raise DeclarationError(msg)
-        places.append(_place(slot, target.field, fields[target.field]))
-    return places
+    return Bound(phrase=bound.phrase, places=bound.places, left_out=left_out)
 
 
 def _place(slot: Slot, field_name: str, field: Field) -> Place:
@@ -240,12 +214,12 @@ def _check_order(name: str, constant: str, phrase: Phrase, places: list[Place]) 
             raise DeclarationError(msg)
 
 
-def _check_polymorphic(name: str, extras: list[Bound], *, polymorphic: bool | None) -> None:
-    renaming = next((bound for bound in extras if bound.renames), None)
-    if polymorphic is True and renaming is None:
-        msg = f'{name}.POLYMORPHIC is True, but no extra phrase renames a slot'
+def _check_polymorphic(name: str, phrases: list[Bound], *, polymorphic: bool | None) -> None:
+    aliasing = next((bound for bound in phrases if bound.renames), None)
+    if polymorphic is True and aliasing is None:
+        msg = f'{name}.POLYMORPHIC is True, but no phrase says a slot by an alias'
         raise DeclarationError(msg)
-    if polymorphic is False and renaming is not None:
-        place = next(place for place in renaming.places if place.renamed)
-        msg = f'{name}.POLYMORPHIC is False, but {renaming.phrase.text!r} renames {{{place.field}}} as {{{place.slot}}}'
+    if polymorphic is False and aliasing is not None:
+        place = next(place for place in aliasing.places if place.renamed)
+        msg = f'{name}.POLYMORPHIC is False, but {aliasing.phrase.text!r} says {{{place.field}}} as {{{place.slot}}}'
         raise DeclarationError(msg)
