@@ -40,14 +40,13 @@ class FleetMine(FleetCommand):
 | `REPLY` | `None` | the seared class its handler returns |
 | `KINDS` | empty | how a field's words are read, by field name ([`kinds.md`](kinds.md)) |
 | `ALIASES` | empty | other names a phrase's slot may fill a field by, slot name to field name: `{'detachment': 'fleet'}` |
+| `EXAMPLES` | `()` | lines that say it, for help and for `parsed check` to read; a `<name>` stands for any value |
 
 - **Every constant but `PHRASE` is optional, and none is inferred.** A command declares what it knows; nothing is
   required for one tool or another's sake.
 - **Each is inherited** like any class attribute, so a base can declare one for every command beneath it. `KINDS`
   and `ALIASES` are merged along the bases instead: a base's entries and its subclasses' all count, a subclass's
   winning where they share a key.
-- **`KINDS` is merged along the class's bases** instead: a base's entries and its subclasses' all count, and a
-  subclass's entry wins where both name a field.
 - **Annotate a mutable constant as a `ClassVar`** (`KINDS: ClassVar[dict[str, …]] = {…}`), as ruff's RUF012 asks.
   seared never takes a `ClassVar` for a field.
 
@@ -92,6 +91,17 @@ reads one way.
   `POLYMORPHIC` needn't be declared for any of this. Declared, it's checked both ways: `True` refuses a class whose
   phrases say no slot by an alias, and `False` one that does.
 
+**`EXAMPLES` are lines that say it,** for help, generated pages and an app's skill text: whole lines, a `<name>`
+standing for any value where a real one would date.
+
+```python
+EXAMPLES = ('fleet <fleet> mine', 'fleet prospector mine --for 1h30m')
+```
+
+A declaration keeps them as given, as it has no tree to read them with; [`parsed check`](doc/check.md) reads each
+one, so an example can't rot unnoticed. A subclass inherits a base's lines as it does any constant, and the check
+reads them as its own, so a subclass with a phrase of its own gives its own.
+
 ## Bases
 
 A subclass of `Command` without a `PHRASE` is a base. It can carry fields and constants for the commands beneath
@@ -135,6 +145,8 @@ put it right:
 | a `PHRASE` that's empty, or not a string | a phrase is a string of words |
 | `EXTRA_PHRASES = 'go on'` | a tuple of phrases; one alone needs a trailing comma |
 | `EXTRA_PHRASES` on a base | a base has no phrases |
+| `EXAMPLES = 'fleet f1 mine'`, or a line that's empty | a tuple of lines; one alone needs a trailing comma |
+| `EXAMPLES` on a base | a base says nothing |
 | `EFFECT = 'reed'` | expected one of read, write, action |
 | `ASKS` or `INTERACTIVE` not `True` or `False`; `POLYMORPHIC` not either or left out | |
 | `INSTEAD` on a command that isn't interactive, naming itself, a base or a non-command, or another interactive command | it names a form an agent can use, in place of an interactive command |

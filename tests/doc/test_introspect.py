@@ -80,6 +80,13 @@ class TestCommandDoc:
         assert introspect_command(farlandia.FleetsShow).reply is farlandia.FleetView
         assert introspect_command(farlandia.ShipsMakeAdd).polymorphic is None
 
+    def test_its_examples(self):
+        assert introspect_command(farlandia.FleetDock).examples == (
+            'fleet <fleet> dock <station>',
+            'fleet <fleet> dock nearest',
+        )
+        assert introspect_command(farlandia.Say).examples == ()
+
     def test_the_class_it_takes_its_fields_from(self):
         assert introspect_command(rio.HandheldConnect).fields_from == (rio.HandheldEndpoint,)
         assert introspect_command(farlandia.FleetMine).fields_from == ()  # its bases are commands

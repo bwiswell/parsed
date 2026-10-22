@@ -14,6 +14,7 @@ parsed's own surface:
   kinds stay ``parsed.kinds.*``.
 - ``names.py``: :class:`Resolver`, what an app gives for a category of its names.
 - ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
+- ``__main__.py``: ``python -m parsed check``, a package's commands checked in its CI (:mod:`parsed.doc.check`).
 """
 
 from seared import (

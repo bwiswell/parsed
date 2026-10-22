@@ -14,6 +14,7 @@ It grows with each release that needs more of it. So far, the declarations, and 
   instead;
 - a share in percent, or off (`fleet {fleet} retreat {share}`), and a routine taken up with its variables, each
   read by the variable's own names (`fleet {fleet} run {routine} {variables**}`);
+- lines that say a command, its `EXAMPLES`, with `<name>` placeholders and without;
 - the app's names, as resolvers over fixed tables (:class:`Table`, :class:`Variables`, :data:`NAMES`): fleets,
   detachments, goods, stations within a fleet's reach (one with an apostrophe in its name), routines, and each
   routine's variables.
@@ -124,6 +125,7 @@ class FleetMine(FleetCommand):
     PHRASE = 'fleet {fleet} mine'
     EXTRA_PHRASES = ('detachment {detachment} mine',)
     POLYMORPHIC = True
+    EXAMPLES = ('fleet <fleet> mine', 'fleet <fleet> mine --for <for>', 'fleet prospector mine --for 1h30m')
 
     for_: timedelta | None = parsed.TimeDelta(data_key='for', default=None, doc='stop after this long')
 
@@ -134,6 +136,7 @@ class FleetDock(FleetCommand):
 
     PHRASE = 'fleet {fleet} dock {station}'
     EXTRA_PHRASES = ('fleet {fleet} dock nearest',)
+    EXAMPLES = ('fleet <fleet> dock <station>', 'fleet <fleet> dock nearest')
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet')}
 
     station: str | None = parsed.Str(default=None, doc='the station; left out, the nearest')
@@ -176,6 +179,7 @@ class FleetRun(FleetCommand):
     """Take up a routine, its variables given."""
 
     PHRASE = 'fleet {fleet} run {routine} {variables**}'
+    EXAMPLES = ('fleet <fleet> run <routine> <variable> <value>', 'fleet prospector run mining ore iron home vesta')
     KINDS: ClassVar[dict[str, parsed.Kind]] = {
         'routine': parsed.Name('routine'),
         'variables': parsed.kinds.Pairs('variable', scope='routine'),
@@ -201,6 +205,7 @@ class Log(parsed.Command):
 
     PHRASE = 'log {n}'
     EFFECT = parsed.Effect.READ
+    EXAMPLES = ('log', 'log 40')
 
     n: int = parsed.Int(default=20, ge=1, doc='how many lines')
 

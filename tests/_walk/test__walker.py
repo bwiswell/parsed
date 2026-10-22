@@ -314,6 +314,44 @@ class TestPairs:
             tree.read('fleet f1 run mining ore iron', names=names)
 
 
+class TestPlaceholders:
+    # A `<name>` word stands for any value, so a line in help or an example reads with no real one.
+    def test_any_value_read_by_no_kind(self, tree):
+        reading = tree.walk('fleet <fleet> mine --for <for>', placeholders=True)
+        assert reading.command is farlandia.FleetMine
+        assert reading.data() == {'fleet': '<fleet>', 'for': '<for>'}
+
+    def test_a_number_s_slot_and_a_pair_s_words(self, tree):
+        assert tree.walk('log <n>', placeholders=True).data() == {'n': '<n>'}
+        reading = tree.walk('fleet <fleet> run <routine> <variable> <value>', placeholders=True)
+        assert reading.data()['variables'] == {'<variable>': '<value>'}
+
+    def test_read_by_no_resolver(self, tree):
+        stations = _Recording(farlandia.NAMES['station'])
+        names = {**farlandia.NAMES, 'station': stations}
+        assert tree.walk('fleet <fleet> dock <station>', names, placeholders=True).data()['station'] == '<station>'
+        assert stations.asked == []
+
+    def test_a_literal_still_reads_as_one(self, tree):
+        assert tree.walk('fleet <fleet> dock nearest', placeholders=True).data() == {'fleet': '<fleet>'}
+
+    def test_never_a_literal_word(self, tree):
+        with pytest.raises(ReadError, match=r"no command 'fleet <fleet> <verb>'"):
+            tree.walk('fleet <fleet> <verb>', placeholders=True)
+
+    def test_only_when_asked(self, tree):
+        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+            tree.walk('log <n>')
+
+    def test_a_quoted_one_is_a_value(self, tree):
+        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+            tree.walk('log "<n>"', placeholders=True)
+
+    def test_its_reading_doesn_t_load(self, tree):
+        with pytest.raises(ReadError):
+            tree.walk('log <n>', placeholders=True).load()
+
+
 class TestFlags:
     def test_anywhere_after_the_first_word(self, tree):
         expected = farlandia.FleetsMerge(fleet='f1', into='f2')

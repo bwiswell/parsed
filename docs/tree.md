@@ -19,7 +19,8 @@ tree.read('fleet prospector mine --for 1h30m')
 ## Reading a line
 
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
-[`Reading`](_walk/_walker.md#reading): the command, and each field's words.
+[`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
+unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:
