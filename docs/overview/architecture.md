@@ -26,7 +26,8 @@ seared  <-  zeared
 - **Phrases** ([`../_phrase/index.md`](../_phrase/index.md)): a phrase's grammar, and how a command's phrases
   bind to its fields, for `declaration` to check.
 - **Kinds** ([`../kinds.md`](../kinds.md)): how a field's words are read, as plain data: a `Name` for an app's
-  names, and a default for each seared type that has a word form, reading a word to the field's wire value.
+  names, `Pairs` for a keyed field's pairs, and a default for each seared type that has a word form, reading a word
+  (or one of its literal words) to the field's wire value.
 - **Names** ([`../names.md`](../names.md)): the resolvers an app gives with each line, by category, a scope
   read before the names it narrows; a category with none reads as typed.
 - **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal

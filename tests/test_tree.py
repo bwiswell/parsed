@@ -35,6 +35,8 @@ class TestCompiling:
             'FleetDock',
             'FleetJump',
             'FleetJumpNearest',
+            'FleetRetreat',
+            'FleetRun',
             'FleetSell',
             'FleetBuyShip',
             'FleetsMerge',
@@ -63,7 +65,7 @@ class TestCompiling:
     def test_a_slot_shared_by_the_commands_after_it(self, fixtures):
         fleet = fixtures.root.words['fleet'].slot
         assert fleet.kind is SlotKind.ONE
-        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'sell']
+        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell']
 
     def test_a_literal_beside_a_slot(self, fixtures):
         dock = fixtures.root.words['fleet'].slot.node.words['dock']

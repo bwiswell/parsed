@@ -36,13 +36,13 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 from seared import ValidationError
 
 from parsed._phrase import Place
 from parsed.errors import ReadError
-from parsed.kinds import Name
+from parsed.kinds import NOT_LITERAL, Name, Named, Pairs
 
 from ._hints import close, either, usage
 from ._terms import RESERVED, Arity, SlotKind
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 
     from parsed.command import Command
     from parsed.kinds import Kind
-    from parsed.names import Resolver
+    from parsed.names import PairsResolver, Resolver
     from parsed.tree import Edge, End, Flag, Node, Tree
 
 
@@ -151,6 +151,7 @@ class _Field(NamedTuple):  # a tuple: one is made for each field of each line, a
         kind: The kind they're read by.
         field: The seared field.
         where: The phrase, or the flag, for a refusal to name.
+        end: Where the walk ended, for a refusal's usage.
     """
 
     by: Place | Flag
@@ -159,6 +160,7 @@ class _Field(NamedTuple):  # a tuple: one is made for each field of each line, a
     kind: Kind
     field: Field
     where: str
+    end: End
 
 
 @dataclass(slots=True)
@@ -181,7 +183,7 @@ class _Walker:
         end, slots = self._walk_words(words)
         specs = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
         fields = {**self._slot_fields(end, slots, specs), **self._flag_fields(end, flags, words, specs)}
-        values = self._values(end, fields)
+        values = self._values(fields)
         given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
         return Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line)
 
@@ -323,14 +325,16 @@ class _Walker:
         found = end.declaration
         out: dict[str, _Field] = {}
         for place, words in zip(end.places, slots, strict=True):
-            values = (_joined(self.line, words),) if place.rest and not place.many else words
+            kind = found.kind_of(place)
+            joined = place.rest and not place.many and not isinstance(kind, Pairs)
             out[place.field] = _Field(
                 by=place,
                 words=words,
-                values=values,
-                kind=found.kind_of(place),
+                values=(_joined(self.line, words),) if joined else words,
+                kind=kind,
                 field=fields[place.field],
                 where=end.bound.phrase.text,
+                end=end,
             )
         return out
 
@@ -359,6 +363,7 @@ class _Walker:
                 kind=found.field_kinds[flag.field],
                 field=field,
                 where=f'--{name}',
+                end=end,
             )
         for flag in takes.values():
             if fields[flag.field].required and flag.field not in out:
@@ -374,23 +379,25 @@ class _Walker:
         near = [f'--{found}' for found in close(name, self.tree.flags_of(end.declaration.cls))]
         return self.refuse(f'{_said(words)} takes no --{name}', word=token, hint=hint, near=near)
 
-    def _values(self, end: End, fields: Mapping[str, _Field]) -> dict[str, object]:
+    def _values(self, fields: Mapping[str, _Field]) -> dict[str, object]:
         """Each field's value, a name's scope read before it; a switch's is ``True``, or ``False`` for ``--no-…``."""
         values: dict[str, object] = {}
 
         def read(attr: str) -> None:
             found = fields[attr]
-            scope = found.kind.scope if isinstance(found.kind, Name) else None
+            scope = found.kind.scope if isinstance(found.kind, Named) else None
             if scope is not None and scope in fields and scope not in values:
                 read(scope)  # a declaration refuses scopes that go round, so this ends
             if not isinstance(found.by, Place) and found.by.arity is Arity.SWITCH:
                 values[attr] = not found.by.negated
                 return
             read_scope = None if scope is None else self._scope(scope, fields, values)
-            if found.field.many:
-                values[attr] = [self._read(end, found, word, read_scope) for word in found.values]
+            if isinstance(found.kind, Pairs):
+                values[attr] = self._pairs(found, found.kind, read_scope)
+            elif found.field.many:
+                values[attr] = [self._read(found, word, read_scope) for word in found.values]
             else:
-                values[attr] = self._read(end, found, found.values[0], read_scope)
+                values[attr] = self._read(found, found.values[0], read_scope)
 
         for attr in fields:
             if attr not in values:
@@ -404,23 +411,53 @@ class _Walker:
             return None
         return scope, str(value), _said(fields[scope].values)
 
-    def _read(self, end: End, found: _Field, word: Token, scope: _Scope | None) -> object:
+    def _read(self, found: _Field, word: Token, scope: _Scope | None) -> object:
         """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
         kind = found.kind
         resolver = self.names.get(kind.category) if self.names and isinstance(kind, Name) else None
         if not isinstance(kind, Name) or resolver is None:
             try:
-                return kind.read(word.text, found.field)
+                return kind.read(word.text, found.field, quoted=word.quoted)
             except ValueError as e:
                 msg = f'{found.where}: {e}'
                 raise self.refuse(msg, word=word, field=found.by.field) from None
-        key = resolver.lookup(word.text, None if scope is None else scope[1])
+        literal = NOT_LITERAL if word.quoted else kind.literal(word.text)
+        if literal is not NOT_LITERAL:
+            return literal
+        return self._resolved(found, resolver, word, scope, kind.category)
+
+    def _pairs(self, found: _Field, kind: Pairs, scope: _Scope | None) -> dict[str, object]:
+        """A keyed field's pairs: each key read by its category's resolver, each value by the one it gives the key."""
+        words = found.values
+        if len(words) % 2:
+            msg = f'{found.where}: {words[-1].raw!r} and its value? pairs come in twos'
+            raise self.refuse(msg, word=words[-1], field=found.by.field, hint=self._usage(found.end))
+        resolver = self.names.get(kind.category)
+        if resolver is not None and not callable(getattr(resolver, 'values', None)):
+            msg = f'the resolver for {kind.category} reads pairs, so it gives values(key, scope): a PairsResolver'
+            raise TypeError(msg)
+        given = None if scope is None else scope[1]
+        out: dict[str, object] = {}
+        for key_word, value_word in zip(words[0::2], words[1::2], strict=True):
+            key = key_word.text if resolver is None else self._resolved(found, resolver, key_word, scope, kind.category)
+            if key in out:
+                msg = f'{found.where}: {key_word.raw} is given twice'
+                raise self.refuse(msg, word=key_word, field=found.by.field)
+            of = None if resolver is None else cast('PairsResolver', resolver).values(key, given)
+            # A value's resolver is given no scope: the pairs' gave it knowing the key and the scope.
+            out[key] = value_word.text if of is None else self._resolved(found, of, value_word, None, key_word.raw)
+        return out
+
+    def _resolved(self, found: _Field, resolver: Resolver, word: Token, scope: _Scope | None, what: str) -> str:
+        """The key a resolver reads a word to; a word no name answers to is refused, with what's close to it."""
+        given = None if scope is None else scope[1]
+        key = resolver.lookup(word.text, given)
         if key is not None:
             return key
-        near = list(resolver.suggest(word.text, None if scope is None else scope[1]))
+        near = list(resolver.suggest(word.text, given))
         within = '' if scope is None else f' for {scope[0]} {scope[2]!r}'
-        msg = f'{found.where}: no {kind.category} {word.raw!r}{within}'
-        raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(end), near=near)
+        msg = f'{found.where}: no {what} {word.text!r}{within}'  # its text: a name may be quoted for its spaces
+        raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end), near=near)
 
 
 def _flag(token: Token) -> tuple[str, Token | None] | None:

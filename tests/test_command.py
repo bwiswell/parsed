@@ -391,14 +391,16 @@ class TestFieldKinds:
 
         assert declaration(Configure).field_kinds['settings'] == parsed.Name('preset')
 
-    def test_a_keyed_field_has_no_word_form_yet(self):
+    def test_a_keyed_field_reads_by_pairs(self):
         @parsed.parsed
         class Set(Command):
             PHRASE = 'set'
 
             values: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
 
-        with pytest.raises(DeclarationError, match=r'Set\.values is a Str field, which has no word form'):
+        with pytest.raises(
+            DeclarationError, match=r'Set\.values is keyed, so its words are pairs: give it parsed\.kinds'
+        ):
             declaration(Set)
 
     def test_an_entry_that_isn_t_a_kind_is_refused_naming_where_it_s_declared(self):
@@ -413,6 +415,75 @@ class TestFieldKinds:
 
         with pytest.raises(DeclarationError, match=r"Base\.KINDS\['fleet'\] = 'fleet': a kind, such as parsed\.Name"):
             declaration(Mine)
+
+
+class TestForms:
+    # What a kind's field and phrase must be for it: pairs and literal words.
+    def test_pairs_said_as_the_rest_of_the_line(self):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = 'run {routine} {variables**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'variables': parsed.kinds.Pairs('variable', scope='routine')}
+
+            routine: str = parsed.Str(required=True)
+            variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        assert declaration(Run).field_kinds['variables'] == parsed.kinds.Pairs('variable', scope='routine')
+
+    def test_pairs_for_a_field_that_isn_t_keyed(self):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = 'run {variables**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'variables': parsed.kinds.Pairs('variable')}
+
+            variables: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r"Run: 'variables' is read as Pairs, but variables is not keyed"):
+            declaration(Run)
+
+    def test_a_keyed_field_read_another_way(self):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = 'run {variables**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'variables': parsed.Name('variable')}
+
+            variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        with pytest.raises(DeclarationError, match=r'Run\.variables is keyed, so its words are pairs'):
+            declaration(Run)
+
+    @pytest.mark.parametrize('phrase', ['run', 'run {variables}'])
+    def test_pairs_anywhere_but_the_rest_of_the_line(self, phrase):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = phrase
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'variables': parsed.kinds.Pairs('variable')}
+
+            variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        with pytest.raises(DeclarationError, match=r'PHRASE says it as the rest of the line: \{variables\*\*\}'):
+            declaration(Run)
+
+    def test_a_literal_none_wants_a_nullable_field(self):
+        @parsed.parsed
+        class Retreat(Command):
+            PHRASE = 'retreat {share}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'share': parsed.kinds.Number(words={'off': None})}
+
+            share: float | None = parsed.Float(required=True)
+
+        with pytest.raises(DeclarationError, match=r"'share' reads 'off' as None, which seared drops unless share is"):
+            declaration(Retreat)
+
+    def test_a_literal_none_on_a_nullable_field_is_fine(self):
+        @parsed.parsed
+        class Retreat(Command):
+            PHRASE = 'retreat {share}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'share': parsed.kinds.Number(words={'off': None})}
+
+            share: float | None = parsed.Float(required=True, nullable=True)
+
+        assert declaration(Retreat).field_kinds['share'].words == {'off': None}
 
 
 class TestScopes:

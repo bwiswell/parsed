@@ -3,7 +3,7 @@
 import _support_farlandia as farlandia
 
 import parsed
-from parsed.names import Resolver
+from parsed.names import PairsResolver, Resolver
 
 
 def test_exported():
@@ -26,3 +26,12 @@ def test_the_fixture_s_table_reads_as_an_app_s_would():
     assert stations.lookup('ceres', None) == 'ceres'  # no scope: across them all
     assert stations.options('f2') == ['Ceres']
     assert stations.suggest('Vsta', 'f1') == ['Vesta']
+
+
+def test_a_pairs_resolver_is_a_resolver_that_gives_values():
+    variables = farlandia.NAMES['variable']
+    assert 'values' in vars(PairsResolver)
+    assert Resolver in PairsResolver.__mro__
+    assert variables.lookup('home', 'mining') == 'home'
+    assert variables.values('ore', 'mining') is farlandia.GOODS
+    assert variables.values('route', 'patrol') is None  # its values read as typed
