@@ -27,7 +27,8 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | after a whole command | its flags not yet given (a list's again), and `--yes` if it asks first |
 | at a flag being typed, before then | the flags of every command the line may be |
 | at a flag waiting for its value | its values, by its kind |
-| in a `Pairs` field | a key not yet given, then that key's values |
+| in a `Pairs` field | a key not yet given, then that key's values; and the command's flags not yet given |
+| in any other rest of the line | the command's flags not yet given, since a flag may stand anywhere |
 
 A name's scope is its field's words so far, read by the scope's own resolver: `fleet Hauler dock ` offers the
 stations within Hauler's reach, and `board --fleet Hauler ` does too. A quoted word is a value, so while one is

@@ -27,9 +27,9 @@ lines as it lands, and the entry is dated when that version is released.
 - **A number's suffix:** `Number(suffix='%')` reads `30%` as `30`.
 - **Completion:** `tree.complete(text, names=…)` offers what may come next on a line being typed, up to the cursor:
   the words that may follow, a slot's values (its kind's literal words and offers, a name's resolver's `options`,
-  given its scope), a whole command's flags, a flag's values, and a pair's keys, then a key's values. It gives the
-  candidates, quoted where one holds a space, and how many characters each replaces. `Kind.offers(field)` is each
-  kind's; `split(line, partial=True)` holds an open quote's word.
+  given its scope), a whole command's flags (in the rest of the line too), a flag's values, and a pair's keys, then
+  a key's values. It gives the candidates, quoted where one holds a space, and how many characters each replaces.
+  `Kind.offers(field)` is each kind's; `split(line, partial=True)` holds an open quote's word.
 - **The completing benchmark** times completing a line for each command.
 - **Pairs:** `parsed.kinds.Pairs(category, scope=…)` reads a keyed field's words, said as the rest of the line, as
   `key value` pairs: each key by the app's `PairsResolver`, and each value by the resolver it gives that key. A

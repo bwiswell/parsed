@@ -9,7 +9,8 @@ come next, each matching the word being typed, case aside:
 - **the command's flags,** once the line says a whole command: those not yet given (a list's again), and ``--yes``
   for one that asks first. While a flag is being typed before then, the flags of every command the line may be;
 - **a flag's values,** when the line ends at a flag waiting for one;
-- **a pair's keys, then each key's values,** for a ``Pairs`` field.
+- **a pair's keys, then each key's values,** for a ``Pairs`` field, and the command's flags beside them, as in any
+  rest of the line.
 
 A quoted word is a value, so while one is typed, literal words and flags aren't offered. A candidate with a space in
 it is offered quoted, as it would be typed. A line whose words don't read as far as they go is offered nothing.
@@ -92,8 +93,10 @@ class _Completer:
         node, slots, opened = walked
         if pending is not None:
             return self._flag_values(node, pending, slots, given)
-        if opened is not None and opened.kind is SlotKind.REST:
-            return self._rest(opened, slots, given)
+        if (
+            opened is not None and opened.kind is SlotKind.REST
+        ):  # its own next word, or a flag, which may stand anywhere
+            return self._rest(opened, slots, given) + self._command_flags(node, given)
         found: list[_Offer] = []
         if opened is not None:  # several words, and more may come
             found += self._values(opened, slots[:-1], given)

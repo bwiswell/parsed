@@ -122,11 +122,47 @@ class TestPairs:
         assert _words(tree, 'fleet f1 run patrol route ', farlandia.NAMES) == []
 
 
+@parsed.parsed
+class Run(Command):
+    """A routine taken up, its variables in pairs, and its place in the list as a flag."""
+
+    PHRASE = 'run {routine} {variables**}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {
+        'routine': parsed.Name('routine'),
+        'variables': parsed.kinds.Pairs('variable', scope='routine'),
+    }
+
+    routine: str = parsed.Str(required=True)
+    variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+    at: int | None = parsed.Int(default=None, ge=1)
+
+
+class TestFlagsAfterTheRest:
+    # Flags may stand anywhere after the first word, so the rest of the line offers its command's too.
+    def test_beside_a_pair_s_keys_and_values(self):
+        run = Tree([Run])
+        assert _words(run, 'run mining ', farlandia.NAMES) == ['ore', 'home', '--at']
+        assert _words(run, 'run mining ore ', farlandia.NAMES) == ['Iron', 'Coal', '--at']
+        assert _words(run, 'run mining ore iron ', farlandia.NAMES) == ['home', '--at']
+
+    def test_not_once_given(self):
+        assert _words(Tree([Run]), 'run mining --at 2 ore iron ', farlandia.NAMES) == ['home']
+
+    def test_with_no_resolver_the_flags_alone(self):
+        assert _words(Tree([Run]), 'run mining home ') == ['--at']
+
+    def test_after_free_text(self):
+        say = Tree([_command('say {message**}', message=parsed.Str(required=True), loud=parsed.Bool(default=False))])
+        assert _words(say, 'say hello ') == ['--loud']
+        assert say.complete('say hello --l') == Completion(words=['--loud'], replace=3)
+
+
 class TestFarlandiasCases:
     """farlandia's own completion cases (``tests/client/test_tree.py``), on this fixture's commands.
 
     Lifted: the first words, a node's words, a command's flags, a span's values, a literal beside a slot, ``--yes``
-    for a command asked first, and a flag being typed. Later: ``then``, with chains.
+    for a command asked first, and a flag being typed; and, from the first spike, a routine's flags after its pairs.
+    Later: ``then``, with chains.
     """
 
     def test_completion_offers_words_slots_and_flags(self, tree):
