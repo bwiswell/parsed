@@ -33,6 +33,11 @@ lines as it lands, and the entry is dated when that version is released.
   `error` as data, raising nothing. `result.code` is its exit code: 2 for a line that doesn't read, 4 for a value
   its field refuses, 1 for a handler's failure. `result.to_json()` writes every key.
 - **`app.run(line, state)`** runs one line in a session of its own, for a program that runs one and exits.
+- **Asking first:** a handler returns `parsed.Ask(question, then)`, having done nothing yet, and `then` acts on a
+  yes, which may ask again. `--yes` on the line, or `yes=True` to `run`, `call` and `app.run`, answers every
+  question yes, on any command; else the session's `answer` does (`app.open(state, answer=…)`), and
+  `parsed.reply.terminal` prompts a person. A question left unanswered, or answered no, leaves the line undone: the
+  result's `asks` holds it, with exit code 0, and `call` gives the `Ask` back.
 - **`tree.usage(end)`:** how the command a walk ended at is said, prefix and flags and all.
 - **`parsed.Context`:** what a handler is given beside its command, made fresh for each line: the app's `state`
   (`Context[S]`), the `mount` and its `params`, the `names`, the `line` and its `reading`, the `phrase` that said
