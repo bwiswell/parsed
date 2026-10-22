@@ -11,8 +11,12 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - a `Bool` said as a word (`fleets start true`);
 - an optional positional, a slot of several words, and the rest of the line;
 - a read with a typed reply, a command that asks first, and an interactive command with the form an agent says
-  instead.
+  instead;
+- the app's names, as resolvers over fixed tables (:class:`Table`, :data:`NAMES`): fleets, detachments, goods, and
+  stations within a fleet's reach, one with an apostrophe in its name.
 """
+
+import difflib
 
 # At runtime: tooling evaluates a command's annotations (`typing.get_type_hints`).
 from datetime import timedelta  # noqa: TC003
@@ -22,6 +26,45 @@ import parsed
 
 FLEET = parsed.Name('fleet')
 DETACHMENT = parsed.Name('detachment')
+
+
+class Table:
+    """A resolver over a fixed table, as an app's might be: a name, case aside, or a key, to its key.
+
+    ``within`` narrows it by scope: each scope's value to the keys it holds. A scope it doesn't know holds nothing,
+    and no scope looks across them all.
+    """
+
+    def __init__(self, names: dict[str, str], *, within: dict[str, set[str]] | None = None) -> None:
+        self.names = names
+        self.within = within
+
+    def _keys(self, scope: str | None) -> dict[str, str]:
+        held = None if self.within is None or scope is None else self.within.get(scope, set())
+        return {name: key for name, key in self.names.items() if held is None or key in held}
+
+    def lookup(self, word: str, scope: str | None) -> str | None:
+        names = self._keys(scope)
+        found = {name.lower(): key for name, key in names.items()}.get(word.lower())
+        return found or (word if word in names.values() else None)
+
+    def suggest(self, word: str, scope: str | None) -> list[str]:
+        return difflib.get_close_matches(word, list(self._keys(scope)), n=3, cutoff=0.5)
+
+    def options(self, scope: str | None) -> list[str]:
+        return list(self._keys(scope))
+
+
+#: The app's names, by category, as a line is read with them.
+NAMES: dict[str, parsed.Resolver] = {
+    'fleet': Table({'Prospector': 'f1', 'Hauler': 'f2'}),
+    'detachment': Table({'Scouts': 'd2'}),
+    'good': Table({'Iron': 'iron', 'Coal': 'coal'}),
+    'station': Table(
+        {'Vesta': 'vesta', "Vruba'a Belt 1": 'vrubaa-belt-1', 'Ceres': 'ceres'},
+        within={'f1': {'vesta', 'vrubaa-belt-1'}, 'f2': {'ceres'}},
+    ),
+}
 
 
 @parsed.parsed

@@ -143,3 +143,4 @@ put it right:
 | a `KINDS` value that isn't a kind | it names the class that declared it |
 | a field whose type has no word form, and no `KINDS` entry | it couldn't be said on a line |
 | a `Name` whose `scope` is no other field of the command | |
+| scopes that go round (`a` scoped by `b`, `b` by `a`) | a scope is read before the names it narrows |

@@ -330,14 +330,44 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
         for place in bound.places
         if place.renamed
     ]
+    scopes: dict[str, set[str]] = {}  # each field, and the fields its names are scoped by
     for said, field, kind in read:
-        if isinstance(kind, Name) and kind.scope is not None and (kind.scope not in found or kind.scope == field):
+        if not isinstance(kind, Name) or kind.scope is None:
+            continue
+        if kind.scope not in found or kind.scope == field:
             msg = (
                 f'{name}: {said!r} is read as a {kind.category} scoped by {kind.scope!r}, which is no other field '
                 f'of {name}'
             )
             raise DeclarationError(msg)
+        scopes.setdefault(field, set()).add(kind.scope)
+    around = _scopes_around(scopes)
+    if around:
+        msg = (
+            f'{name}: its scopes go round, {" by ".join(around)}: a scope is read before the names it narrows, so '
+            f'one of them must be read without the other'
+        )
+        raise DeclarationError(msg)
     return MappingProxyType(found)
+
+
+def _scopes_around(scopes: Mapping[str, set[str]]) -> list[str]:
+    """A round of scopes, as the fields it passes through, the first again last; empty when there's none."""
+
+    def follow(field: str, path: list[str]) -> list[str]:
+        if field in path:
+            return [*path[path.index(field) :], field]
+        for scope in sorted(scopes.get(field, ())):
+            found = follow(scope, [*path, field])
+            if found:
+                return found
+        return []
+
+    for field in sorted(scopes):
+        found = follow(field, [])
+        if found:
+            return found
+    return []
 
 
 def _kinds(cls: type[Command]) -> Mapping[str, Kind]:

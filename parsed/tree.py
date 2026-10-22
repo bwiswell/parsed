@@ -26,8 +26,8 @@ Every command is declared first (:func:`parsed.command.declaration`), so a tree 
 declarations check.
 
 **A line read** (:meth:`Tree.walk`) is a :class:`~parsed._walk.Reading`: the command, and each field's words, read
-by its kind to its wire value. A name is kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads
-from those values.
+by its kind to its wire value. A name is read by the resolver the app gives for its category (:mod:`parsed.names`),
+or kept as typed. :meth:`Tree.read` goes on to the instance, which seared loads from those values.
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from ._phrase import Bound, Place
+    from .names import Resolver
 
 _FLAG = re.compile(r'[a-z0-9][a-z0-9-]*')
 
@@ -159,23 +160,26 @@ class Tree:
         """
         return self._flags[cls]
 
-    def walk(self, line: str) -> Reading:
+    def walk(self, line: str, names: Mapping[str, Resolver] | None = None) -> Reading:
         """What ``line`` says: the command, and each field's words and wire value, before seared loads them.
 
-        Raises:
-            ReadError: The line doesn't read, or a word its kind can't read; the message says why, with the words
-                read up to it.
-        """
-        return _walk.walk(self, line)
-
-    def read(self, line: str) -> Command:
-        """The command ``line`` says, loaded by seared from its fields' values.
+        Args:
+            line: The line.
+            names: The app's resolvers, by category: a ``Name`` of a category with none reads as typed.
 
         Raises:
-            ReadError: The line doesn't read, a word its kind can't read, or a value seared refuses (``'validation'``,
-                at the word that gave it).
+            ReadError: The line doesn't read, a word its kind can't read, or a name no resolver answers to; the
+                message says why, with the words read up to it.
         """
-        return self.walk(line).load()
+        return _walk.walk(self, line, names)
+
+    def read(self, line: str, names: Mapping[str, Resolver] | None = None) -> Command:
+        """The command ``line`` says, loaded by seared from its fields' values; ``names`` as :meth:`walk` takes it.
+
+        Raises:
+            ReadError: As :meth:`walk` does, or a value seared refuses (``'validation'``, at the word that gave it).
+        """
+        return self.walk(line, names).load()
 
     def _insert(self, found: Declaration, bound: Bound, places: tuple[Place, ...]) -> None:
         name = found.cls.__qualname__

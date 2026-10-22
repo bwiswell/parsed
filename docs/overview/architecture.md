@@ -27,6 +27,8 @@ seared  <-  zeared
   bind to its fields, for `declaration` to check.
 - **Kinds** ([`../kinds.md`](../kinds.md)): how a field's words are read, as plain data: a `Name` for an app's
   names, and a default for each seared type that has a word form, reading a word to the field's wire value.
+- **Names** ([`../names.md`](../names.md)): the resolvers an app gives with each line, by category, a scope
+  read before the names it narrows; a category with none reads as typed.
 - **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal
   beating a slot, with the checks across commands: no line read two ways, no flag meaning two things.
 - **The walk** ([`../_walk/index.md`](../_walk/index.md)): a line split into words, its flags split off, and its
@@ -35,5 +37,5 @@ seared  <-  zeared
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`, and `ReadError`, one error for a
   line that doesn't read, with where it stands, a hint and what may have been meant.
 
-Names read against an app's own, running a command, and the docs a command describes itself with, arrive in the
-releases that follow, each adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).
+Completion, running a command, and the docs a command describes itself with arrive in the releases that follow,
+each adding its part here. What each part costs is in [`benchmarks.md`](benchmarks.md).

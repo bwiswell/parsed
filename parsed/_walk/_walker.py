@@ -13,8 +13,13 @@
 literal after them, or the end; the rest of the line takes every word left.
 
 **Each word is read by its field's kind** (:mod:`parsed.kinds`) to the field's wire value: ``1,000`` to ``1000``,
-``1h30m`` to ``5400.0`` seconds, ``Iron`` to an ``Enum``'s ``'iron'``. A name is kept as typed. A word its kind can't
-read is refused here, naming the phrase or the flag.
+``1h30m`` to ``5400.0`` seconds, ``Iron`` to an ``Enum``'s ``'iron'``. A word its kind can't read is refused here,
+naming the phrase or the flag.
+
+**A name is read by the resolver the app gives for its category** (:mod:`parsed.names`), or kept as typed when it
+gives none. A scoped name waits for its scope: the fields are read in an order that puts a scope before the names it
+narrows, whatever their order on the line, and the resolver is given the scope's value. A word no name answers to is
+refused with the resolver's suggestions.
 
 **What a walk keeps** is a :class:`Reading`: the command, the phrase, and each field's words and value. A required
 flag left out is refused once the command is known. :meth:`Reading.load` hands the values to seared, which checks
@@ -31,12 +36,13 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from seared import ValidationError
 
 from parsed._phrase import Place
 from parsed.errors import ReadError
+from parsed.kinds import Name
 
 from ._hints import close, either, usage
 from ._terms import RESERVED, Arity, SlotKind
@@ -49,6 +55,7 @@ if TYPE_CHECKING:
 
     from parsed.command import Command
     from parsed.kinds import Kind
+    from parsed.names import Resolver
     from parsed.tree import Edge, End, Flag, Node, Tree
 
 
@@ -117,15 +124,41 @@ class Reading:
 type _Said = tuple[str, Token, Token | None]
 
 
-def walk(tree: Tree, line: str) -> Reading:
-    """Read ``line`` by ``tree``, as the module's docstring describes.
+#: A name's scope, once read: the field it is, its value as the resolver is given it, and its words as typed.
+type _Scope = tuple[str, str, str]
+
+
+def walk(tree: Tree, line: str, names: Mapping[str, Resolver] | None = None) -> Reading:
+    """Read ``line`` by ``tree``, as the module's docstring describes, its names by ``names``' resolvers.
 
     Raises:
         ReadError: The line doesn't read: an open quote, a flag before the first word or that no command takes, a
             word no command says, a slot left empty, a line that stops short of a command, a flag its command
-            doesn't take or a required one it leaves out, or a word its kind can't read.
+            doesn't take or a required one it leaves out, a word its kind can't read, or a name no resolver
+            answers to.
     """
-    return _Walker(tree, line).walk()
+    return _Walker(tree, line, names or {}).walk()
+
+
+class _Field(NamedTuple):  # a tuple: one is made for each field of each line, and a tuple is the cheapest to make
+    """A field as the line gives it, before its value is read.
+
+    Attributes:
+        by: The slot or the flag that took its words.
+        words: Every word that went into it, for :class:`Given`.
+        values: The words its value is read from, one for each of a list's values; none for a switch. The rest of
+            the line, for a field that isn't a list, is one word.
+        kind: The kind they're read by.
+        field: The seared field.
+        where: The phrase, or the flag, for a refusal to name.
+    """
+
+    by: Place | Flag
+    words: tuple[Token, ...]
+    values: tuple[Token, ...]
+    kind: Kind
+    field: Field
+    where: str
 
 
 @dataclass(slots=True)
@@ -134,6 +167,7 @@ class _Walker:
 
     tree: Tree
     line: str
+    names: Mapping[str, Resolver]
 
     def walk(self) -> Reading:
         tokens = split(self.line)
@@ -145,8 +179,10 @@ class _Walker:
             msg = 'no command: the line has no words'
             raise self.refuse(msg, suggestions=list(self.tree.root.words))
         end, slots = self._walk_words(words)
-        given = self._slots_given(end, slots)
-        given.update(self._flags_given(end, flags, words))
+        specs = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
+        fields = {**self._slot_fields(end, slots, specs), **self._flag_fields(end, flags, words, specs)}
+        values = self._values(end, fields)
+        given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
         return Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line)
 
     def refuse(  # noqa: PLR0913 -- one refusal, its parts named
@@ -282,52 +318,55 @@ class _Walker:
 
     # --- the values --------------------------------------------------------------------------------------------
 
-    def _slots_given(self, end: End, slots: list[tuple[Token, ...]]) -> dict[str, Given]:
-        """Each slot's words, read by its kind: one word, a list of them, or the rest of the line, joined."""
+    def _slot_fields(self, end: End, slots: list[tuple[Token, ...]], fields: Mapping[str, Field]) -> dict[str, _Field]:
+        """Each slot's words, as its field's: one word, several, or the rest of the line, joined."""
         found = end.declaration
-        fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
-        where = end.bound.phrase.text
-        given: dict[str, Given] = {}
+        out: dict[str, _Field] = {}
         for place, words in zip(end.places, slots, strict=True):
-            kind, field = found.kind_of(place), fields[place.field]
-            if place.rest and not place.many:
-                value = self._read(kind, field, _joined(self.line, words), where, place.field)
-            else:
-                values = [self._read(kind, field, word, where, place.field) for word in words]
-                value = values if place.many else values[0]
-            given[place.field] = Given(by=place, words=words, value=value)
-        return given
+            values = (_joined(self.line, words),) if place.rest and not place.many else words
+            out[place.field] = _Field(
+                by=place,
+                words=words,
+                values=values,
+                kind=found.kind_of(place),
+                field=fields[place.field],
+                where=end.bound.phrase.text,
+            )
+        return out
 
-    def _flags_given(self, end: End, flags: list[_Said], words: list[Token]) -> dict[str, Given]:
+    def _flag_fields(
+        self, end: End, flags: list[_Said], words: list[Token], fields: Mapping[str, Field]
+    ) -> dict[str, _Field]:
         """Each flag's words, as its field's, once the command is known; a required flag left out is refused."""
         by_name: dict[str, list[_Said]] = defaultdict(list)
         for said in flags:
             by_name[said[0]].append(said)
         found = end.declaration
         takes = self.tree.flags_of(found.cls)
-        fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
-        given: dict[str, Given] = {}
+        out: dict[str, _Field] = {}
         for name, saids in by_name.items():
             flag = takes.get(name)
             if flag is None:
                 raise self._not_taken(end, name, saids[0][1], words)
-            kind, field = found.field_kinds[flag.field], fields[flag.field]
+            field = fields[flag.field]
             if len(saids) > 1 and (flag.arity is Arity.SWITCH or not field.many):
                 msg = f'--{name} is given twice'
                 raise self.refuse(msg, word=saids[1][1], field=flag.field)
-            tokens = tuple(word for _, token, value in saids for word in (token, value) if word is not None)
-            values = [
-                self._read(kind, field, value, f'--{name}', flag.field) for _, _, value in saids if value is not None
-            ]
-            value = (not flag.negated) if flag.arity is Arity.SWITCH else values if field.many else values[0]
-            given[flag.field] = Given(by=flag, words=tokens, value=value)
+            out[flag.field] = _Field(
+                by=flag,
+                words=tuple(word for _, token, value in saids for word in (token, value) if word is not None),
+                values=tuple(value for _, _, value in saids if value is not None),
+                kind=found.field_kinds[flag.field],
+                field=field,
+                where=f'--{name}',
+            )
         for flag in takes.values():
-            if fields[flag.field].required and flag.field not in given:
+            if fields[flag.field].required and flag.field not in out:
                 said = f'{self.line.strip()} --{flag.name}'  # the line as given, the flag added
                 hint = said if flag.arity is Arity.SWITCH else f'{said} <{flag.name}>'
                 msg = f'{_said(words)} needs --{flag.name}'
                 raise self.refuse(msg, field=flag.field, hint=hint)
-        return given
+        return out
 
     def _not_taken(self, end: End, name: str, token: Token, words: list[Token]) -> ReadError:
         """A flag its command doesn't take, with its usage, and its own flags close to the one given."""
@@ -335,13 +374,53 @@ class _Walker:
         near = [f'--{found}' for found in close(name, self.tree.flags_of(end.declaration.cls))]
         return self.refuse(f'{_said(words)} takes no --{name}', word=token, hint=hint, near=near)
 
-    def _read(self, kind: Kind, field: Field, word: Token, where: str, attr: str) -> object:
-        """A word, read by its field's kind; a word it can't read is refused, saying where it stands."""
-        try:
-            return kind.read(word.text, field)
-        except ValueError as e:
-            msg = f'{where}: {e}'
-            raise self.refuse(msg, word=word, field=attr) from None
+    def _values(self, end: End, fields: Mapping[str, _Field]) -> dict[str, object]:
+        """Each field's value, a name's scope read before it; a switch's is ``True``, or ``False`` for ``--no-…``."""
+        values: dict[str, object] = {}
+
+        def read(attr: str) -> None:
+            found = fields[attr]
+            scope = found.kind.scope if isinstance(found.kind, Name) else None
+            if scope is not None and scope in fields and scope not in values:
+                read(scope)  # a declaration refuses scopes that go round, so this ends
+            if not isinstance(found.by, Place) and found.by.arity is Arity.SWITCH:
+                values[attr] = not found.by.negated
+                return
+            read_scope = None if scope is None else self._scope(scope, fields, values)
+            if found.field.many:
+                values[attr] = [self._read(end, found, word, read_scope) for word in found.values]
+            else:
+                values[attr] = self._read(end, found, found.values[0], read_scope)
+
+        for attr in fields:
+            if attr not in values:
+                read(attr)
+        return values
+
+    def _scope(self, scope: str | None, fields: Mapping[str, _Field], values: Mapping[str, object]) -> _Scope | None:
+        """A name's scope, once its field is read; ``None`` when it has none, or the line leaves it out."""
+        value = values.get(scope) if scope is not None else None
+        if scope is None or value is None or isinstance(value, list):
+            return None
+        return scope, str(value), _said(fields[scope].values)
+
+    def _read(self, end: End, found: _Field, word: Token, scope: _Scope | None) -> object:
+        """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
+        kind = found.kind
+        resolver = self.names.get(kind.category) if self.names and isinstance(kind, Name) else None
+        if not isinstance(kind, Name) or resolver is None:
+            try:
+                return kind.read(word.text, found.field)
+            except ValueError as e:
+                msg = f'{found.where}: {e}'
+                raise self.refuse(msg, word=word, field=found.by.field) from None
+        key = resolver.lookup(word.text, None if scope is None else scope[1])
+        if key is not None:
+            return key
+        near = list(resolver.suggest(word.text, None if scope is None else scope[1]))
+        within = '' if scope is None else f' for {scope[0]} {scope[2]!r}'
+        msg = f'{found.where}: no {kind.category} {word.raw!r}{within}'
+        raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(end), near=near)
 
 
 def _flag(token: Token) -> tuple[str, Token | None] | None:

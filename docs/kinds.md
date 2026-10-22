@@ -51,7 +51,8 @@ what one should be (`'soon' is not a span of time: say 90s, 10m, 2h or 1h30m`); 
 ## `Name`
 
 `parsed.Name(category, scope=None)` is one of an app's names: a fleet, a station, a good. Its words read to the
-name's key by what the app gives for its `category`.
+name's key by the resolver the app gives for its `category` with each line ([`names.md`](names.md)); with none,
+as typed.
 
 ```python
 @parsed.parsed
@@ -72,10 +73,11 @@ class FleetDock(FleetCommand):
     station: str | None = parsed.Str(default=None)
 ```
 
-- **`category`** is a name (`fleet`, `station`): what the app's lookups are given by.
+- **`category`** is a name (`fleet`, `station`): what the app's resolvers are given by.
 - **`scope`** names another field of the command, whose value narrows the lookup: `scope='fleet'` looks for a
-  station within the fleet's system. It must name a field of every command that reads by it, other than the field
-  itself, or the command is refused. An entry a base declares but a command never reads by isn't held to it.
+  station within the fleet's reach, the resolver given the fleet's key. It must name a field of every command that
+  reads by it, other than the field itself, and a command's scopes mustn't go round, or the command is refused. An
+  entry a base declares but a command never reads by isn't held to it.
 
 ## The default kinds
 

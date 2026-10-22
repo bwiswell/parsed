@@ -221,6 +221,10 @@ class TestReading:
     def test_read_goes_on_to_the_instance(self, fixtures):
         assert fixtures.read('fleet f1 mine --for 90s') == farlandia.FleetMine(fleet='f1', for_=timedelta(seconds=90))
 
+    def test_names_by_their_resolvers(self, fixtures):
+        assert fixtures.walk('fleet Prospector mine', names=farlandia.NAMES).given['fleet'].value == 'f1'
+        assert fixtures.read('fleet Prospector mine', names=farlandia.NAMES).fleet == 'f1'
+
     def test_a_line_that_doesn_t_read(self, fixtures):
         with pytest.raises(ReadError, match=r'no command'):
             fixtures.read('frobnicate')

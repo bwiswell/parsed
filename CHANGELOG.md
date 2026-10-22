@@ -7,6 +7,21 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.3 — unreleased
+
+**Names and completion.**
+
+### Added
+
+- **Names read by the app's resolvers:** `tree.read(line, names={'fleet': …})` and `tree.walk(…, names=…)` read
+  each `Name` by the resolver given for its category, to the key it returns. `parsed.Resolver` is the protocol:
+  `lookup(word, scope)`, `suggest(word, scope)` and `options(scope)`. A category with no resolver reads as typed.
+- **Scopes read first:** a scoped name's resolver is given its scope's value, read before it whatever their order on
+  the line; a scope the line leaves out is `None`. A renamed slot reads by its own category.
+- **A word no name answers to** is a `ReadError` at that word, with the resolver's suggestions and the command's
+  usage.
+- **A command whose scopes go round is refused** when it's declared.
+
 ## 0.1.2 — 2026-10-21
 
 **Reading a line.** A tree compiles every command's phrases and checks them as a whole, then reads a line to its
