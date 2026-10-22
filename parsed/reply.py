@@ -16,6 +16,7 @@ A :class:`Result` holds what came of a line, however it went:
 - ``ok``, whether it went well, and ``done``, whether its handler ran for real: run to its end, not for a dry run,
   to answer ``--help``, or to stop at a question;
 - ``asks``, the question it stopped at, unanswered or answered no;
+- ``met``, for a line that waits (``--until``), whether its reply met every condition;
 - ``reply``, the ``REPLY`` its handler returned;
 - ``text``, for people: the reply's ``str()`` (a reply class may define ``__str__``; seared leaves it free), the
   text the handler returned, the command's usage for ``--help``, the question it stopped at, or the error's message;
@@ -95,6 +96,7 @@ class Result:
         done: Whether its handler ran for real: to its end, not for a dry run, to answer ``--help``, or to stop at a
             question.
         asks: The question it stopped at, unanswered or answered no; ``None`` if none.
+        met: Whether its reply met every ``--until`` condition; ``None`` for a line that doesn't wait.
         reply: The ``REPLY`` its handler returned, or ``None``.
         text: For people: the reply's ``str()``, the handler's text, the usage, the question, or the error's message.
         error: What went wrong, as data: ``{'error': kind, 'message': …}`` and its parts; ``None`` if nothing did.
@@ -106,6 +108,7 @@ class Result:
     ok: bool = True
     done: bool = False
     asks: str | None = None
+    met: bool | None = None
     reply: Seared | None = None
     text: str | None = None
     error: Mapping[str, object] | None = None
@@ -126,6 +129,7 @@ class Result:
             'ok': self.ok,
             'done': self.done,
             'asks': self.asks,
+            'met': self.met,
             'reply': None if self.reply is None else type(self.reply).dump(self.reply),
             'text': self.text,
             'error': None if self.error is None else dict(self.error),

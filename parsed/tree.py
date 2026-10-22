@@ -52,6 +52,7 @@ from ._walk._hints import usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
+from .wait import FLAGS as WAIT_FLAGS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -126,7 +127,9 @@ class Tree:
         under: The prefix, its words separated by single spaces; ``''`` for none.
         root: Where every line's walk begins.
         top: Where every phrase begins: the node after the prefix's words, or the root.
-        flags: Every flag's name, and whether it takes a value, across the tree.
+        flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until`` and
+            ``--timeout``) among them when a command can wait.
+        waits: Whether any of its commands can wait (:mod:`parsed.wait`).
 
     Raises:
         DeclarationError: A command's declaration doesn't check, two phrases would read a line two ways, a flag
@@ -147,11 +150,21 @@ class Tree:
             self.top = self.top.words.setdefault(word, Node())
         self._flags: dict[type, Mapping[str, Flag]] = {}
         arities: dict[str, tuple[Arity, str]] = {}
+        self.waits = any(found_declaration.can_wait for found_declaration in self.commands)
+        for name in WAIT_FLAGS if self.waits else ():
+            _check_arity(name, Arity.VALUE, 'a wait', arities)
         for found_declaration in self.commands:
             for bound in found_declaration.phrases:
                 for places in _routes(bound):
                     self._insert(found_declaration, bound, places)
             flags = _flags_of(found_declaration)
+            taken = [name for name in WAIT_FLAGS if name in flags]
+            if found_declaration.can_wait and taken:
+                msg = (
+                    f"{found_declaration.cls.__qualname__}: --{taken[0]} is a wait's, on a command that can wait (a "
+                    f'read with a REPLY): give the field a data_key'
+                )
+                raise DeclarationError(msg)
             self._flags[found_declaration.cls] = flags
             for name, flag in flags.items():
                 _check_arity(name, flag.arity, found_declaration.cls.__qualname__, arities)

@@ -68,6 +68,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/app.md`](docs/app.md): a program's trees mounted under prefixes, with their handlers and names.
 - [`docs/context.md`](docs/context.md): what a handler is given beside its command.
 - [`docs/reply.md`](docs/reply.md): what running a line comes to, and its exit code.
+- [`docs/wait.md`](docs/wait.md): a read that waits on its reply.
 - [`docs/doc/index.md`](docs/doc/index.md): commands as data, for the tools that read them, and `parsed check`,
   for an app's CI.
 - [`docs/effect.md`](docs/effect.md): what running a command does.

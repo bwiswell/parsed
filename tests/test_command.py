@@ -293,6 +293,20 @@ class TestExamples:
         assert declaration(Twin).examples == ('log', 'log 40')
 
 
+class TestCanWait:
+    @pytest.mark.parametrize(
+        ('cls', 'waits'),
+        [
+            (farlandia.FleetsShow, True),  # a read with a REPLY
+            (farlandia.Log, False),  # a read with no REPLY
+            (farlandia.FleetMine, False),  # a write
+            (farlandia.FleetCommand, False),  # a base
+        ],
+    )
+    def test_a_read_with_a_reply(self, cls, waits):
+        assert declaration(cls).can_wait is waits
+
+
 class TestInstead:
     def test_an_interactive_command_names_its_agent_form(self):
         found = declaration(farlandia.ShipFit)

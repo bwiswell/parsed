@@ -63,4 +63,4 @@ def test_check_runs_as_a_module():
 def test_its_exit_code_says_whether_there_are_problems():
     found = _run('check', '_support_check.examples')
     assert found.returncode == 1
-    assert len(json.loads(found.stdout)['problems']) == 3
+    assert len(json.loads(found.stdout)['problems']) == 4

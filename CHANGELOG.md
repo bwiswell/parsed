@@ -7,6 +7,25 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.6 — unreleased
+
+**Waiting.**
+
+### Added
+
+- **`--until` on reads:** a command that declares `EFFECT = READ` and a `REPLY` can wait
+  (`declaration(cls).can_wait`). `--until PATH=VALUE`, repeatable, is a condition on its reply in `tooled wait`'s
+  grammar: a dotted path, a whole number stepping into a list, and a value read as JSON if it reads as JSON, else
+  as a string, compared as JSON compares. Each path is checked against the reply's dump schema when the line is
+  read, before anything runs, with what may have been meant. `--timeout` bounds it, a span of time, 30 s by
+  default.
+- **A wait's flags are a tree's** once any of its commands can wait (`tree.waits`): a command that can wait can't
+  name a field for them, and any other command refuses `--until` with the reason, unless a field of its own takes
+  it. A reading's `wait` holds the conditions and the bound (`parsed.wait.Wait`), and completion offers them.
+- **`result.met`:** a session runs a line that waits once, so far, and says whether its reply met every condition;
+  its handler returns its `REPLY`.
+- **`parsed.kinds.span(word)`:** a span of time's seconds, as `Duration` reads one.
+
 ## 0.1.5 — 2026-10-22
 
 **Running commands.** An app mounts trees of commands under prefixes of words, binds the handler each command

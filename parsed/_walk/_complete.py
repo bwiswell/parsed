@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 from parsed.kinds import Name, Named, Pairs
+from parsed.wait import FLAGS as WAIT_FLAGS
 
 from ._terms import RESERVED, Arity, SlotKind
 from ._walker import _ends, _flag, _literal, _taken
@@ -191,6 +192,8 @@ class _Completer:
             if flag is not None:
                 kind = end.declaration.field_kinds[flag.field]
                 found += self._kind(end, kind, _field(end, flag.field), slots, given)
+            elif name in WAIT_FLAGS and end.declaration.can_wait:
+                found += _waits(end, name)
         return found
 
     def _command_flags(self, node: Node, given: Mapping[str, Token | None]) -> list[_Offer]:
@@ -208,6 +211,8 @@ class _Completer:
                     found.append((f'--{name}', True))
             if end.declaration.asks and 'yes' not in given:
                 found.append(('--yes', True))
+            if end.declaration.can_wait:
+                found += [(f'--{name}', True) for name in WAIT_FLAGS if name == 'until' or name not in given]
         return found
 
     def _kind(
@@ -239,6 +244,15 @@ class _Completer:
             text, scope_kind = cast('Token', given[flag.name]).text, found.field_kinds[flag.field]
         resolver = self.names.get(scope_kind.category) if isinstance(scope_kind, Name) else None
         return text if resolver is None else resolver.lookup(text, None) or text
+
+
+def _waits(end: End, name: str) -> list[_Offer]:
+    """What a wait's flag offers: a condition on each of the reply's fields, ``docked=``; or a few bounds."""
+    if name == 'timeout':
+        return [(span, False) for span in ('30s', '1m', '2m', '5m')]
+    reply = end.declaration.reply
+    fields = [] if reply is None else reply.__seared_fields__
+    return [(f'{spec.wire}=', False) for spec in fields]
 
 
 def _field(end: End, attr: str) -> Field:
