@@ -244,13 +244,7 @@ class Duration(Kind):
 
     def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
         """Seconds as a span: hours, minutes and seconds, those that aren't nought (``5400.0`` as ``1h30m``)."""
-        total = float(value)  # ty: ignore[invalid-argument-type] -- a TimeDelta's wire value is a number
-        hours, rest = divmod(total, 3600)
-        minutes, seconds = divmod(rest, 60)
-        seconds = round(seconds, 6)
-        parts = [f'{int(hours)}h' if hours else '', f'{int(minutes)}m' if minutes else '']
-        parts.append(f'{seconds:g}s' if seconds or not (hours or minutes) else '')
-        return [''.join(parts)]
+        return [spell_span(float(value))]  # ty: ignore[invalid-argument-type] -- a TimeDelta's wire value is a number
 
 
 #: What a moment's word is read by, and what one looks like, by its field's type.
@@ -352,6 +346,16 @@ def span(word: str) -> float:
         raise ValueError(msg)
     hours, minutes, seconds = (float(part or 0) for part in found.groups())
     return hours * 3600 + minutes * 60 + seconds
+
+
+def spell_span(seconds: float) -> str:
+    """Seconds as a span of time, as :func:`span` reads one: those of hours, minutes and seconds that aren't nought."""
+    hours, rest = divmod(seconds, 3600)
+    minutes, left = divmod(rest, 60)
+    left = round(left, 6)
+    parts = [f'{int(hours)}h' if hours else '', f'{int(minutes)}m' if minutes else '']
+    parts.append(f'{left:g}s' if left or not (hours or minutes) else '')
+    return ''.join(parts)
 
 
 def default_kind(field: object) -> Kind | None:

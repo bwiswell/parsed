@@ -63,10 +63,20 @@ passes:
 - **else every `interval` seconds** (`app.open(state, interval=…)`, a second by default). An app that signals every
   change opens with `interval=None`, so a wait reads only on a change, never on a poll.
 
-At the bound it stops, reading again only if a change woke it there. The result's `met` says whether the conditions
-were met, and its reply is the last read ([`reply.md`](reply.md)); `session.call` gives that reply. A handler waited
-on returns its `REPLY`, since a wait reads its values. Hooks run once around the whole wait, not around each read,
-and the session stays open for it, so a wait pays the app's opening once.
+At the bound it stops, reading again only if a change woke it there. A handler waited on returns its `REPLY`, since
+a wait reads its values. Hooks run once around the whole wait, not around each read, and the session stays open for
+it, so a wait pays the app's opening once.
+
+## How it ends
+
+| | `session.run` | `session.call` |
+|---|---|---|
+| met | the reply that met them, `met` true, exit `0` | the reply |
+| past the bound | the last reply, `met` false, a `timeout` error, exit `7` | raises `TimedOutError`, its `reply` the last |
+
+Either way, the result's `waited` says how long it waited, in seconds ([`reply.md`](reply.md)). The error names the
+command and every condition: `fleets show {fleet}: docked=true not met within 30s`. A timeout is the line's
+failure, so the on-error hooks see it, and the after hooks don't run.
 
 With placeholders (`--until <until>`, `--timeout <timeout>`), as an example in help says them, a condition is any
 condition and the bound is the default.

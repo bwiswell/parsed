@@ -8,6 +8,7 @@ gave the value.
 |---|---|
 | `ParsedError` | the base of every error below |
 | `DeclarationError` | a command, a tree or an app is declared in a way parsed can't use ([`command.md`](command.md), [`tree.md`](tree.md#what-the-build-refuses), [`app.md`](app.md#what-it-refuses)): it names the class or the mount and what's wrong, and says how to put it right. It's a `TypeError` too, as a mistake in a class's definition is in Python |
+| `TimedOutError` | a wait whose bound passed before its reply met every condition ([`wait.md`](wait.md#waiting)): `fleets show {fleet}: docked=true not met within 30s`, with its last `reply` and how long it `waited`. `session.call` raises it; `session.run` makes it the result's `timeout`, exit 7. It's a `TimeoutError` too |
 | `RenderError` | an instance no phrase of its command can say ([`_walk/_render.md`](_walk/_render.md)): a value holding a double quote, one the app's names don't know, or a class that isn't one of the tree's commands. It's a `ValueError` too |
 | `ReadError` | a line doesn't read ([`_walk/_walker.md`](_walk/_walker.md#what-it-refuses)): a word no command says, a slot left empty, a flag the command doesn't take, a word its kind can't read. Its message says what's wrong, with the words read up to it. It's a `ValueError` too, as a value Python can't read is |
 

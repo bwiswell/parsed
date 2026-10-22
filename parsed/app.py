@@ -59,7 +59,8 @@ from typing import TYPE_CHECKING, Any, NamedTuple, overload
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import Reading, Routes
 from .command import Command, declaration
-from .errors import DeclarationError, ReadError, RenderError
+from .errors import DeclarationError, ReadError, RenderError, TimedOutError
+from .kinds import spell_span
 from .reply import Ask, Result
 from .tree import Tree
 
@@ -567,7 +568,8 @@ class Session[S]:
 
         A line that doesn't read, a value its field refuses, and a handler that fails, has no binding or returns what
         it shouldn't, each comes back as the result's error, none of them raised. A question it stops at is its
-        ``asks``, with nothing done. ``yes`` answers every question yes, as ``--yes`` does.
+        ``asks``, with nothing done. ``yes`` answers every question yes, as ``--yes`` does. A wait says how long it
+        waited (``waited``); past its bound, its error is a ``timeout``, exit 7, with its last reply.
 
         Raises:
             RuntimeError: The session isn't open.
@@ -585,13 +587,27 @@ class Session[S]:
         except ReadError as e:
             return Result(line, said, ok=False, text=str(e), error=e.to_json(), exception=e)
         try:
-            found = await self._handled(routed, command, yes=yes)
+            found, waited = await self._handled(routed, command, yes=yes)
+        except TimedOutError as e:
+            error = {'error': 'timeout', 'message': e.message}
+            return Result(
+                line,
+                said,
+                ok=False,
+                done=True,
+                met=False,
+                waited=e.waited,
+                reply=e.reply,
+                text=e.message,
+                error=error,
+                exception=e,
+            )
         except Exception as e:  # noqa: BLE001 -- a handler's failure is the result's, never the caller's
             message = f'{type(e).__name__}: {e}' if str(e) else type(e).__name__
             return Result(
                 line, said, ok=False, text=message, error={'error': 'handler', 'message': message}, exception=e
             )
-        return _outcome(line, said, found, dry_run='dry-run' in own, wait=routed.reading.wait)
+        return _outcome(routed, found, waited)
 
     async def call(self, line: str, *, yes: bool = False) -> object:
         """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
@@ -611,16 +627,24 @@ class Session[S]:
             LookupError: Its command has no handler.
             ImportError: Its handler's path doesn't import.
             TypeError: Its handler returned something besides its ``REPLY``, text, nothing or an ``Ask``.
+            TimedOutError: A line that waits passed its bound before its reply met every condition: it carries the
+                last reply, and how long it waited.
             Exception: Whatever its handler raises, or its answer.
         """
         self._check_open()
         routed = self.app.walk(line)
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
-        return await self._handled(routed, routed.load(), yes=yes)
+        found, _ = await self._handled(routed, routed.load(), yes=yes)
+        return found
 
-    async def _handled(self, routed: Routed, command: Command, *, yes: bool) -> Seared | str | Ask | None:
-        """Call the handler for ``command`` between its hooks, check what it returned, and ask each question it asks."""
+    async def _handled(
+        self, routed: Routed, command: Command, *, yes: bool
+    ) -> tuple[Seared | str | Ask | None, float | None]:
+        """Call the handler for ``command`` between its hooks, check what it returned, and ask each question it asks.
+
+        A line that waits reads until it's met, or refused past its bound; it gives how long it waited too.
+        """
         cls = routed.command
         handler = routed.mount.handler(cls)
         if handler is None:
@@ -635,20 +659,24 @@ class Session[S]:
                 found = _checked(await _awaited(found.then()), cls)
             return found
 
+        clock, waited = asyncio.get_running_loop(), None
         try:
             for hook in hooks.before:
                 await _awaited(hook(command, ctx))
             wait, change = routed.reading.wait, self._change  # the change held before the read, so none is missed
+            started = clock.time()
             found = await read()
             if wait is not None:
                 found = await self._waited(wait, found, change, read, cls)
+                waited = round(clock.time() - started, 3)
+                _unmet(wait, found, cls, routed.said, waited)
             for hook in hooks.after:
                 await _awaited(hook(command, ctx, found))
         except Exception as error:
             for hook in hooks.on_error:
                 await _awaited(hook(command, ctx, error))
             raise
-        return found
+        return found, waited
 
     async def _waited(
         self,
@@ -796,14 +824,27 @@ def _checked(found: object, cls: type[Command]) -> Seared | str | Ask | None:
     raise TypeError(msg)
 
 
-def _outcome(line: str, said: str, found: Seared | str | Ask | None, *, dry_run: bool, wait: Wait | None) -> Result:
+def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | None) -> Result:
     """What a line came to, from what its handler gave: the question it stopped at, its reply, or its text."""
+    line, said, wait = routed.reading.line, routed.said, routed.reading.wait
+    done = 'dry-run' not in routed.reading.own
     if isinstance(found, Ask):
-        return Result(line, said, asks=found.question, text=found.question)
+        return Result(line, said, asks=found.question, waited=waited, text=found.question)
     if found is None or isinstance(found, str):
-        return Result(line, said, done=not dry_run, text=found)
+        return Result(line, said, done=done, text=found)
     met = None if wait is None else wait.met(found)
-    return Result(line, said, done=not dry_run, met=met, reply=found, text=str(found))
+    return Result(line, said, done=done, met=met, waited=waited, reply=found, text=str(found))
+
+
+def _unmet(wait: Wait, found: Seared | str | Ask | None, cls: type[Command], said: str, waited: float) -> None:
+    """Refuse a wait whose bound passed before its reply met every condition, naming them and the bound."""
+    if isinstance(found, Ask):
+        return
+    reply = _replied(found, cls)
+    if not wait.met(reply):
+        unmet = ' and '.join(condition.text for condition in wait.until)
+        msg = f'{said}: {unmet} not met within {spell_span(wait.timeout)}'
+        raise TimedOutError(msg, reply=reply, waited=waited)
 
 
 def _replied(found: object, cls: type[Command]) -> Seared:

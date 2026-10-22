@@ -976,6 +976,7 @@ class TestWaiting:
             found = await session.run('fleets show f1 --until docked=true')
         assert (found.ok, found.met, found.code, fleet.reads) == (True, True, 0, 1)
         assert found.to_json()['met'] is True
+        assert 0 <= found.waited < 1  # it says how long it waited
 
     async def test_woken_by_a_change_not_a_poll(self, shows):
         fleet = _Fleet()
@@ -993,24 +994,49 @@ class TestWaiting:
         assert found.met
         assert fleet.reads > 2
 
-    async def test_past_the_bound_the_last_reply(self, shows):
+    async def test_past_the_bound_exit_7_with_the_last_reply(self, shows):
         fleet = _Fleet()
         async with shows.open(fleet, interval=0.01) as session:
             found = await session.run('fleets show f1 --until docked=true --timeout 0.05s')
-        assert (found.ok, found.met, found.reply) == (True, False, farlandia.FleetView(fleet='f1'))
+        message = 'fleets show {fleet}: docked=true not met within 0.05s'
+        assert (found.ok, found.done, found.met, found.code) == (False, True, False, 7)
+        assert (found.reply, found.text) == (farlandia.FleetView(fleet='f1'), message)
+        assert found.error == {'error': 'timeout', 'message': message}
+        assert 0.05 <= found.waited < 1
+        assert isinstance(found.exception, parsed.TimedOutError)
         assert fleet.reads > 1
+
+    async def test_every_condition_named(self, shows):
+        async with shows.open(_Fleet()) as session:
+            found = await session.run('fleets show f1 --until docked=true --until fleet=f1 --timeout 0s')
+        assert found.text == 'fleets show {fleet}: docked=true and fleet=f1 not met within 0s'
 
     async def test_no_interval_no_change_one_read(self, shows):
         fleet = _Fleet()
         async with shows.open(fleet, interval=None) as session:
             found = await session.run('fleets show f1 --until docked=true --timeout 0.05s')
-        assert (found.met, fleet.reads) == (False, 1)
+        assert (found.met, found.code, fleet.reads) == (False, 7, 1)
 
     async def test_a_bound_of_nought_reads_once(self, shows):
         fleet = _Fleet()
         async with shows.open(fleet) as session:
             found = await session.run('fleets show f1 --until docked=true --timeout 0s')
-        assert (found.met, fleet.reads) == (False, 1)
+        assert (found.met, found.code, fleet.reads) == (False, 7, 1)
+
+    async def test_call_refuses_it_with_the_last_reply(self, shows):
+        async with shows.open(_Fleet(), interval=None) as session:
+            with pytest.raises(parsed.TimedOutError, match=r'docked=true not met within 0.05s') as caught:
+                await session.call('fleets show f1 --until docked=true --timeout 0.05s')
+        assert caught.value.reply == farlandia.FleetView(fleet='f1')
+        assert 0.05 <= caught.value.waited < 1
+
+    async def test_the_on_error_hooks_see_it(self, shows):
+        seen: list[object] = []
+        shows.after(lambda command, ctx, found: seen.append('after'))
+        shows.on_error(lambda command, ctx, error: seen.append(type(error).__name__))
+        async with shows.open(_Fleet()) as session:
+            await session.run('fleets show f1 --until docked=true --timeout 0s')
+        assert seen == ['TimedOutError']
 
     async def test_a_change_from_another_thread(self, shows):
         fleet = _Fleet()
@@ -1059,7 +1085,9 @@ class TestWaiting:
 
     async def test_none_for_a_line_that_doesn_t_wait(self, shows):
         async with shows.open(_Fleet()) as session:
-            assert (await session.run('fleets show f1')).met is None
+            found = await session.run('fleets show f1')
+        assert (found.met, found.waited) == (None, None)
+        assert found.to_json()['waited'] is None
 
     async def test_refused_before_anything_runs(self, app):
         fleet = _Fleet()
