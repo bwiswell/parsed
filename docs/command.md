@@ -41,6 +41,7 @@ class FleetMine(FleetCommand):
 | `KINDS` | empty | how a field's words are read, by field name ([`kinds.md`](kinds.md)) |
 | `ALIASES` | empty | other names a phrase's slot may fill a field by, slot name to field name: `{'detachment': 'fleet'}` |
 | `EXAMPLES` | `()` | lines that say it, for help and for `parsed check` to read; a `<name>` stands for any value |
+| `STEPS` | `False` | on a chain's base: the commands beneath it are steps, which `then` joins on a line ([chains](#chains)) |
 
 - **Every constant but `PHRASE` is optional, and none is inferred.** A command declares what it knows; nothing is
   required for one tool or another's sake.
@@ -102,6 +103,25 @@ A declaration keeps them as given, as it has no tree to read them with; [`parsed
 one, so an example can't rot unnoticed. A subclass inherits a base's lines as it does any constant, and the check
 reads them as its own, so a subclass with a phrase of its own gives its own.
 
+## Chains
+
+**A chain's base declares `STEPS = True`,** and every command beneath it is a step: a line says several, joined by
+`then`, and they run as one order ([`tree.md`](tree.md#chains), [`app.md`](app.md#chains)):
+
+```python
+@parsed.parsed
+class FleetCommand(parsed.Command):
+    STEPS = True
+    fleet: str = parsed.Str(required=True)
+
+# fleet prospector jump sol then move belt then mine
+```
+
+- **A command beneath it that isn't a step** declares `STEPS = False`, as any constant can be overridden: a
+  setting, or a purchase that asks first.
+- **The base's own fields are the chain's shared fields:** the first step says them, and every step gets them.
+- **`STEPS = True` goes on a base,** a class without a `PHRASE`: on a command, it's refused.
+
 ## Bases
 
 A subclass of `Command` without a `PHRASE` is a base. It can carry fields and constants for the commands beneath
@@ -128,6 +148,7 @@ class HandheldConnect(parsed.Command, HandheldEndpoint):   # HandheldEndpoint: t
 
 - the class, its phrase (`None` for a base) and its extra phrases;
 - its effect (a name normalised to its member), `asks`, `interactive`, `polymorphic`, `instead` and `reply`;
+- `chain`: for a step, its chain's base, the nearest class above it declaring `STEPS = True`; `None` otherwise;
 - its merged `kinds` and `aliases`, read-only, and `field_kinds`: each field's kind, its entry or its type's
   default;
 - `phrases`: `PHRASE` and each extra phrase, bound, each slot to the field it fills;
@@ -136,7 +157,7 @@ class HandheldConnect(parsed.Command, HandheldEndpoint):   # HandheldEndpoint: t
 `is_command` says whether it has a phrase, `can_wait` whether a line may wait on it (a read with a `REPLY`:
 [`wait.md`](wait.md)), and `kind_of(place)` the kind a slot reads by: a slot by an alias's own
 entry, if it has one, else its field's. The result is kept on the class itself, so there's no registry beside
-it.
+it. `parsed.command.is_chain_base(cls)` says whether a class is a chain's base.
 
 What's wrong is a `DeclarationError`, a `ParsedError` and a `TypeError`, naming the class, the constant and how to
 put it right:
@@ -148,6 +169,8 @@ put it right:
 | `EXTRA_PHRASES` on a base | a base has no phrases |
 | `EXAMPLES = 'fleet f1 mine'`, or a line that's empty | a tuple of lines; one alone needs a trailing comma |
 | `EXAMPLES` on a base | a base says nothing |
+| `STEPS = True` on a command, or inherited from one | it goes on a chain's base, a class without a `PHRASE` |
+| `STEPS` not `True` or `False` | |
 | `EFFECT = 'reed'` | expected one of read, write, action |
 | `ASKS` or `INTERACTIVE` not `True` or `False`; `POLYMORPHIC` not either or left out | |
 | `INSTEAD` on a command that isn't interactive, naming itself, a base or a non-command, or another interactive command | it names a form an agent can use, in place of an interactive command |

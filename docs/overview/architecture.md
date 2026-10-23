@@ -33,7 +33,8 @@ seared  <-  zeared
 - **The tree** ([`../tree.md`](../tree.md)): every command's phrases compiled into one trie of words, a literal
   beating a slot, with the checks across commands: no line read two ways, no flag meaning two things.
 - **The walk** ([`../_walk/index.md`](../_walk/index.md)): a line split into words, its flags split off, and its
-  words walked from the tree's root to a `Reading`, each field's words kept for seared to load; completion, what
+  words walked from the tree's root to a `Reading`, each field's words kept for seared to load, a chain's steps
+  read in turn where its shared part ends; completion, what
   may come next on a line being typed; and rendering, an instance back to its line.
 - **The app** ([`../app.md`](../app.md)): a program's trees, each mounted under a prefix of words with its own
   parameters; a line sent to its mount by its first words; the handlers commands run with, bound by callable or by
@@ -54,5 +55,5 @@ seared  <-  zeared
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
   no line can say.
 
-Chains of steps, argv and help arrive in the releases that follow, each adding its part here. What
-each part costs is in [`benchmarks.md`](benchmarks.md).
+A chain's schema and subjects, then argv and help, arrive in the releases that follow, each adding its part
+here. What each part costs is in [`benchmarks.md`](benchmarks.md).

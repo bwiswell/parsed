@@ -21,11 +21,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, cast
 
+from parsed._phrase import Word
+from parsed.errors import ReadError
 from parsed.kinds import Name, Named, Pairs
 from parsed.wait import FLAGS as WAIT_FLAGS
 
-from ._terms import RESERVED, Arity, SlotKind
-from ._walker import _ends, _flag, _literal, _taken
+from ._terms import RESERVED, THEN, Arity, SlotKind
+from ._walker import _ends, _flag, _head, _Later, _literal, _onward, _pieces, _place_of, _shared, _taken, _Walker
 from ._words import Token, split
 
 if TYPE_CHECKING:
@@ -36,6 +38,8 @@ if TYPE_CHECKING:
     from parsed.kinds import Kind
     from parsed.names import PairsResolver, Resolver
     from parsed.tree import Edge, End, Node, Tree
+
+    from ._walker import Reading
 
 #: A candidate, and whether it's a literal word or a flag, which a quoted word never is.
 type _Offer = tuple[str, bool]
@@ -61,7 +65,11 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
     """What may come next on ``text``, a line up to the cursor, as the module's docstring describes."""
     tokens, partial = being_typed(text)
     flagging = partial is not None and not partial.quoted and partial.text.startswith('--')
-    found = _Completer(tree, names or {}, flagging=flagging).offers(tokens)
+    chained = _chained(tree, text, tokens, names or {}) if tree.chains else (tokens, None, [])
+    if chained is None:
+        return Completion(words=[], replace=0 if partial is None else len(text) - partial.start)
+    tokens, later, head = chained
+    found = _Completer(tree, names or {}, flagging=flagging).offers(tokens, later, head)
     said = '' if partial is None else partial.text.lower()
     quoted = partial is not None and partial.quoted
     words: list[str] = []
@@ -71,6 +79,46 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
             continue
         words.append(typed)
     return Completion(words=words, replace=0 if partial is None else len(text) - partial.start)
+
+
+def _chained(
+    tree: Tree, text: str, tokens: list[Token], names: Mapping[str, Resolver]
+) -> tuple[list[Token], _Later | None, _Slots] | None:
+    """A chain's last step being typed: its words, where in the tree they start, and the chain's shared slots.
+
+    The words as they are, for a line that isn't a chain; ``None`` for a chain whose steps so far don't read.
+    """
+    _, joins = _pieces(tree, tokens)
+    if not joins:
+        return tokens, None, []
+    try:
+        before = _Walker(tree, text[: joins[-1].start], names).walk()
+    except ReadError:
+        return None
+    if before.chain is None:  # the `then` is a word of a command that isn't a step
+        return tokens, None, []
+    shared = _shared(before.chain)
+    parts = _head(before.end, shared)[0]
+    after = [token for token in tokens if token.start > joins[-1].start]
+    later = _Later(_place_of(tree, before.end, parts), shared, before.chain)
+    return after, later, _shared_slots(tree, before, parts)
+
+
+def _shared_slots(tree: Tree, first: Reading, parts: int) -> _Slots:
+    """The slots a chain's first step read in its shared part, each with its words.
+
+    A later step's walk holds them before its own, so a name's scope reads from them as it would on one line.
+    """
+    node, found = tree.top, []
+    places = {place.slot: place for place in first.end.places}
+    for part in first.end.bound.phrase.parts[:parts]:
+        if isinstance(part, Word):
+            node = node.words[part.text]
+        elif part.name in places:
+            edge = cast('Edge', node.slot)
+            found.append((edge, first.given[places[part.name].field].words))
+            node = edge.node
+    return found
 
 
 def being_typed(text: str) -> tuple[list[Token], Token | None]:
@@ -88,12 +136,15 @@ class _Completer:
     names: Mapping[str, Resolver]
     flagging: bool
 
-    def offers(self, tokens: list[Token]) -> list[_Offer]:
-        """What may come after ``tokens``, the words before the one being typed."""
+    def offers(self, tokens: list[Token], later: _Later | None = None, head: _Slots | None = None) -> list[_Offer]:
+        """What may come after ``tokens``, the words before the one being typed.
+
+        From the root, or a chain's place for a later step, with the slots its first step read there.
+        """
         if not tokens:
-            return [(word, True) for word in self.tree.root.words]
+            return [(word, True) for word in (self.tree.root.words if later is None else _onward(later.start, later))]
         words, given, pending = self._flags(tokens)
-        walked = self._walk(words)
+        walked = self._walk(words, None if later is None else later.start, head or [])
         if walked is None:
             return []
         node, slots, opened = walked
@@ -109,6 +160,8 @@ class _Completer:
         if node.slot is not None:
             found += self._values(node.slot, slots, given)
         found += [(word, True) for word in node.words]
+        if node.end is not None and node.end.declaration.chain is not None:
+            found.append((THEN, True))  # a step: more may follow it
         return found + self._command_flags(node, given)
 
     def _flags(self, tokens: list[Token]) -> tuple[list[Token], dict[str, Token | None], str | None]:
@@ -136,9 +189,14 @@ class _Completer:
             given[name] = value
         return words, given, None
 
-    def _walk(self, words: list[Token]) -> tuple[Node, _Slots, Edge | None] | None:
-        """Where the words go: the node, the slots on the way, and the slot still taking words at the end, if one is."""
-        node, slots, opened = self.tree.root, [], None
+    def _walk(
+        self, words: list[Token], start: Node | None = None, head: _Slots | None = None
+    ) -> tuple[Node, _Slots, Edge | None] | None:
+        """Where the words go, from the root or ``start``, after the slots ``head`` read before it.
+
+        The node they reach, the slots on the way, and the slot still taking words at the end, if one is.
+        """
+        node, slots, opened = start or self.tree.root, list(head or []), None
         at = 0
         while at < len(words):
             child = _literal(node, words[at])

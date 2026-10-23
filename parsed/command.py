@@ -20,6 +20,8 @@ Constant           Default                      What it says
                                                 (``{'detachment': 'fleet'}``)
 ``EXAMPLES``       ``()``                       lines that say it, for help and for ``parsed check`` to read;
                                                 ``<name>`` stands for any value
+``STEPS``          ``False``                    on a chain's base: its commands are steps, which ``then`` joins
+                                                on a line; a command beneath it that isn't one says ``False``
 =================  ===========================  ==============================================================
 
 Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherited like any class attribute, so a base
@@ -69,6 +71,7 @@ class Command(Seared):
     KINDS: ClassVar[Mapping[str, Kind]] = MappingProxyType({})
     ALIASES: ClassVar[Mapping[str, str]] = MappingProxyType({})
     EXAMPLES: ClassVar[tuple[str, ...]] = ()
+    STEPS: ClassVar[bool] = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +89,8 @@ class Declaration:
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
         examples: Its ``EXAMPLES``, lines that say it.
+        chain: The chain it's a step of: the nearest base that declares ``STEPS = True``; ``None`` when it isn't a
+            step, and for a base.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
         aliases: ``ALIASES``, merged likewise: a slot's name, to the field it fills.
         field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
@@ -104,6 +109,7 @@ class Declaration:
     instead: type[Command] | None
     reply: type[Seared] | None
     examples: tuple[str, ...]
+    chain: type[Command] | None
     kinds: Mapping[str, Kind]
     aliases: Mapping[str, str]
     field_kinds: Mapping[str, Kind]
@@ -169,6 +175,7 @@ def _read(cls: type) -> Declaration:
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
         examples=_examples(cls, name, phrase),
+        chain=_chain(cls, name, phrase),
         kinds=kinds,
         aliases=aliases,
         field_kinds=field_kinds,
@@ -286,6 +293,29 @@ def _flag(cls: type[Command], name: str, constant: str) -> bool:
         msg = f'{name}.{constant} = {value!r}: True or False'
         raise DeclarationError(msg)
     return value
+
+
+def _chain(cls: type[Command], name: str, phrase: str | None) -> type[Command] | None:
+    """The chain a command is a step of: the nearest class that declares ``STEPS = True``, which is a base."""
+    if not _flag(cls, name, 'STEPS') or phrase is None:
+        return None
+    base = next(found for found in cls.__mro__ if 'STEPS' in vars(found))
+    if issubclass(base, Command) and base is not cls and base.PHRASE is None:
+        return base
+    said = name if base is cls else f'{name}, through {base.__qualname__},'
+    msg = (
+        f"{said} declares STEPS = True on a command: it goes on a chain's base, a subclass of parsed.Command "
+        f'without a PHRASE, and the commands beneath it are its steps'
+    )
+    raise DeclarationError(msg)
+
+
+def is_chain_base(cls: object) -> bool:
+    """Whether ``cls`` is a chain's base: a subclass of :class:`Command` without a ``PHRASE``, declaring the steps.
+
+    It declares ``STEPS = True`` itself, so the commands beneath it are its steps.
+    """
+    return isinstance(cls, type) and issubclass(cls, Command) and vars(cls).get('STEPS') is True and cls.PHRASE is None
 
 
 def _polymorphic(cls: type[Command], name: str) -> bool | None:

@@ -73,6 +73,28 @@ log {n}: must be >= 1, got 0
 
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
 
+## Chains
+
+A chain's steps (the commands beneath a base declaring `STEPS = True`: [`command.md`](command.md#chains)) are said
+on one line, joined by `then`:
+
+```python
+reading = tree.walk('fleet prospector jump sol then move belt then mine')
+[step.command for step in reading.steps]   # [FleetJump, FleetMove, FleetMine]
+reading.phrase                             # 'fleet {fleet} jump {system} then move {to} then mine'
+```
+
+- **The line is cut at each unquoted `then`,** never at a flag's value or after `--`. The first piece is read as
+  any line is. A piece after `then` is read where the first step's shared part ends: its phrase up to its last slot
+  of the base's own fields (`fleet {fleet}`, or a twin's `detachment {detachment}`). So a later step says only its
+  own words, and its shared fields are the first step's.
+- **`then` only joins steps:** where the first piece isn't a step, the line is read as one command, `then` a word
+  of it (`say hello then goodbye`). A step's phrase can't say `then`.
+- **Refused:** `then` with no step on one side, a first piece that isn't a step where the line doesn't read as one
+  command, a later step that isn't one of the chain's, and a wait (`--until`, `--watch`) in a chain.
+
+`tree.chains` holds each chain's base, to its steps among the tree's commands.
+
 ## Completing a line
 
 `tree.complete(text, names=…)` offers what may come next on a line being typed, up to the cursor: the words that
@@ -129,6 +151,7 @@ Each is a `DeclarationError` naming the commands and the phrases:
 | a flag name that isn't lowercase words (`--Count`) | give the field a `data_key` |
 | a field whose flag is one of parsed's own: `--help`, `--json`, `--yes`, `--dry-run` | parsed takes them for every command |
 | a field whose flag is `--until`, `--timeout`, `--watch` or `--count`, on a command that can wait | a wait takes them there |
+| a step whose phrase says `then` | it joins a chain's steps |
 
 A command whose own declaration doesn't check is refused as `declaration` refuses it
 ([`command.md`](command.md#declarationcls)).

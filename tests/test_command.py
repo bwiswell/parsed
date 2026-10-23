@@ -12,7 +12,7 @@ import pytest
 import seared
 
 import parsed
-from parsed.command import Command, Declaration, declaration
+from parsed.command import Command, Declaration, declaration, is_chain_base
 from parsed.effect import Effect
 from parsed.errors import DeclarationError
 
@@ -30,6 +30,7 @@ class TestDefaults:
         assert Command.REPLY is None
         assert dict(Command.KINDS) == {}
         assert Command.EXAMPLES == ()
+        assert Command.STEPS is False
 
     def test_the_base_declares_nothing(self):
         found = declaration(Command)
@@ -44,6 +45,7 @@ class TestDefaults:
             instead=None,
             reply=None,
             examples=(),
+            chain=None,
             kinds=MappingProxyType({}),
             aliases=MappingProxyType({}),
             field_kinds=MappingProxyType({}),
@@ -305,6 +307,50 @@ class TestCanWait:
     )
     def test_a_read_with_a_reply(self, cls, waits):
         assert declaration(cls).can_wait is waits
+
+
+class TestSteps:
+    @pytest.mark.parametrize(
+        ('cls', 'chain'),
+        [
+            (farlandia.FleetMine, farlandia.FleetCommand),  # beneath the base that declares them
+            (farlandia.FleetJumpNearest, farlandia.FleetCommand),
+            (farlandia.FleetRetreat, None),  # a setting, which says it isn't one
+            (farlandia.FleetCommand, None),  # the base itself
+            (farlandia.Log, None),
+        ],
+    )
+    def test_a_step_s_chain(self, cls, chain):
+        assert declaration(cls).chain is chain
+
+    def test_a_chain_s_base(self):
+        assert is_chain_base(farlandia.FleetCommand)
+        assert not is_chain_base(farlandia.FleetMine)
+        assert not is_chain_base(farlandia.Log)
+        assert not is_chain_base('fleet')
+
+    def test_steps_declared_on_a_command_are_refused(self):
+        with pytest.raises(
+            DeclarationError, match=r"Declared declares STEPS = True on a command: it goes on a chain's"
+        ):
+            declaration(_declared(STEPS=True))
+
+    def test_or_inherited_from_one(self):
+        @parsed.parsed
+        class Ordered(parsed.Command):
+            PHRASE = 'order'
+            STEPS = True
+
+        @parsed.parsed
+        class Reordered(Ordered):
+            PHRASE = 'reorder'
+
+        with pytest.raises(DeclarationError, match=r'Reordered, through .*Ordered, declares STEPS = True on a command'):
+            declaration(Reordered)
+
+    def test_steps_true_or_false(self):
+        with pytest.raises(DeclarationError, match=r"Declared\.STEPS = 'yes': True or False"):
+            declaration(_declared(STEPS='yes'))
 
 
 class TestInstead:

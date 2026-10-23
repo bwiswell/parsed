@@ -86,6 +86,26 @@ app that gathers several packages imports none of their runtimes to read a line 
 `app.handler(Cls)` is the app's own. Looking up a path that doesn't import, or names nothing in its module, raises
 an `ImportError` naming the command and the path; one that names something that isn't callable, a `TypeError`.
 
+## Chains
+
+`app.on_chain(Base, handler)` binds what a chain's steps run with, in every mount that holds them; `mount.on_chain`
+binds one for that mount alone. It's called as `handler(steps, ctx)`, `steps` each step's instance, in order:
+
+```python
+app.on_chain(FleetCommand, orders)       # orders([FleetJump(…), FleetMove(…), FleetMine(…)], ctx)
+```
+
+- **A chain of two steps or more** runs by its chain's handler.
+- **A lone step** runs by its own handler, if it has one (`app.on(FleetMine, …)`), else by its chain's, as a chain
+  of one: so a step needs no handler of its own.
+- **The chain's base stands for it:** hooks that name the base (`app.before(hook, FleetCommand)`) run for its
+  chains, given the steps, and its reply is checked against the base's `REPLY`. A result's `command` is the chain's
+  phrase (`fleet {fleet} jump {system} then move {to} then mine`).
+- **Every step is loaded before any runs,** so a value one step's field refuses refuses the line, exit 4.
+
+`app.chain_handler(Base)` and `mount.chain_handler(Base)` look one up. A chain with no handler is a `LookupError`,
+as a command with none is.
+
 ## Hooks
 
 Hooks run around each command's handler, for what every command shares: an audit line, a timer, a check:
@@ -185,7 +205,8 @@ Each is a `DeclarationError`, made when the app is put together:
 | an `under` that isn't words (`'Relay'`, `'relay {x}'`) | a prefix is words, as a phrase's are |
 | a mount that would make a line read two ways | it names both mounts and the words they share |
 | `on` of a class that isn't a command, or a handler that isn't a callable or a path (`'pkg.module:function'`) | |
-| `before`, `after` or `on_error` of a hook that isn't callable, or for a class that isn't a command | |
+| `before`, `after` or `on_error` of a hook that isn't callable, or for a class that isn't a command or a chain's base | |
+| `on_chain` of a class that isn't a chain's base; `mount.on_chain` of a chain none of whose steps it holds | |
 | `mount.on` of a command the mount doesn't hold | bind it on the app, or on the mount that has it |
 | a second handler for a command, or a second resolver for a category, on the app or on one mount | bind each once |
 | `names` of a category that isn't a name, or a resolver without `lookup`, `suggest` and `options` | |
