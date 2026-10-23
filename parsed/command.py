@@ -22,6 +22,8 @@ Constant           Default                      What it says
                                                 ``<name>`` stands for any value
 ``STEPS``          ``False``                    on a chain's base: its commands are steps, which ``then`` joins
                                                 on a line; a command beneath it that isn't one says ``False``
+``MOVES``          ``False``                    on a step: the field that says where it takes its chain
+                                                (``'to'``), or ``True`` for somewhere the line doesn't say
 =================  ===========================  ==============================================================
 
 Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherited like any class attribute, so a base
@@ -72,6 +74,7 @@ class Command(Seared):
     ALIASES: ClassVar[Mapping[str, str]] = MappingProxyType({})
     EXAMPLES: ClassVar[tuple[str, ...]] = ()
     STEPS: ClassVar[bool] = False
+    MOVES: ClassVar[str | bool] = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,8 @@ class Declaration:
         examples: Its ``EXAMPLES``, lines that say it.
         chain: The chain it's a step of: the nearest base that declares ``STEPS = True``; ``None`` when it isn't a
             step, and for a base.
+        moves: Where a step takes its chain: the field that says so, ``True`` for somewhere the line doesn't say,
+            or ``False`` when it stays where it is.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
         aliases: ``ALIASES``, merged likewise: a slot's name, to the field it fills.
         field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
@@ -110,6 +115,7 @@ class Declaration:
     reply: type[Seared] | None
     examples: tuple[str, ...]
     chain: type[Command] | None
+    moves: str | bool
     kinds: Mapping[str, Kind]
     aliases: Mapping[str, str]
     field_kinds: Mapping[str, Kind]
@@ -163,7 +169,8 @@ def _read(cls: type) -> Declaration:
     kinds = _kinds(cls)
     aliases = _aliases(cls)
     binding = _bind(cls, name, phrase=phrase, extra=extra, aliases=aliases, polymorphic=polymorphic)
-    field_kinds = _field_kinds(cls, name, kinds, binding) if phrase is not None else MappingProxyType({})
+    chain = _chain(cls, name, phrase)
+    field_kinds = _field_kinds(cls, name, kinds, binding, chain) if phrase is not None else MappingProxyType({})
     return Declaration(
         cls=cls,
         phrase=phrase,
@@ -175,7 +182,8 @@ def _read(cls: type) -> Declaration:
         instead=_instead(cls, name, interactive=interactive),
         reply=_reply(cls, name),
         examples=_examples(cls, name, phrase),
-        chain=_chain(cls, name, phrase),
+        chain=chain,
+        moves=_moves(cls, name, chain) if phrase is not None else False,
         kinds=kinds,
         aliases=aliases,
         field_kinds=field_kinds,
@@ -310,6 +318,45 @@ def _chain(cls: type[Command], name: str, phrase: str | None) -> type[Command] |
     raise DeclarationError(msg)
 
 
+def _moves(cls: type[Command], name: str, chain: type[Command] | None) -> str | bool:
+    """Where a step takes its chain: a field of its own, of one value; ``True``; or ``False``, staying put."""
+    moves = cls.MOVES
+    if moves is False:
+        return False
+    if not isinstance(moves, (str, bool)):
+        msg = (
+            f"{name}.MOVES = {moves!r}: the field that says where the step takes its chain ('to'), True for "
+            f"somewhere the line doesn't say, or False"
+        )
+        raise DeclarationError(msg)
+    if chain is None:
+        msg = (
+            f"{name}.MOVES says where a step takes its chain, and {name} is no step: declare STEPS on its chain's base"
+        )
+        raise DeclarationError(msg)
+    if moves is True:
+        return True
+    fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
+    if moves not in fields:
+        msg = f'{name}.MOVES = {moves!r} names no field of {name}'
+        raise DeclarationError(msg)
+    if moves in _shared(chain):
+        msg = (
+            f"{name}.MOVES = {moves!r} names a field of {chain.__qualname__}'s, which every step shares: name the "
+            f'field that says where {name} goes'
+        )
+        raise DeclarationError(msg)
+    if fields[moves].many or fields[moves].keyed:
+        msg = f'{name}.MOVES = {moves!r}: {moves} holds several values, and a chain is in one place'
+        raise DeclarationError(msg)
+    return moves
+
+
+def _shared(base: type[Command]) -> frozenset[str]:
+    """A chain's shared fields: those its base declares, which every step has."""
+    return frozenset(spec.attr for spec in getattr(base, '__seared_fields__', ()))
+
+
 def is_chain_base(cls: object) -> bool:
     """Whether ``cls`` is a chain's base: a subclass of :class:`Command` without a ``PHRASE``, declaring the steps.
 
@@ -375,8 +422,13 @@ def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrase
     )
 
 
-def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], binding: Binding) -> Mapping[str, Kind]:
-    """Each field's kind, checked against its field and its phrase, and every scope against the other fields."""
+def _field_kinds(
+    cls: type[Command], name: str, kinds: Mapping[str, Kind], binding: Binding, chain: type[Command] | None
+) -> Mapping[str, Kind]:
+    """Each field's kind, checked against its field and its phrase, and every scope against the other fields.
+
+    A scope that follows its chain's place is a field the chain shares, on a step.
+    """
     found: dict[str, Kind] = {}
     for spec in cls.__seared_fields__:
         kind = kinds.get(spec.attr) or default_kind(spec.field)
@@ -410,6 +462,8 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
                 f'of {name}'
             )
             raise DeclarationError(msg)
+        if kind.follows:
+            _check_follows(name, said, kind, chain)
         scopes.setdefault(field, set()).add(kind.scope)
     around = _scopes_around(scopes)
     if around:
@@ -419,6 +473,23 @@ def _field_kinds(cls: type[Command], name: str, kinds: Mapping[str, Kind], bindi
         )
         raise DeclarationError(msg)
     return MappingProxyType(found)
+
+
+def _check_follows(name: str, said: str, kind: Named, chain: type[Command] | None) -> None:
+    """Refuse a scope that follows a chain's place where there's no chain, or that isn't a field the chain shares."""
+    if chain is None:
+        msg = (
+            f"{name}: {said!r} follows its scope along a chain, and {name} is no step: declare STEPS on its chain's "
+            f'base, or leave follows off'
+        )
+        raise DeclarationError(msg)
+    if kind.scope not in _shared(chain):
+        shared = ', '.join(sorted(_shared(chain))) or 'none'
+        msg = (
+            f'{name}: {said!r} follows its scope along a chain, so its scope is a field the chain shares, which '
+            f"{kind.scope!r} isn't: {chain.__qualname__}'s are {shared}"
+        )
+        raise DeclarationError(msg)
 
 
 def _check_forms(cls: type[Command], name: str, read: list[tuple[str, str, Kind]], binding: Binding) -> None:

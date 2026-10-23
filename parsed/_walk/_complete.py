@@ -4,7 +4,8 @@
 come next, each matching the word being typed, case aside:
 
 - **a slot's values:** its kind's literal words, its own offers (an ``Enum``'s values, ``true`` and ``false``, a few
-  spans of time), and for a name, the ``options`` of the resolver for its category, given its scope;
+  spans of time), and for a name, the ``options`` of the resolver for its category, given its scope: in a chain's
+  later step, for a scope that follows the chain, where its steps so far have moved it;
 - **the literal words** that may come next;
 - **the command's flags,** once the line says a whole command: those not yet given (a list's again), and ``--yes``
   for one that asks first. While a flag is being typed before then, the flags of every command the line may be;
@@ -27,7 +28,21 @@ from parsed.kinds import Name, Named, Pairs
 from parsed.wait import FLAGS as WAIT_FLAGS
 
 from ._terms import RESERVED, THEN, Arity, SlotKind
-from ._walker import _ends, _flag, _head, _Later, _literal, _onward, _pieces, _place_of, _shared, _taken, _Walker
+from ._walker import (
+    _ends,
+    _flag,
+    _head,
+    _Later,
+    _literal,
+    _Moved,
+    _moved,
+    _onward,
+    _pieces,
+    _place_of,
+    _shared,
+    _taken,
+    _Walker,
+)
 from ._words import Token, split
 
 if TYPE_CHECKING:
@@ -69,7 +84,8 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
     if chained is None:
         return Completion(words=[], replace=0 if partial is None else len(text) - partial.start)
     tokens, later, head = chained
-    found = _Completer(tree, names or {}, flagging=flagging).offers(tokens, later, head)
+    moved = None if later is None else later.moved
+    found = _Completer(tree, names or {}, flagging=flagging, moved=moved).offers(tokens, later, head)
     said = '' if partial is None else partial.text.lower()
     quoted = partial is not None and partial.quoted
     words: list[str] = []
@@ -86,7 +102,8 @@ def _chained(
 ) -> tuple[list[Token], _Later | None, _Slots] | None:
     """A chain's last step being typed: its words, where in the tree they start, and the chain's shared slots.
 
-    The words as they are, for a line that isn't a chain; ``None`` for a chain whose steps so far don't read.
+    Where it starts holds where the steps so far have moved the chain. The words as they are, for a line that isn't a
+    chain; ``None`` for a chain whose steps so far don't read.
     """
     _, joins = _pieces(tree, tokens)
     if not joins:
@@ -100,7 +117,10 @@ def _chained(
     shared = _shared(before.chain)
     parts = _head(before.end, shared)[0]
     after = [token for token in tokens if token.start > joins[-1].start]
-    later = _Later(_place_of(tree, before.end, parts), shared, before.chain)
+    moved = None
+    for step in before.steps:
+        moved = _moved(step, moved)
+    later = _Later(_place_of(tree, before.end, parts), shared, before.chain, moved)
     return after, later, _shared_slots(tree, before, parts)
 
 
@@ -130,11 +150,12 @@ def being_typed(text: str) -> tuple[list[Token], Token | None]:
 
 @dataclass(slots=True)
 class _Completer:
-    """One line's completion by a tree."""
+    """One line's completion by a tree; ``moved``, where a chain's steps before the one being typed have moved it."""
 
     tree: Tree
     names: Mapping[str, Resolver]
     flagging: bool
+    moved: _Moved | None = None
 
     def offers(self, tokens: list[Token], later: _Later | None = None, head: _Slots | None = None) -> list[_Offer]:
         """What may come after ``tokens``, the words before the one being typed.
@@ -285,9 +306,14 @@ class _Completer:
         return found
 
     def _scope(self, end: End, kind: Kind, slots: _Slots, given: Mapping[str, Token | None]) -> str | None:
-        """A named kind's scope, from the words the line gives its field so far, read by its own resolver."""
+        """A named kind's scope, from the words the line gives its field so far, read by its own resolver.
+
+        For a scope that follows its chain, once the chain has moved, where it moved to.
+        """
         if not isinstance(kind, Named) or kind.scope is None:
             return None
+        if kind.follows and self.moved is not None:
+            return self.moved.key
         found = end.declaration
         said = {place.field: (place, words) for place, (_, words) in zip(end.places, slots, strict=False)}
         if kind.scope in said:

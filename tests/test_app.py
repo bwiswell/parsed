@@ -1319,6 +1319,26 @@ class TestChains:
             'fleet {fleet} jump {system} then move {to} then mine',
         )
 
+    async def test_each_step_s_names_where_the_fleet_will_be(self, game):
+        for category in ('system', 'site', 'station'):
+            game.names(category, farlandia.NAMES[category])
+        orders = _Orders()
+        async with game.open(orders) as session:
+            found = await session.run('fleet Prospector jump sol then move "Sol Belt" then mine')
+            refused = await session.run('fleet Prospector jump sol then move Vesta')
+        assert orders.sent == [
+            [
+                farlandia.FleetJump(fleet='f1', system='sol'),
+                farlandia.FleetMove(fleet='f1', to='sol-belt'),
+                farlandia.FleetMine(fleet='f1'),
+            ]
+        ]
+        assert found.ok
+        assert (refused.code, refused.error and refused.error['message']) == (
+            2,
+            "fleet {fleet} move {to}: no site 'Vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> move <to>`",
+        )
+
     async def test_a_lone_step_as_a_chain_of_one(self, game):
         orders = _Orders()
         async with game.open(orders) as session:

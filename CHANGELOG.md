@@ -22,6 +22,10 @@ lines as it lands, and the entry is dated when that version is released.
 - **Running a chain:** `app.on_chain(Base, handler)` and `mount.on_chain` bind what a chain runs with, as
   `handler(steps, ctx)`. A lone step with no handler of its own runs by its chain's, as a chain of one. Hooks may
   name a chain's base, and a result's `command` is the chain's phrase.
+- **A chain's place:** a step declares `MOVES`, the field that says where it takes its chain
+  (`MOVES = 'system'`), or `MOVES = True` for somewhere the line doesn't say. A name whose kind says `follows=True`
+  (`Name('station', scope='fleet', follows=True)`) is looked for where the fleet will be: after `jump sol`, the
+  resolver is given `sol` as its scope, not the fleet's key. Completion offers names there too.
 
 ## 0.1.6 — 2026-10-22
 

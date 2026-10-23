@@ -265,3 +265,25 @@ class TestChains:
 
     def test_then_as_a_word_of_a_command_that_isn_t_a_step(self, tree):
         assert _words(tree, 'say hello then ') == []
+
+
+class TestChainPlace:
+    # A later step's names, offered where the steps before it have moved the fleet.
+    def test_where_the_fleet_will_be(self, tree):
+        assert _words(tree, 'fleet Prospector dock ', farlandia.NAMES) == [
+            'Vesta',
+            '"Vruba\'a Belt 1"',
+            'nearest',
+            'then',
+        ]
+        assert _words(tree, 'fleet Prospector jump sol then dock ', farlandia.NAMES) == ['Ceres', 'nearest', 'then']
+        line = 'fleet Prospector jump sol then move "Sol Belt" then move '
+        assert _words(tree, line, farlandia.NAMES) == ['Ceres', '"Sol Belt"']
+
+    def test_until_a_step_moves_it(self, tree):
+        offered = _words(tree, 'fleet Prospector mine then dock ', farlandia.NAMES)
+        assert offered == ['Vesta', '"Vruba\'a Belt 1"', 'nearest', 'then']
+
+    def test_somewhere_the_line_doesn_t_say_every_name(self, tree):
+        offered = _words(tree, 'fleet Prospector jump nearest iron then move ', farlandia.NAMES)
+        assert offered == ['Vesta', '"Vruba\'a Belt 1"', '"Vruba Rings"', 'Ceres', '"Sol Belt"']

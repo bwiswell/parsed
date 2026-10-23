@@ -108,6 +108,24 @@ class TestName:
         with pytest.raises(DeclarationError, match=r'a scope is the name of another field'):
             Name('station', scope=scope)
 
+    def test_a_scope_that_follows_its_chain(self):
+        found = Name('station', scope='fleet', follows=True)
+        assert found.follows
+        assert not Name('station', scope='fleet').follows
+        assert found != Name('station', scope='fleet')  # it reads differently in a chain
+
+    def test_follows_is_keyword_only(self):
+        with pytest.raises(TypeError):
+            Name('station', 'fleet', True)  # noqa: FBT003  # ty: ignore[too-many-positional-arguments] -- refused
+
+    def test_follows_needs_a_scope(self):
+        with pytest.raises(DeclarationError, match=r"follows=True\): it follows its scope's place along a chain, so"):
+            Name('station', follows=True)
+
+    def test_follows_true_or_false(self):
+        with pytest.raises(DeclarationError, match=r"Name\('station', follows='yes'\): True or False"):
+            Name('station', scope='fleet', follows='yes')  # ty: ignore[invalid-argument-type] -- what's refused
+
 
 _ID = str(uuid.UUID(int=7))
 

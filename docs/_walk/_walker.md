@@ -35,6 +35,10 @@ resolver for its category** ([`names.md`](../names.md)), when `walk(tree, line, 
 gives the key. The walk first gathers each field's words, then reads them in an order that puts a scope before
 the names it narrows, whatever their order on the line, and gives each resolver its scope's value.
 
+**A chain's place moves on** with each step that declares `MOVES`. A later step's name whose scope follows the
+chain is given that place instead of its field's value, or no scope where a step went somewhere the line doesn't
+say ([`names.md`](../names.md#a-chains-place)). A placeholder is a place the line doesn't say.
+
 ## Placeholders
 
 `walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes
@@ -90,6 +94,7 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
 | gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]` `` | the resolver's |
+| gives a later step a name not where the chain will be | ``fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> dock [<station>]` `` | the resolver's |
 | gives a pair's key no key answers to | `… {variables**}: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
 | gives a pair's value no name answers to | `… {variables**}: no home 'mars'` | the key's resolver's |
 | leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
