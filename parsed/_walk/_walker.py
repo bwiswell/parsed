@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 
     from seared import Field, Seared
 
+    from parsed._phrase import Bound
     from parsed.command import Command
     from parsed.kinds import Kind
     from parsed.names import PairsResolver, Resolver
@@ -821,19 +822,23 @@ def _shared(base: type) -> frozenset[str]:
 
 
 def _head(end: End, shared: Collection[str]) -> tuple[int, int]:
-    """How much of a step's phrase is its chain's: how many parts, and how many of its line's slots among them.
+    """How much of a step's phrase is its chain's: how many parts, and how many of its line's slots among them."""
+    head = head_of(end.bound, shared)
+    slots = {part.name for part in end.bound.phrase.parts[:head] if isinstance(part, Slot)}
+    return head, sum(1 for place in end.places if place.slot in slots)
 
-    A chain's part of a phrase runs up to its last slot of a shared field: ``fleet {fleet}``, or a twin's
-    ``detachment {detachment}``.
+
+def head_of(bound: Bound, shared: Collection[str]) -> int:
+    """How many parts of a step's phrase are its chain's: up to its last slot of a shared field.
+
+    That's ``fleet {fleet}``, or a twin's ``detachment {detachment}``; none, for a phrase that says no shared field.
     """
-    places = {place.slot: place for place in end.bound.places}
-    parts = end.bound.phrase.parts
-    head = 1 + max(
+    places = {place.slot: place for place in bound.places}
+    parts = bound.phrase.parts
+    return 1 + max(
         (at for at, part in enumerate(parts) if isinstance(part, Slot) and places[part.name].field in shared),
         default=-1,
     )
-    slots = {part.name for part in parts[:head] if isinstance(part, Slot)}
-    return head, sum(1 for place in end.places if place.slot in slots)
 
 
 def _flag(token: Token) -> tuple[str, Token | None] | None:

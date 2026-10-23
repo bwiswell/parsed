@@ -24,6 +24,7 @@ def test_it_gathers_its_modules():
         'Token',
         'complete',
         'key',
+        'moved_by',
         'render',
         'split',
         'walk',

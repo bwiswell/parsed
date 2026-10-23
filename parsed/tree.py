@@ -56,7 +56,7 @@ from .wait import FLAGS as WAIT_FLAGS
 from .wait import SWITCHES as WAIT_SWITCHES
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from ._phrase import Bound, Place
     from .names import Resolver
@@ -244,16 +244,19 @@ class Tree:
         """
         return _walk.complete(self, text, names)
 
-    def render(self, command: Command, names: Mapping[str, Resolver] | None = None) -> str:
+    def render(self, command: Command | Sequence[Command], names: Mapping[str, Resolver] | None = None) -> str:
         """The line that says ``command``, which reads back to it: the first of its phrases that can say it.
 
         Args:
-            command: An instance of one of the tree's commands.
+            command: An instance of one of the tree's commands; or a chain's steps, in order, said on one line
+                joined by ``then``.
             names: The app's resolvers, by category: with them, a phrase's names must be keys they know, so a
-                polymorphic command is said by the twin its value belongs to.
+                polymorphic command is said by the twin its value belongs to. A step's are known where the chain
+                will be by then.
 
         Raises:
-            RenderError: ``command`` isn't one of the tree's, or none of its phrases can say it.
+            RenderError: ``command`` isn't one of the tree's, or none of its phrases can say it; steps that aren't one
+                chain's, or that don't share its fields' values.
         """
         return _walk.render(self, command, names)
 

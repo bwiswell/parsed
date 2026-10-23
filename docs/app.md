@@ -61,7 +61,7 @@ A line goes to its mount by its first words, then the mount's tree reads the who
 | `app.walk(line, placeholders=False)` | a `Routed`: its `mount`, its `reading` ([`Reading`](_walk/_walker.md#reading)), its `command` class, and `load()` |
 | `app.read(line)` | the command, loaded |
 | `app.complete(text)` | what may come next on a line being typed: its mount's tree's offers, or, short of a mount, the words that may follow |
-| `app.render(command, mount=None)` | the line that says an instance, by its mount's tree, prefix and all |
+| `app.render(command, mount=None)` | the line that says an instance, by its mount's tree, prefix and all; or a chain's steps, in its first step's mount |
 
 A line that reaches no mount is refused as a tree refuses one: `no command 'rela'; did you mean relay?`, or
 `relay: then what? run | validate-config | status`. parsed's own flags (`--yes`, `--json`, …) may stand among the

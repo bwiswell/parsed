@@ -36,4 +36,4 @@ docs among it. Its values are the wire's, not the line's words: a span of time i
 
 Nothing a constrained decoder needs is an `x-` key: they say what the command is, not what the call may hold. The
 document is built in one order, so the same command gives the same bytes every time. A class that isn't a command
-is refused with a `TypeError`.
+is refused with a `TypeError`. A chain's schema, its steps as one tool call, is [`chain_schema`](chains.md)'s.

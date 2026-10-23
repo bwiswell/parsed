@@ -5,7 +5,8 @@ uv run python -m parsed check farm.commands
 ```
 
 `python -m parsed check <target> …` builds the tree of every command in the targets (modules or packages, by name,
-as `Tree.collect` takes them) and checks each command, as `tooled check --no-resolve` checks a protocol in its CI.
+as `Tree.collect` takes them) and checks each command, then each chain, as `tooled check --no-resolve` checks a
+protocol in its CI.
 
 ## What it checks
 
@@ -15,6 +16,7 @@ as `Tree.collect` takes them) and checks each command, as `tooled check --no-res
 | `round-trip` | two instances made from the command's fields, one with only its required fields and one with every field it can give, each render to a line that reads back to it |
 | `example` | each line of its `EXAMPLES` reads to it, and a line with no placeholder loads too |
 | `schema` | `json_schema` builds, takes the command's example, holds as a constrained decoder needs it to, and stays compact |
+| `chain` | each chain's generated chains render to lines that read back to their steps; its schema builds, holds as a decoder needs it to, stays compact, and takes each chain as a call that loads back to its steps |
 
 **The instances are made from each field's type and constraints,** with no generator beside: a string `example`
 (or the first of a few words its lengths and pattern take), a number `1` moved into its bounds, a switch the other
@@ -35,6 +37,17 @@ at the command whose example it is. A line with no placeholder is loaded too, so
   it requires, and loads back to that instance;
 - it stays compact: at most `--max-schema-bytes` (2048 by default), written with no spaces.
 
+**A chain is checked from its steps' instances** ([`chains.md`](chains.md)). Its steps are grouped by the shared
+part their phrase says (`fleet {fleet}`), since a later step reads under the first's. Each group gives two chains:
+every step's instance with only its required fields, and every step's with every field it can give, in the tree's
+order:
+
+- **each renders** to a line (`fleet example mine then dock then jump example …`) that reads back to its steps;
+- **its schema** (`chain_schema`) builds, is a closed object, each step's branch closed and tagged by a `const`, its
+  enums sound, and at most `--max-chain-bytes` (8192 by default: a union of its steps, so more than a command's);
+- **each chain, dumped as a call** (`dump_chain`), has only keys the schema names, each step's only its branch's,
+  each it requires, and loads back to its steps (`load_chain`).
+
 ## The report
 
 The report is JSON on stdout:
@@ -44,7 +57,7 @@ The report is JSON on stdout:
   "targets": ["farm.commands"],
   "ok": false,
   "commands": 3,
-  "checked": {"round-trips": 4, "examples": 5, "schemas": 3},
+  "checked": {"round-trips": 4, "examples": 5, "schemas": 3, "chains": 1},
   "skipped": {},
   "problems": [
     {"check": "example", "command": "farm.commands.Mine", "line": "mien <fleet>",
@@ -53,8 +66,8 @@ The report is JSON on stdout:
 }
 ```
 
-Each problem has its `check`, its `command` by module and name (none for the tree's own), the `line` at fault where
-there's one, and a `message`.
+Each problem has its `check`, its `command` by module and name (a chain's base, for a chain's; none for the tree's
+own), the `line` at fault where there's one, and a `message`. `chains` counts the chains checked.
 
 | Exit | When |
 |---|---|
@@ -62,6 +75,6 @@ there's one, and a `message`.
 | `1` | a problem, in the report |
 | `2` | a usage that doesn't read, or a target that doesn't import: `{"error": "usage", "message": …}` on stderr |
 
-**From Python,** `parsed.doc.check(targets, max_schema_bytes=2048)` gives the same as a `CheckReport`: `ok`, the
-counts, `skipped`, `problems` and `to_json()`. It raises `ImportError` for a target that doesn't import. Each
-problem is a `Problem`: `check`, `message`, `command` and `line`.
+**From Python,** `parsed.doc.check(targets, max_schema_bytes=2048, max_chain_bytes=8192)` gives the same as a
+`CheckReport`: `ok`, the counts, `skipped`, `problems` and `to_json()`. It raises `ImportError` for a target that
+doesn't import. Each problem is a `Problem`: `check`, `message`, `command` and `line`.

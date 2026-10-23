@@ -26,6 +26,16 @@ lines as it lands, and the entry is dated when that version is released.
   (`MOVES = 'system'`), or `MOVES = True` for somewhere the line doesn't say. A name whose kind says `follows=True`
   (`Name('station', scope='fleet', follows=True)`) is looked for where the fleet will be: after `jump sol`, the
   resolver is given `sol` as its scope, not the fleet's key. Completion offers names there too.
+- **A chain as one tool call:** `parsed.doc.chain_schema(tree, Base)` is its shared fields and `steps`, an array of
+  its steps, each tagged by its words after the shared part (`{"step": "jump", "system": "sol"}`), closed, joined
+  by `anyOf`; `x-effect` is the strongest step's, `x-asks` there if any step asks, and `x-moves` and `x-follows` say
+  where the chain moves. `load_chain` reads a call to its steps and `dump_chain` writes them back;
+  `introspect_chain` gives a `ChainDoc`; `chain_keys` gives each step's key, for a policy that allows a chain only
+  when it allows every step. `tree.render(steps)` and `app.render(steps)` write a chain back to its line, each
+  step's names where the fleet will be by then, and a step's value spelled `then` quoted. `CommandDoc` gains
+  `chain` and `moves`.
+- **`parsed check` checks chains:** each chain's steps round-trip through their line and through the chain's schema
+  as a call, the schema at most `--max-chain-bytes` (8192 by default). The report counts them under `chains`.
 
 ## 0.1.6 — 2026-10-22
 
