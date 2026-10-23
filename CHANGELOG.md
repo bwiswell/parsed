@@ -34,6 +34,13 @@ lines as it lands, and the entry is dated when that version is released.
   when it allows every step. `tree.render(steps)` and `app.render(steps)` write a chain back to its line, each
   step's names where the fleet will be by then, and a step's value spelled `then` quoted. `CommandDoc` gains
   `chain` and `moves`.
+- **Subjects:** the words a session tries before a bare line, `app.open(state, subjects=('fleet prospector',))` or
+  `session.use(…)` (from a handler, `ctx.session.use(…)`), so `mine` reads as `fleet prospector mine`. The line as
+  typed is read first; only where its first word begins no command is each subject tried, in turn, the first whose
+  words go on into it reading the line. A result's `line` is the line as read. `app.walk`, `app.read`,
+  `app.complete` and `app.run` take `subjects=` too, `app.subject_of` says which a line reads under, and
+  `session.complete` completes with the session's. A subject is checked: words, no flags, that a command begins
+  with. Subjects stay out of schemas and keys.
 - **`parsed check` checks chains:** each chain's steps round-trip through their line and through the chain's schema
   as a call, the schema at most `--max-chain-bytes` (8192 by default). The report counts them under `chains`.
 

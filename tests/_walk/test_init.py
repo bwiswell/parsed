@@ -23,6 +23,7 @@ def test_it_gathers_its_modules():
         'SlotKind',
         'Token',
         'complete',
+        'goes',
         'key',
         'moved_by',
         'render',

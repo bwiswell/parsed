@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import pytest
 
 import parsed
-from parsed._walk import Completion
+from parsed._walk import Completion, goes, split
 from parsed._walk._complete import being_typed
 from parsed.command import Command
 from parsed.tree import Tree
@@ -287,3 +287,20 @@ class TestChainPlace:
     def test_somewhere_the_line_doesn_t_say_every_name(self, tree):
         offered = _words(tree, 'fleet Prospector jump nearest iron then move ', farlandia.NAMES)
         assert offered == ['Vesta', '"Vruba\'a Belt 1"', '"Vruba Rings"', 'Ceres', '"Sol Belt"']
+
+
+class TestGoes:
+    # Whether words go along a tree as far as they're given, read loosely: for a session's subjects.
+    @pytest.mark.parametrize(
+        ('words', 'goes_on'),
+        [
+            ('fleet prospector', True),  # a slot takes any word
+            ('fleet prospector mine', True),
+            ('detachment scouts dock', False),  # a detachment's only step here is mine
+            ('fleet', True),
+            ('flet', False),
+            ('log 5 more', False),  # left over
+        ],
+    )
+    def test_words_that_go_on(self, tree, words, goes_on):
+        assert goes(tree, split(words)) is goes_on

@@ -97,6 +97,14 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
     return Completion(words=words, replace=0 if partial is None else len(text) - partial.start)
 
 
+def goes(tree: Tree, tokens: list[Token]) -> bool:
+    """Whether ``tokens``, words without flags, go along ``tree`` as far as they're given.
+
+    They're read loosely, each a literal word or a slot's, as completion reads a line.
+    """
+    return _Completer(tree, {}, flagging=False)._walk(tokens) is not None  # noqa: SLF001 -- the walk is this module's
+
+
 def _chained(
     tree: Tree, text: str, tokens: list[Token], names: Mapping[str, Resolver]
 ) -> tuple[list[Token], _Later | None, _Slots] | None:
