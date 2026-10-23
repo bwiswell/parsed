@@ -11,6 +11,8 @@ envelope, the same for every parsed app, however the line went ([`app.md`](app.m
 | `ok` | whether it went well |
 | `done` | whether its handler ran for real: to its end, not for a dry run (`--dry-run`), to answer `--help`, or to stop at a question |
 | `asks` | the question it stopped at, unanswered or answered no; `None` if none |
+| `met` | for a line that waits (`--until`), whether its reply met every condition ([`wait.md`](wait.md)); `None` for one that doesn't |
+| `waited` | for a line that waits, how long it waited, in seconds; `None` for one that doesn't |
 | `reply` | the `REPLY` its handler returned, or `None` |
 | `text` | for people: the reply's `str()`, the text its handler returned, the command's usage for `--help`, the question it stopped at, or the error's message |
 | `error` | what went wrong, as data, `{'error': kind, 'message': …}` and its parts; `None` if nothing did |
@@ -28,7 +30,8 @@ app's state (a width, a mirror) returns the text itself.
 | none | it went well; for `--help`, or a question it stopped at, too | `0` |
 | `usage` | the line doesn't read: the `ReadError`'s own data, with its line, column, word, hint and suggestions | `2` |
 | `validation` | a value its field refuses: the `ReadError`'s own data, with the field | `4` |
-| `handler` | its handler raised, has no binding, or returned something besides its `REPLY`, text or nothing: `{'error': 'handler', 'message': "KeyError: 'nope'"}` | `1` |
+| `timeout` | a wait whose bound passed before its reply met every condition: `{'error': 'timeout', 'message': 'fleets show {fleet}: docked=true not met within 30s'}`, its reply the last read | `7` |
+| `handler` | its handler raised, has no binding, or returned something besides its `REPLY`, text or nothing (a waited-on one, besides its `REPLY`): `{'error': 'handler', 'message': "KeyError: 'nope'"}` | `1` |
 
 The codes are `tooled`'s where the meanings match. A handler's failure is never silent: its message names the
 exception, and the exception itself is kept as `result.exception`.
@@ -69,7 +72,8 @@ writes it:
 
 ```json
 {"command": "fleets show {fleet}", "line": "fleets show f1", "ok": true, "done": true, "asks": null,
- "reply": {"fleet": "f1", "docked": true}, "text": "FleetView(fleet='f1', docked=True)", "error": null}
+ "met": null, "waited": null, "reply": {"fleet": "f1", "docked": true}, "text": "FleetView(fleet='f1', docked=True)",
+ "error": null}
 ```
 
 `parsed.reply.CODES` maps each error kind to its exit code.

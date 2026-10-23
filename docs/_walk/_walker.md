@@ -51,6 +51,7 @@ command. Without `placeholders`, a `<name>` is a word like any other.
 | `given` | each field the line gives, by attribute name: its slots in the phrase's order, then its flags in the line's. A field the line leaves out isn't here, and keeps its default |
 | `own` | parsed's own flags the line gives, by name: `yes`, `json`, … |
 | `line` | the line read |
+| `wait` | its wait, when it gives `--until` on a command that can wait: its conditions and its bound ([`wait.md`](../wait.md)) |
 | `command` | the command class (a property) |
 
 Each of `given` is a `Given`: `by`, the slot (a `Place`) or the flag (a `Flag`) that took the words; `words`, every
@@ -91,6 +92,12 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | gives a pair's value no name answers to | `… {variables**}: no home 'mars'` | the key's resolver's |
 | leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
 | gives a key twice | `… {variables**}: ore is given twice` | |
+| waits on a path its reply hasn't | `--until 'dockd' names no field of FleetView; did you mean 'docked'?` | the reply's fields close to it |
+| gives a condition that isn't one | ``--until: a condition is path=value, … not 'docked' `--until <path>=<value>` `` | |
+| bounds a wait it doesn't give | `--timeout bounds a wait or a watch: give --until or --watch too` | |
+| counts a watch it doesn't give | `--count is how many replies a watch gives: give --watch too` | |
+| counts nothing | `--count: '0' is not a number of replies: say 1 or more` | |
+| waits on a command that can't | ``fleet f1 mine can't wait: --until is for a read, … `fleet <fleet> mine [--for <for>]` `` | |
 
 A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the
 rest of the one command's usage past it (flags and all), or the slot's `<…>` where several lie past it.

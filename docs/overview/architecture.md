@@ -42,6 +42,10 @@ seared  <-  zeared
   it as one envelope, with its exit code ([`../reply.md`](../reply.md)); a handler that asks first, answered by
   `--yes`, the session's answer, or left undone with its question; and hooks before and after each command, and on
   its error, in a stated order.
+- **Waits** ([`../wait.md`](../wait.md)): a read with a `REPLY` takes `--until` conditions on its reply and a
+  `--timeout`, each condition's path checked against the reply's schema before anything runs; a session reads it
+  again on the app's change signal, or on an interval, until they're met or the bound passes. `--watch` streams each
+  reply as it changes.
 - **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
   its arguments as a closed JSON Schema, for the tools that read commands; and `python -m parsed check`, a
   package's commands checked in its CI.
@@ -50,5 +54,5 @@ seared  <-  zeared
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
   no line can say.
 
-Waiting, chains of steps, argv and help arrive in the releases that follow, each adding its part here. What each
-part costs is in [`benchmarks.md`](benchmarks.md).
+Chains of steps, argv and help arrive in the releases that follow, each adding its part here. What
+each part costs is in [`benchmarks.md`](benchmarks.md).

@@ -2,7 +2,7 @@
 
 Every error parsed raises is a :class:`ParsedError`. A line that doesn't read is one error, a :class:`ReadError`,
 whichever part refused it: the walk, a field's kind, or seared, whose ``ValidationError`` comes back as the word that
-gave the value.
+gave the value. A wait whose bound passes is a :class:`TimedOutError`.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from seared import Seared
 
 #: What a :class:`ReadError` is: a line that doesn't read, or a value its field refuses.
 type ReadKind = Literal['usage', 'validation']
@@ -79,6 +81,26 @@ class ReadError(ParsedError, ValueError):
         if self.suggestions:
             out['suggestions'] = list(self.suggestions)
         return out
+
+
+class TimedOutError(ParsedError, TimeoutError):
+    """A wait whose bound passed before its reply met every condition: the last reply, and how long it waited.
+
+    Its message names the command and the conditions: ``fleets show {fleet}: docked=true not met within 30s``. It's
+    a ``TimeoutError`` too, as a wait that runs out is in Python.
+
+    Args:
+        message: The text for people.
+        reply: The last reply read.
+        waited: How long it waited, in seconds.
+    """
+
+    def __init__(self, message: str, *, reply: Seared, waited: float) -> None:
+        """Hold the message, the last reply and the time waited."""
+        super().__init__(message)
+        self.message = message
+        self.reply = reply
+        self.waited = waited
 
 
 class RenderError(ParsedError, ValueError):

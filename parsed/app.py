@@ -33,6 +33,10 @@ yes runs ``then``, which may ask again: ``--yes`` on the line (or ``yes=True``) 
 session's ``answer`` does, if it has one (``app.open(state, answer=parsed.reply.terminal)`` prompts a person). A
 question left unanswered, or answered no, leaves the line undone, its question in the result (``asks``).
 
+**A line that waits** (``--until``, :mod:`parsed.wait`) reads again until its reply meets every condition, or its
+bound passes: at once when the app says its state moved (``session.changed()``), else every ``interval`` seconds
+(``app.open(state, interval=…)``, a second by default; ``None`` for an app that signals every change).
+
 **Hooks run around each command,** in a stated order: ``app.before(hook)``, ``app.after(hook)`` and
 ``app.on_error(hook)`` for every command, or with commands named (``app.before(hook, FleetBuyShip)``), for those
 alone. Before hooks run the app's, then the command's; after and on-error hooks the command's, then the app's; each
@@ -43,23 +47,25 @@ runs the on-error hooks, then goes on.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import inspect
 import re
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, AsyncExitStack
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, NamedTuple, overload
+from typing import TYPE_CHECKING, Any, NamedTuple, cast, overload
 
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import Reading, Routes
 from .command import Command, declaration
-from .errors import DeclarationError, ReadError, RenderError
+from .errors import DeclarationError, ReadError, RenderError, TimedOutError
+from .kinds import spell_span
 from .reply import Ask, Result
 from .tree import Tree
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
     from types import TracebackType
 
     from seared import Seared
@@ -68,6 +74,7 @@ if TYPE_CHECKING:
     from .context import Context
     from .names import Resolver
     from .reply import Answer
+    from .wait import Wait
 
 #: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
 #: is awaited if it's awaitable.
@@ -242,18 +249,34 @@ class App:
         return self._bound.handler(cls)
 
     @overload
-    def open(self, state: None = None, *, verbosity: int = 0, answer: Answer | None = None) -> Session[None]: ...
+    def open(
+        self, state: None = None, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+    ) -> Session[None]: ...
     @overload
     def open[S](
-        self, state: AbstractAsyncContextManager[S], *, verbosity: int = 0, answer: Answer | None = None
+        self,
+        state: AbstractAsyncContextManager[S],
+        *,
+        verbosity: int = 0,
+        answer: Answer | None = None,
+        interval: float | None = 1.0,
     ) -> Session[S]: ...
     @overload
     def open[S](
-        self, state: AbstractContextManager[S], *, verbosity: int = 0, answer: Answer | None = None
+        self,
+        state: AbstractContextManager[S],
+        *,
+        verbosity: int = 0,
+        answer: Answer | None = None,
+        interval: float | None = 1.0,
     ) -> Session[S]: ...
     @overload
-    def open[S](self, state: S, *, verbosity: int = 0, answer: Answer | None = None) -> Session[S]: ...
-    def open(self, state: object = None, *, verbosity: int = 0, answer: Answer | None = None) -> Session[Any]:
+    def open[S](
+        self, state: S, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+    ) -> Session[S]: ...
+    def open(
+        self, state: object = None, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+    ) -> Session[Any]:
         """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
 
         Args:
@@ -263,10 +286,15 @@ class App:
             verbosity: How much handlers should say (``ctx.verbosity``): ``0`` by default, more for more.
             answer: What answers a question a line asks, when ``--yes`` doesn't: yes or no from the question, sync
                 or async (``parsed.reply.terminal`` asks a person). With none, a question is left unanswered.
-        """
-        return Session(self, state, verbosity=verbosity, answer=answer)
+            interval: How often, in seconds, a wait reads again when the app says nothing has changed; ``None`` for
+                an app that calls ``session.changed()`` on every change, so a wait reads only then.
 
-    def run(
+        Raises:
+            ValueError: ``interval`` isn't a positive number of seconds, or ``None``.
+        """
+        return Session(self, state, verbosity=verbosity, answer=answer, interval=interval)
+
+    def run(  # noqa: PLR0913 -- the line, its state, and how it's said, answered and waited on
         self,
         line: str,
         state: object = None,
@@ -274,6 +302,7 @@ class App:
         verbosity: int = 0,
         yes: bool = False,
         answer: Answer | None = None,
+        interval: float | None = 1.0,
     ) -> Result:
         """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
 
@@ -286,6 +315,7 @@ class App:
             verbosity: How much handlers should say, as :meth:`open` takes it.
             yes: Whether to answer every question the line asks yes, as ``--yes`` does.
             answer: What answers a question otherwise, as :meth:`open` takes it.
+            interval: How often a wait reads again, as :meth:`open` takes it.
 
         Raises:
             RuntimeError: It's called inside a running event loop.
@@ -295,7 +325,7 @@ class App:
             raise RuntimeError(msg)
 
         async def once() -> Result:
-            async with self.open(state, verbosity=verbosity, answer=answer) as session:
+            async with self.open(state, verbosity=verbosity, answer=answer, interval=interval) as session:
                 return await session.run(line, yes=yes)
 
         return asyncio.run(once())
@@ -439,17 +469,28 @@ class Session[S]:
         app: The app.
         verbosity: How much handlers should say: ``0`` by default, more for more.
         answer: What answers a question a line asks, when ``--yes`` doesn't; ``None`` leaves it unanswered.
+        interval: How often, in seconds, a wait reads again when nothing has changed; ``None``: only on a change.
     """
 
-    def __init__(self, app: App, state: object, *, verbosity: int, answer: Answer | None) -> None:
+    def __init__(
+        self, app: App, state: object, *, verbosity: int, answer: Answer | None, interval: float | None
+    ) -> None:
         """Hold what to open; nothing is entered until the session opens."""
+        if interval is not None and (
+            isinstance(interval, bool) or not isinstance(interval, int | float) or interval <= 0
+        ):
+            msg = f'interval={interval!r}: how often a wait reads again, a positive number of seconds, or None'
+            raise ValueError(msg)
         self.app = app
         self.verbosity = verbosity
         self.answer = answer
+        self.interval = interval
         self._given = state
         self._state: Any = None
         self._stack: AsyncExitStack | None = None
         self._closed = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._change = asyncio.Event()
 
     def __repr__(self) -> str:
         """The session, by its app and whether it's open."""
@@ -488,6 +529,7 @@ class Session[S]:
             self._state = stack.enter_context(given)
         else:
             self._state = given
+        self._loop = asyncio.get_running_loop()
         self._stack = stack
         return self
 
@@ -502,12 +544,50 @@ class Session[S]:
         if stack is not None:
             await stack.__aexit__(kind, error, traceback)
 
+    def changed(self) -> None:
+        """Say the app's state moved: every wait on the session reads again, at once. From any thread.
+
+        Wire it where the app learns of a change: ``controls.on_change = session.changed``. A session that isn't
+        open has nothing waiting, so it's a no-op there.
+        """
+        loop = self._loop
+        if loop is None or self._stack is None:
+            return
+        if _looping() and asyncio.get_running_loop() is loop:
+            self._wake()
+        else:
+            loop.call_soon_threadsafe(self._wake)
+
+    def _wake(self) -> None:
+        """Set the change every wait holds, and hold a fresh one for the next."""
+        change, self._change = self._change, asyncio.Event()
+        change.set()
+
     async def run(self, line: str, *, yes: bool = False) -> Result:
         """Run ``line`` as :meth:`call` does, and give what came of it: the envelope, its error and exit code among it.
 
         A line that doesn't read, a value its field refuses, and a handler that fails, has no binding or returns what
         it shouldn't, each comes back as the result's error, none of them raised. A question it stops at is its
-        ``asks``, with nothing done. ``yes`` answers every question yes, as ``--yes`` does.
+        ``asks``, with nothing done. ``yes`` answers every question yes, as ``--yes`` does. A wait says how long it
+        waited (``waited``); past its bound, its error is a ``timeout``, exit 7, with its last reply. A line that
+        watches gives its last result here; :meth:`watch` gives each.
+
+        Raises:
+            RuntimeError: The session isn't open.
+        """
+        last: Result | None = None
+        async with contextlib.aclosing(self.watch(line, yes=yes)) as results:
+            async for result in results:
+                last = result
+        return cast('Result', last)  # a line always comes to one result at least
+
+    async def watch(self, line: str, *, yes: bool = False) -> AsyncGenerator[Result]:
+        """Run ``line``, giving what came of it each time its reply changes: a result for each, as ``--watch`` asks.
+
+        A line that watches gives its first reply, then one each time it changes, until its count, its bound, its
+        conditions, or the task running it is cancelled (a signal, at a front end). Each result's ``to_json()`` is a
+        line of a stream, for a tool that reads one (Claude Code's Monitor). Any other line gives its one result, as
+        :meth:`run` does. Nothing the line or its handler does is raised: the last result says how it ended.
 
         Raises:
             RuntimeError: The session isn't open.
@@ -516,22 +596,24 @@ class Session[S]:
         try:
             routed = self.app.walk(line)
         except ReadError as e:
-            return Result(line, ok=False, text=str(e), error=e.to_json(), exception=e)
-        said, own = routed.said, routed.reading.own
-        if 'help' in own:
-            return Result(line, said, text=routed.mount.tree.usage(routed.reading.end))
+            yield _refused(line, None, e)
+            return
+        if 'help' in routed.reading.own:
+            yield Result(line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
+            return
         try:
             command = routed.load()
         except ReadError as e:
-            return Result(line, said, ok=False, text=str(e), error=e.to_json(), exception=e)
+            yield _refused(line, routed.said, e)
+            return
         try:
-            found = await self._handled(routed, command, yes=yes)
+            async with contextlib.aclosing(self._handling(routed, command, yes=yes)) as handling:
+                async for found, waited in handling:
+                    yield _outcome(routed, found, waited)
+        except TimedOutError as e:
+            yield _timed_out(routed, e)
         except Exception as e:  # noqa: BLE001 -- a handler's failure is the result's, never the caller's
-            message = f'{type(e).__name__}: {e}' if str(e) else type(e).__name__
-            return Result(
-                line, said, ok=False, text=message, error={'error': 'handler', 'message': message}, exception=e
-            )
-        return _outcome(line, said, found, dry_run='dry-run' in own)
+            yield _failed(routed, e)
 
     async def call(self, line: str, *, yes: bool = False) -> object:
         """Run the command ``line`` says by its handler, with a fresh context, and give what the handler returns.
@@ -551,16 +633,27 @@ class Session[S]:
             LookupError: Its command has no handler.
             ImportError: Its handler's path doesn't import.
             TypeError: Its handler returned something besides its ``REPLY``, text, nothing or an ``Ask``.
+            TimedOutError: A line that waits passed its bound before its reply met every condition: it carries the
+                last reply, and how long it waited.
             Exception: Whatever its handler raises, or its answer.
         """
         self._check_open()
         routed = self.app.walk(line)
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
-        return await self._handled(routed, routed.load(), yes=yes)
+        found: Seared | str | Ask | None = None
+        async with contextlib.aclosing(self._handling(routed, routed.load(), yes=yes)) as handling:
+            async for each, _ in handling:
+                found = each
+        return found
 
-    async def _handled(self, routed: Routed, command: Command, *, yes: bool) -> Seared | str | Ask | None:
-        """Call the handler for ``command`` between its hooks, check what it returned, and ask each question it asks."""
+    async def _handling(
+        self, routed: Routed, command: Command, *, yes: bool
+    ) -> AsyncGenerator[tuple[Seared | str | Ask | None, float | None]]:
+        """Call the handler for ``command`` between its hooks: what it came to, and for a watch each reply in turn.
+
+        A line that waits reads until it's met, or refused past its bound; each comes with how long it had waited.
+        """
         cls = routed.command
         handler = routed.mount.handler(cls)
         if handler is None:
@@ -568,19 +661,33 @@ class Session[S]:
             raise LookupError(msg)
         hooks, ctx = self.app.hooks(cls), self.context(routed)
         yes = yes or 'yes' in routed.reading.own
-        try:
-            for hook in hooks.before:
-                await _awaited(hook(command, ctx))
+
+        async def read() -> Seared | str | Ask | None:
             found = _checked(await _awaited(handler(command, ctx)), cls)
             while isinstance(found, Ask) and (yes or await self._answered(found.question)):
                 found = _checked(await _awaited(found.then()), cls)
+            return found
+
+        clock = asyncio.get_running_loop()
+        try:
+            for hook in hooks.before:
+                await _awaited(hook(command, ctx))
+            wait, change = routed.reading.wait, self._change  # the change held before the read, so none is missed
+            started = clock.time()
+            found = await read()
+            if wait is None:
+                yield found, None
+            else:
+                waiting = _Waiting(self, wait, read, cls, routed.said, started)
+                async with contextlib.aclosing(waiting.replies(found, change)) as replies:
+                    async for found in replies:
+                        yield found, round(clock.time() - started, 3)
             for hook in hooks.after:
                 await _awaited(hook(command, ctx, found))
         except Exception as error:
             for hook in hooks.on_error:
                 await _awaited(hook(command, ctx, error))
             raise
-        return found
 
     async def _answered(self, question: str) -> bool:
         """Whether the session's answer says yes to ``question``; no, with none."""
@@ -598,6 +705,60 @@ class Session[S]:
         if self._stack is None:
             msg = f'{self!r}: call lines inside `async with app.open(state) as session`'
             raise RuntimeError(msg)
+
+
+@dataclass(slots=True)
+class _Waiting:
+    """A line's wait, as a session reads it: again on a change or the interval, until it's met, counted or bound."""
+
+    session: Session[Any]
+    wait: Wait
+    read: Callable[[], Awaitable[Seared | str | Ask | None]]
+    cls: type[Command]
+    said: str
+    started: float
+
+    async def replies(self, found: Seared | str | Ask | None, change: asyncio.Event) -> AsyncGenerator[Seared | Ask]:
+        """Each reply a watch gives as it changes, or the one a wait meets; the question, if one stops it.
+
+        At the bound it stops, reading again only if a change woke it there. Conditions unmet at the bound are a
+        :class:`~parsed.errors.TimedOutError`, carrying the last reply; a watch with none just ends.
+        """
+        wait, clock = self.wait, asyncio.get_running_loop()
+        deadline = None if wait.timeout is None else self.started + wait.timeout
+        shown, last, met = 0, None, False
+        while True:
+            if isinstance(found, Ask):
+                yield found
+                return
+            reply = _replied(found, self.cls)
+            wire = type(reply).dump(reply)
+            if wait.watch and wire != last:
+                yield reply
+                shown, last = shown + 1, wire
+            met = bool(wait.until) and wait.met(reply)
+            if met or (wait.count is not None and shown >= wait.count):
+                break
+            if not await self._woken(change, deadline):
+                break
+            change, found = self.session._change, await self.read()  # noqa: SLF001 -- the session's own wait
+        if wait.until and not met and (wait.count is None or shown < wait.count):
+            unmet = ' and '.join(condition.text for condition in wait.until)
+            bound = spell_span(cast('float', wait.timeout))
+            msg = f'{self.said}: {unmet} not met within {bound}'
+            raise TimedOutError(msg, reply=reply, waited=round(clock.time() - self.started, 3))
+        if not wait.watch:
+            yield reply
+
+    async def _woken(self, change: asyncio.Event, deadline: float | None) -> bool:
+        """Wait for a change, or the interval, short of the deadline: whether to read again."""
+        clock, interval = asyncio.get_running_loop(), self.session.interval
+        left = None if deadline is None else deadline - clock.time()
+        if left is not None and left <= 0:
+            return False
+        seconds = left if interval is None else interval if left is None else min(left, interval)
+        woke = await _woken(change, seconds)
+        return woke or deadline is None or clock.time() < deadline
 
 
 @dataclass(frozen=True, slots=True)
@@ -702,13 +863,63 @@ def _checked(found: object, cls: type[Command]) -> Seared | str | Ask | None:
     raise TypeError(msg)
 
 
-def _outcome(line: str, said: str, found: Seared | str | Ask | None, *, dry_run: bool) -> Result:
+def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | None) -> Result:
     """What a line came to, from what its handler gave: the question it stopped at, its reply, or its text."""
+    line, said, wait = routed.reading.line, routed.said, routed.reading.wait
+    done = 'dry-run' not in routed.reading.own
     if isinstance(found, Ask):
-        return Result(line, said, asks=found.question, text=found.question)
+        return Result(line, said, asks=found.question, waited=waited, text=found.question)
     if found is None or isinstance(found, str):
-        return Result(line, said, done=not dry_run, text=found)
-    return Result(line, said, done=not dry_run, reply=found, text=str(found))
+        return Result(line, said, done=done, text=found)
+    met = None if wait is None or not wait.until else wait.met(found)
+    return Result(line, said, done=done, met=met, waited=waited, reply=found, text=str(found))
+
+
+def _refused(line: str, said: str | None, error: ReadError) -> Result:
+    """A line that doesn't read, or a value its field refuses: the error's own data."""
+    return Result(line, said, ok=False, text=str(error), error=error.to_json(), exception=error)
+
+
+def _timed_out(routed: Routed, error: TimedOutError) -> Result:
+    """A wait past its bound: the last reply, ``met`` false, and a ``timeout`` error, exit 7."""
+    return Result(
+        routed.reading.line,
+        routed.said,
+        ok=False,
+        done=True,
+        met=False,
+        waited=error.waited,
+        reply=error.reply,
+        text=error.message,
+        error={'error': 'timeout', 'message': error.message},
+        exception=error,
+    )
+
+
+def _failed(routed: Routed, error: Exception) -> Result:
+    """A handler that failed: its exception, named, as the result's ``handler`` error."""
+    message = f'{type(error).__name__}: {error}' if str(error) else type(error).__name__
+    error_data = {'error': 'handler', 'message': message}
+    return Result(routed.reading.line, routed.said, ok=False, text=message, error=error_data, exception=error)
+
+
+def _replied(found: object, cls: type[Command]) -> Seared:
+    """What a waited-on handler returned, if it's its ``REPLY``: refused otherwise, as a wait reads its values."""
+    reply = declaration(cls).reply
+    if reply is None or not isinstance(found, reply):
+        said = 'nothing' if found is None else f'a {type(found).__name__}'
+        what = 'its REPLY' if reply is None else f'its REPLY ({reply.__name__})'
+        msg = f"{cls.__qualname__}'s handler returned {said}: a wait reads {what}, so it returns one"
+        raise TypeError(msg)
+    return found
+
+
+async def _woken(change: asyncio.Event, seconds: float | None) -> bool:
+    """Wait for ``change``, at most ``seconds`` (``None``: as long as it takes): whether it came."""
+    with contextlib.suppress(TimeoutError):
+        async with asyncio.timeout(seconds):
+            await change.wait()
+    return change.is_set()
 
 
 async def _awaited(found: object) -> object:

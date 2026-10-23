@@ -14,6 +14,7 @@ import parsed
 from parsed.command import Command
 from parsed.errors import ReadError
 from parsed.tree import Flag, Tree
+from parsed.wait import Condition, Wait
 
 
 def _command(phrase: str, **fields: object) -> type[Command]:
@@ -350,6 +351,95 @@ class TestPlaceholders:
     def test_its_reading_doesn_t_load(self, tree):
         with pytest.raises(ReadError):
             tree.walk('log <n>', placeholders=True).load()
+
+
+class TestWaits:
+    # A read with a REPLY takes --until and --timeout, read and checked before anything runs.
+    def test_a_condition_and_the_default_bound(self, tree):
+        reading = tree.walk('fleets show f1 --until docked=true')
+        assert reading.wait == Wait((Condition(path=('docked',), value=True, text='docked=true'),), 30.0)
+        assert reading.data() == {'fleet': 'f1'}  # a wait's flags are no field's
+
+    def test_several_conditions_and_a_bound(self, tree):
+        reading = tree.walk('fleets show f1 --until docked=true --timeout 2m --until=fleet=f1')
+        assert [condition.text for condition in reading.wait.until] == ['docked=true', 'fleet=f1']
+        assert reading.wait.timeout == 120.0
+
+    def test_none_without_until(self, tree):
+        assert tree.walk('fleets show f1').wait is None
+        assert tree.walk('fleet f1 mine').wait is None
+
+    @pytest.mark.parametrize(
+        ('line', 'says', 'word'),
+        [
+            (
+                'fleets show f1 --until dockd=true',
+                "--until 'dockd' names no field of FleetView; did you mean 'docked'?",
+                'dockd=true',
+            ),
+            (
+                'fleets show f1 --until docked',
+                (
+                    "--until: a condition is path=value, the path dotted (docked, cargo.iron), not 'docked' "
+                    '`--until <path>=<value>`'
+                ),
+                'docked',
+            ),
+            (
+                'fleets show f1 --timeout 2m',
+                '--timeout bounds a wait or a watch: give --until or --watch too',
+                '--timeout',
+            ),
+            ('fleets show f1 --count 3', '--count is how many replies a watch gives: give --watch too', '--count'),
+            ('fleets show f1 --watch --count 0', "--count: '0' is not a number of replies: say 1 or more", '0'),
+            ('fleets show f1 --watch --count lots', "--count: 'lots' is not a number of replies", 'lots'),
+            ('fleets show f1 --watch --watch', '--watch is given twice', '--watch'),
+            ('fleet f1 mine --watch', "fleet f1 mine can't wait: --watch is for a read", '--watch'),
+            (
+                'fleets show f1 --until docked=true --timeout 1m --timeout 2m',
+                '--timeout is given twice',
+                '--timeout',
+            ),
+            (
+                'fleets show f1 --until docked=true --timeout soon',
+                "--timeout: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m",
+                'soon',
+            ),
+            (
+                'fleet f1 mine --until docked=true',
+                (
+                    "fleet f1 mine can't wait: --until is for a read, a command that declares EFFECT = READ and a "
+                    'REPLY `fleet <fleet> mine [--for <for>]`'
+                ),
+                '--until',
+            ),
+            ('log --timeout 2m', "log can't wait: --timeout is for a read", '--timeout'),
+        ],
+    )
+    def test_refused_before_anything_runs(self, tree, line, says, word):
+        found = _refusal(tree, line)
+        assert str(found).startswith(says)
+        assert found.word == word
+
+    def test_a_path_s_near_names_as_suggestions(self, tree):
+        assert _refusal(tree, 'fleets show f1 --until dockd=true').suggestions == ('docked',)
+
+    def test_placeholders_stand_for_a_condition_and_a_bound(self, tree):
+        reading = tree.walk('fleets show <fleet> --until <until> --timeout <timeout>', placeholders=True)
+        assert reading.wait == Wait((), 30.0)
+        assert tree.walk('fleets show <fleet> --watch --count <count>', placeholders=True).wait == Wait(
+            (), None, watch=True
+        )
+
+    def test_a_watch_with_no_bound_of_its_own(self, tree):
+        assert tree.walk('fleets show f1 --watch').wait == Wait((), None, watch=True)
+        assert tree.walk('fleets show f1 --watch --count 1,000 --timeout 5m').wait == Wait(
+            (), 300.0, watch=True, count=1000
+        )
+
+    def test_a_watch_until_its_conditions_has_their_bound(self, tree):
+        found = tree.walk('fleets show f1 --watch --until docked=true').wait
+        assert (found.watch, found.timeout, len(found.until)) == (True, 30.0, 1)
 
 
 class TestFlags:

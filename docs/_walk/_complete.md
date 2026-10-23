@@ -24,7 +24,10 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | at its first word | the first words of every command |
 | at a slot | its kind's literal words, its own offers (an `Enum`'s values, `true` and `false`, `10m`, `30m` and `1h` for a span of time), and for a name, the `options` of the resolver for its category, given its scope |
 | after a slot or a word | the literal words that may come next |
-| after a whole command | its flags not yet given (a list's again), and `--yes` if it asks first |
+| after a whole command | its flags not yet given (a list's again), `--yes` if it asks first, and `--until` (again), `--timeout`, `--watch` and `--count` (once) if it can wait |
+| at `--until`'s value | a condition on each of the reply's fields: `fleet=`, `docked=` |
+| at `--timeout`'s value | a few bounds: `30s`, `1m`, `2m`, `5m` |
+| at `--count`'s value | a few counts: `1`, `5`, `10` |
 | at a flag being typed, before then | the flags of every command the line may be |
 | at a flag waiting for its value | its values, by its kind |
 | in a `Pairs` field | a key not yet given, then that key's values; and the command's flags not yet given |

@@ -214,3 +214,27 @@ def test_the_word_being_typed(text, before, typing):
     tokens, partial = being_typed(text)
     assert [token.text for token in tokens] == before
     assert (partial.text if partial else None) == typing
+
+
+class TestWaits:
+    def test_a_read_that_can_wait_offers_its_flags(self, tree):
+        assert {'--until', '--timeout'} <= set(_words(tree, 'fleets show f1 --'))
+        assert '--until' not in _words(tree, 'fleet f1 mine --')
+
+    def test_until_again_but_the_bound_once(self, tree):
+        offered = _words(tree, 'fleets show f1 --until docked=true --timeout 1m --')
+        assert '--until' in offered
+        assert '--timeout' not in offered
+
+    def test_a_condition_on_each_of_the_reply_s_fields(self, tree):
+        assert _words(tree, 'fleets show f1 --until ') == ['fleet=', 'docked=']
+        assert _words(tree, 'fleets show f1 --until d') == ['docked=']
+
+    def test_a_watch_and_its_count(self, tree):
+        offered = _words(tree, 'fleets show f1 --')
+        assert {'--watch', '--count'} <= set(offered)
+        assert _words(tree, 'fleets show f1 --watch --count ') == ['1', '5', '10']
+        assert '--watch' not in _words(tree, 'fleets show f1 --watch --')
+
+    def test_a_few_bounds(self, tree):
+        assert _words(tree, 'fleets show f1 --until docked=true --timeout ') == ['30s', '1m', '2m', '5m']

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
+import threading
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import _support_farlandia as farlandia
 import _support_handlers as handlers
@@ -16,6 +19,9 @@ import parsed
 from parsed.app import App, Mount, Routed
 from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.tree import Tree
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.fixture
@@ -933,3 +939,342 @@ class TestHooks:
     def test_refused(self, app, stage, given, message):
         with pytest.raises(DeclarationError, match=message):
             getattr(app, stage)(*given)
+
+
+class _Fleet:
+    """A fake state: a fleet, docked or not, how often it was read, and whom to tell when it moves."""
+
+    def __init__(self, *, docked: bool = False) -> None:
+        self.docked = docked
+        self.reads = 0
+        self.on_change: Callable[[], None] | None = None
+
+    def dock(self) -> None:
+        self.docked = True
+        if self.on_change is not None:
+            self.on_change()
+
+    def drift(self) -> None:
+        """Dock, saying nothing: a state that moves without a signal."""
+        self.docked = True
+
+
+def _show(command, ctx):
+    fleet = ctx.state
+    fleet.reads += 1
+    return farlandia.FleetView(fleet=command.fleet, docked=fleet.docked)
+
+
+class TestWaiting:
+    @pytest.fixture
+    def shows(self, app) -> App:
+        app.on(farlandia.FleetsShow, _show)
+        return app
+
+    async def test_met_at_once(self, shows):
+        fleet = _Fleet(docked=True)
+        async with shows.open(fleet) as session:
+            found = await session.run('fleets show f1 --until docked=true')
+        assert (found.ok, found.met, found.code, fleet.reads) == (True, True, 0, 1)
+        assert found.to_json()['met'] is True
+        assert 0 <= found.waited < 1  # it says how long it waited
+
+    async def test_woken_by_a_change_not_a_poll(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=None) as session:
+            fleet.on_change = session.changed
+            asyncio.get_running_loop().call_later(0.01, fleet.dock)
+            found = await session.run('fleets show f1 --until docked=true --timeout 5s')
+        assert (found.met, found.reply.docked, fleet.reads) == (True, True, 2)
+
+    async def test_read_again_on_the_interval_without_one(self, shows):
+        fleet = _Fleet()  # it moves, and says nothing
+        async with shows.open(fleet, interval=0.01) as session:
+            asyncio.get_running_loop().call_later(0.03, fleet.drift)
+            found = await session.run('fleets show f1 --until docked=true --timeout 5s')
+        assert found.met
+        assert fleet.reads > 2
+
+    async def test_past_the_bound_exit_7_with_the_last_reply(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=0.01) as session:
+            found = await session.run('fleets show f1 --until docked=true --timeout 0.05s')
+        message = 'fleets show {fleet}: docked=true not met within 0.05s'
+        assert (found.ok, found.done, found.met, found.code) == (False, True, False, 7)
+        assert (found.reply, found.text) == (farlandia.FleetView(fleet='f1'), message)
+        assert found.error == {'error': 'timeout', 'message': message}
+        assert 0.05 <= found.waited < 1
+        assert isinstance(found.exception, parsed.TimedOutError)
+        assert fleet.reads > 1
+
+    async def test_every_condition_named(self, shows):
+        async with shows.open(_Fleet()) as session:
+            found = await session.run('fleets show f1 --until docked=true --until fleet=f1 --timeout 0s')
+        assert found.text == 'fleets show {fleet}: docked=true and fleet=f1 not met within 0s'
+
+    async def test_no_interval_no_change_one_read(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=None) as session:
+            found = await session.run('fleets show f1 --until docked=true --timeout 0.05s')
+        assert (found.met, found.code, fleet.reads) == (False, 7, 1)
+
+    async def test_a_bound_of_nought_reads_once(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet) as session:
+            found = await session.run('fleets show f1 --until docked=true --timeout 0s')
+        assert (found.met, found.code, fleet.reads) == (False, 7, 1)
+
+    async def test_call_refuses_it_with_the_last_reply(self, shows):
+        async with shows.open(_Fleet(), interval=None) as session:
+            with pytest.raises(parsed.TimedOutError, match=r'docked=true not met within 0.05s') as caught:
+                await session.call('fleets show f1 --until docked=true --timeout 0.05s')
+        assert caught.value.reply == farlandia.FleetView(fleet='f1')
+        assert 0.05 <= caught.value.waited < 1
+
+    async def test_the_on_error_hooks_see_it(self, shows):
+        seen: list[object] = []
+        shows.after(lambda command, ctx, found: seen.append('after'))
+        shows.on_error(lambda command, ctx, error: seen.append(type(error).__name__))
+        async with shows.open(_Fleet()) as session:
+            await session.run('fleets show f1 --until docked=true --timeout 0s')
+        assert seen == ['TimedOutError']
+
+    async def test_a_change_from_another_thread(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=None) as session:
+            fleet.on_change = session.changed
+            mover = threading.Timer(0.01, fleet.dock)
+            mover.start()
+            found = await session.run('fleets show f1 --until docked=true --timeout 5s')
+            mover.join()
+        assert (found.met, fleet.reads) == (True, 2)
+
+    async def test_a_change_during_a_read_isn_t_missed(self, app):
+        fleet = _Fleet()
+
+        def racing(command, ctx):
+            found = _show(command, ctx)
+            if fleet.reads == 1:
+                fleet.docked = True
+                ctx.session.changed()  # after the reply was made, before the wait waits
+            return found
+
+        app.on(farlandia.FleetsShow, racing)
+        async with app.open(fleet, interval=None) as session:
+            found = await session.run('fleets show f1 --until docked=true --timeout 5s')
+        assert (found.met, fleet.reads) == (True, 2)
+
+    async def test_hooks_once_around_the_wait(self, shows):
+        seen: list[str] = []
+        shows.before(lambda command, ctx: seen.append('before'))
+        shows.after(lambda command, ctx, found: seen.append('after'))
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=0.01) as session:
+            asyncio.get_running_loop().call_later(0.02, fleet.drift)
+            await session.run('fleets show f1 --until docked=true --timeout 5s')
+        assert seen == ['before', 'after']
+        assert fleet.reads > 1
+
+    async def test_call_waits_too(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=None) as session:
+            fleet.on_change = session.changed
+            asyncio.get_running_loop().call_later(0.01, fleet.dock)
+            assert await session.call('fleets show f1 --until docked=true') == farlandia.FleetView(
+                fleet='f1', docked=True
+            )
+
+    async def test_none_for_a_line_that_doesn_t_wait(self, shows):
+        async with shows.open(_Fleet()) as session:
+            found = await session.run('fleets show f1')
+        assert (found.met, found.waited) == (None, None)
+        assert found.to_json()['waited'] is None
+
+    async def test_refused_before_anything_runs(self, app):
+        fleet = _Fleet()
+        app.on(farlandia.FleetsShow, _show)
+        async with app.open(fleet) as session:
+            found = await session.run('fleets show f1 --until dockd=true')
+        assert (found.ok, found.code, fleet.reads) == (False, 2, 0)
+
+    async def test_a_waited_on_handler_returns_its_reply(self, app):
+        app.on(farlandia.FleetsShow, lambda command, ctx: 'docked')
+        async with app.open() as session:
+            found = await session.run('fleets show f1 --until docked=true')
+        assert (found.ok, found.code) == (False, 1)
+        assert found.text == (
+            "TypeError: FleetsShow's handler returned a str: a wait reads its REPLY (FleetView), so it returns one"
+        )
+
+    def test_a_change_with_nothing_open_is_nothing(self, app):
+        session = app.open()
+        session.changed()  # not yet open: nothing waits
+
+    @pytest.mark.parametrize('interval', [0, -1, True, '1s'])
+    def test_an_interval_is_a_positive_number_of_seconds(self, app, interval):
+        with pytest.raises(ValueError, match=r'how often a wait reads again, a positive number of seconds, or None'):
+            app.open(interval=interval)
+
+
+class _Galaxy:
+    """The terminal game's fixture as a fake state: fleets that take a while to dock, and whom to tell."""
+
+    def __init__(self) -> None:
+        self.docked: dict[str, bool] = {'f1': False}
+        self.reads = 0
+        self.on_change: Callable[[], None] | None = None
+
+    def arrive(self, fleet: str) -> None:
+        self.docked[fleet] = True
+        if self.on_change is not None:
+            self.on_change()
+
+
+class TestTheTerminalGameWaiting:
+    async def test_a_fleet_sent_to_dock_waited_on_until_it_does(self):
+        game = App('farlandia')
+        game.names('fleet', farlandia.NAMES['fleet'])
+        game.mount('_support_farlandia')
+
+        def dock(command, ctx):
+            asyncio.get_running_loop().call_later(0.02, ctx.state.arrive, command.fleet)
+            return f'{command.fleet} is on its way'
+
+        def show(command, ctx):
+            ctx.state.reads += 1
+            return farlandia.FleetView(fleet=command.fleet, docked=ctx.state.docked[command.fleet])
+
+        game.on(farlandia.FleetDock, dock)
+        game.on(farlandia.FleetsShow, show)
+        galaxy = _Galaxy()
+        async with game.open(galaxy, interval=None) as session:  # no poll: only the change wakes it
+            galaxy.on_change = session.changed
+            sent = await session.run('fleet Prospector dock nearest')
+            found = await session.run('fleets show Prospector --until docked=true --timeout 2m')
+        assert sent.text == 'f1 is on its way'
+        assert (found.met, found.to_json()['reply'], galaxy.reads) == (True, {'fleet': 'f1', 'docked': True}, 2)
+
+
+class _Moving:
+    """A fake state: a fleet that docks and leaves in turn, saying so each time."""
+
+    def __init__(self) -> None:
+        self.docked = False
+        self.reads = 0
+        self.on_change: Callable[[], None] | None = None
+
+    def move(self) -> None:
+        self.docked = not self.docked
+        if self.on_change is not None:
+            self.on_change()
+
+
+class TestWatching:
+    @pytest.fixture
+    def shows(self, app) -> App:
+        app.on(farlandia.FleetsShow, _show)
+        return app
+
+    async def _watch(self, app: App, line: str, state: object, moves: int = 0, *, interval: float | None = None):
+        """The results of watching ``line``, while the state moves ``moves`` times, once each result is in."""
+        found = []
+        async with app.open(state, interval=interval) as session:
+            state.on_change = session.changed
+            async for result in session.watch(line):
+                found.append(result)
+                if len(found) <= moves:
+                    asyncio.get_running_loop().call_soon(state.move)
+        return found
+
+    async def test_each_reply_as_it_changes_until_its_count(self, shows):
+        found = await self._watch(shows, 'fleets show f1 --watch --count 3', _Moving(), moves=5)
+        assert [result.reply.docked for result in found] == [False, True, False]
+        assert all(result.ok and result.code == 0 and result.met is None for result in found)
+        assert [type(result.waited) for result in found] == [float] * 3
+
+    async def test_one_json_line_each(self, shows):
+        found = await self._watch(shows, 'fleets show f1 --watch --count 2', _Moving(), moves=1)
+        lines = [json.dumps(result.to_json()) for result in found]
+        assert [json.loads(line)['reply'] for line in lines] == [
+            {'fleet': 'f1', 'docked': False},
+            {'fleet': 'f1', 'docked': True},
+        ]
+
+    async def test_only_a_change_is_given(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=0.01) as session:  # reads again and again, the reply the same
+            loop = asyncio.get_running_loop()
+            loop.call_later(0.05, fleet.drift)
+            found = [result async for result in session.watch('fleets show f1 --watch --count 2 --timeout 5s')]
+        assert [result.reply.docked for result in found] == [False, True]
+        assert fleet.reads > 2
+
+    async def test_until_the_bound_without_conditions_is_an_end(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=0.01) as session:
+            found = [result async for result in session.watch('fleets show f1 --watch --timeout 0.05s')]
+        assert [(result.ok, result.code) for result in found] == [(True, 0)]
+
+    async def test_until_its_conditions(self, shows):
+        found = await self._watch(shows, 'fleets show f1 --watch --until docked=true', _Moving(), moves=5)
+        assert [(result.reply.docked, result.met) for result in found] == [(False, False), (True, True)]
+
+    async def test_conditions_unmet_past_the_bound_exit_7(self, shows):
+        fleet = _Fleet()
+        async with shows.open(fleet, interval=0.01) as session:
+            found = [
+                result async for result in session.watch('fleets show f1 --watch --until docked=true --timeout 0.05s')
+            ]
+        assert [(result.ok, result.code) for result in found] == [(True, 0), (False, 7)]
+        assert found[-1].reply == farlandia.FleetView(fleet='f1')
+
+    async def test_cancelled_it_stops(self, shows):
+        fleet = _Fleet()
+        seen = []
+
+        async def watch(session):
+            async for result in session.watch('fleets show f1 --watch'):
+                seen.append(result)  # noqa: PERF401 -- kept as each comes, so a cancel leaves what came before
+
+        async with shows.open(fleet, interval=None) as session:
+            task = asyncio.create_task(watch(session))
+            await asyncio.sleep(0.01)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert len(seen) == 1
+
+    async def test_run_gives_the_last_and_call_its_reply(self, shows):
+        async with shows.open(_Moving(), interval=None) as session:
+            moving = session.state
+            moving.on_change = session.changed
+            asyncio.get_running_loop().call_later(0.01, moving.move)
+            last = await session.run('fleets show f1 --watch --count 2')
+            asyncio.get_running_loop().call_later(0.01, moving.move)
+            reply = await session.call('fleets show f1 --watch --count 2')
+        assert last.reply.docked is True
+        assert reply == farlandia.FleetView(fleet='f1', docked=False)
+
+    async def test_hooks_once_around_the_watch(self, shows):
+        seen = []
+        shows.before(lambda command, ctx: seen.append('before'))
+        shows.after(lambda command, ctx, found: seen.append(('after', found.docked)))
+        await self._watch(shows, 'fleets show f1 --watch --count 3', _Moving(), moves=5)
+        assert seen == ['before', ('after', False)]
+
+    async def test_a_line_that_doesn_t_watch_gives_its_one_result(self, shows):
+        async with shows.open(_Fleet(docked=True)) as session:
+            found = [result async for result in session.watch('fleets show f1 --until docked=true')]
+            refused = [result async for result in session.watch('rela run')]
+        assert [(result.met, result.code) for result in found] == [(True, 0)]
+        assert [result.code for result in refused] == [2]
+
+    async def test_the_terminal_game_s_fleet_as_it_moves(self):
+        game = App('farlandia')
+        game.names('fleet', farlandia.NAMES['fleet'])
+        game.mount('_support_farlandia')
+        game.on(farlandia.FleetsShow, _show)
+        found = await self._watch(game, 'fleets show Prospector --watch --count 4', _Moving(), moves=10)
+        assert [result.to_json()['reply'] for result in found] == [
+            {'fleet': 'f1', 'docked': docked} for docked in (False, True, False, True)
+        ]

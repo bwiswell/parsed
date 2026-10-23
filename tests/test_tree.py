@@ -214,6 +214,10 @@ class TestFlags:
 
     def test_a_tree_wide_table(self, fixtures):
         assert fixtures.flags == {
+            'until': Arity.VALUE,  # a wait's, as `fleets show` can wait
+            'timeout': Arity.VALUE,
+            'watch': Arity.SWITCH,
+            'count': Arity.VALUE,
             'for': Arity.VALUE,
             'into': Arity.VALUE,
             'quiet': Arity.SWITCH,
@@ -286,6 +290,49 @@ class TestReading:
 
     def test_exported(self):
         assert parsed.Tree is Tree
+
+
+class TestWaiting:
+    def test_a_tree_waits_when_a_command_can(self, fixtures):
+        assert fixtures.waits
+        assert not Tree([farlandia.Log, farlandia.FleetMine]).waits  # a read with no REPLY, and a write
+
+    def test_a_wait_s_flags_only_then(self):
+        assert 'until' not in Tree([farlandia.Log]).flags
+        assert Tree([farlandia.FleetsShow]).flags == {
+            'until': Arity.VALUE,
+            'timeout': Arity.VALUE,
+            'watch': Arity.SWITCH,
+            'count': Arity.VALUE,
+        }
+
+    def test_a_waiting_command_can_t_name_a_field_for_one(self):
+        cls = _waiting(until=parsed.Str(default=None))
+        with pytest.raises(DeclarationError, match=r"Look: --until is a wait's, on a command that can wait"):
+            Tree([cls])
+
+    def test_another_command_s_field_may_take_one(self):
+        # A value, as a wait's is: --until there is the field's.
+        tree = Tree([farlandia.FleetsShow, _command('remind {who}', who=parsed.Str(), until=parsed.Str(default=None))])
+        assert tree.read('remind me --until noon').until == 'noon'
+
+    def test_unless_it_would_mean_two_things(self):
+        switch = _command('remind {who}', who=parsed.Str(), until=parsed.Bool(default=False))
+        with pytest.raises(DeclarationError, match=r'--until takes a value in a wait but is a switch in Cmd'):
+            Tree([farlandia.FleetsShow, switch])
+
+
+def _waiting(**fields: object) -> type[Command]:
+    """A read with a REPLY, that can wait, with ``fields`` beside its fleet."""
+    namespace: dict[str, object] = {
+        'PHRASE': 'look {fleet}',
+        'EFFECT': parsed.Effect.READ,
+        'REPLY': farlandia.FleetView,
+        'fleet': parsed.Str(),
+        '__annotations__': dict.fromkeys(['fleet', *fields], object),
+    }
+    namespace.update(fields)
+    return parsed.parsed(type('Look', (Command,), namespace))
 
 
 @pytest.fixture(scope='module')

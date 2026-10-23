@@ -133,7 +133,8 @@ class HandheldConnect(parsed.Command, HandheldEndpoint):   # HandheldEndpoint: t
 - `phrases`: `PHRASE` and each extra phrase, bound, each slot to the field it fills;
 - `flags`: the fields no slot of `PHRASE` names.
 
-`is_command` says whether it has a phrase, and `kind_of(place)` the kind a slot reads by: a slot by an alias's own
+`is_command` says whether it has a phrase, `can_wait` whether a line may wait on it (a read with a `REPLY`:
+[`wait.md`](wait.md)), and `kind_of(place)` the kind a slot reads by: a slot by an alias's own
 entry, if it has one, else its field's. The result is kept on the class itself, so there's no registry beside
 it.
 

@@ -10,8 +10,8 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - a required flag and a switch, on a command that asks first (`fleets merge {fleet} --into …`);
 - a `Bool` said as a word (`fleets start true`);
 - an optional positional, a slot of several words, and the rest of the line;
-- a read with a typed reply, a command that asks first, and an interactive command with the form an agent says
-  instead;
+- a read with a typed reply, which can wait (`--until docked=true`), a command that asks first, and an
+  interactive command with the form an agent says instead;
 - a share in percent, or off (`fleet {fleet} retreat {share}`), and a routine taken up with its variables, each
   read by the variable's own names (`fleet {fleet} run {routine} {variables**}`);
 - lines that say a command, its `EXAMPLES`, with `<name>` placeholders and without;
@@ -263,6 +263,7 @@ class FleetsShow(parsed.Command):
     PHRASE = 'fleets show {fleet}'
     EFFECT = parsed.Effect.READ
     REPLY = FleetView
+    EXAMPLES = ('fleets show <fleet> --until docked=true', 'fleets show f1 --until docked=true --timeout 2m')
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET}
 
     fleet: str = parsed.Str(required=True, doc='the fleet')

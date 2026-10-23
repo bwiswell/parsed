@@ -7,6 +7,45 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.6 — 2026-10-22
+
+**Waiting.** A read with a typed reply can wait on it: `--until` conditions, checked against the reply's schema
+before anything runs, read again on the app's change signal or an interval until they're met, or the bound passes
+(exit 7, with the last reply). `--watch` streams each reply as it changes, one JSON line each.
+
+### Added
+
+- **`--until` on reads:** a command that declares `EFFECT = READ` and a `REPLY` can wait
+  (`declaration(cls).can_wait`). `--until PATH=VALUE`, repeatable, is a condition on its reply in `tooled wait`'s
+  grammar: a dotted path, a whole number stepping into a list, and a value read as JSON if it reads as JSON, else
+  as a string, compared as JSON compares. Each path is checked against the reply's dump schema when the line is
+  read, before anything runs, with what may have been meant. `--timeout` bounds it, a span of time, 30 s by
+  default.
+- **A wait's flags are a tree's** once any of its commands can wait (`tree.waits`): a command that can wait can't
+  name a field for them, and any other command refuses `--until` with the reason, unless a field of its own takes
+  it. A reading's `wait` holds the conditions and the bound (`parsed.wait.Wait`), and completion offers them.
+- **Waiting:** a session runs a line that waits again until its reply meets every condition, or the bound passes:
+  at once when the app says its state moved, `session.changed()`, from any thread
+  (`controls.on_change = session.changed`); else every `interval` seconds (`app.open(state, interval=…)`, 1 s by
+  default, `None` for an app that signals every change). Its handler returns its `REPLY`, and hooks run once
+  around the whole wait.
+- **How a wait ends:** met, the reply, `met` true and exit 0; past the bound, the last reply, `met` false, and a
+  `timeout` error, exit 7, naming every condition (`fleets show {fleet}: docked=true not met within 30s`).
+  `result.waited` says how long it waited. `session.call` raises `parsed.TimedOutError`, a `TimeoutError` carrying
+  the last reply and the time waited.
+- **Watching:** `--watch` gives the reply now, then each time it changes, until `--count N` replies, the bound
+  (`--timeout`; none by default without conditions), its conditions (`--until`), or a cancel.
+  `session.watch(line)` gives a result for each, each one's `to_json()` a line of a stream for a tool that reads
+  one; `session.run` gives its last, and `session.call` its last reply.
+- **`parsed.kinds.span(word)` and `spell_span(seconds)`:** a span of time read to its seconds, and written back.
+- **The waiting benchmark** times a change to its wake: a watch reads again and gives its next reply.
+
+### Changed
+
+- **The benchmarks freeze the suites' trees** out of the collection before each iteration, so it sweeps only what
+  the iterations left. A run takes seconds, not minutes, and the smaller cases read faster than in earlier records,
+  which swept every tree and flushed the processor's caches before each operation: a break in the series.
+
 ## 0.1.5 — 2026-10-22
 
 **Running commands.** An app mounts trees of commands under prefixes of words, binds the handler each command

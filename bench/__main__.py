@@ -9,6 +9,7 @@ rather than landing on one; the docs quote the median.
 from __future__ import annotations
 
 import argparse
+import gc
 import importlib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,7 +21,7 @@ import parsed
 from . import tables
 from .harness import Report, environment, time_case
 
-_SUITES = ['suite_declaring', 'suite_reading', 'suite_completing', 'suite_rendering', 'suite_running']
+_SUITES = ['suite_declaring', 'suite_reading', 'suite_completing', 'suite_rendering', 'suite_running', 'suite_waiting']
 _DEFAULT_OUT = tables.RESULTS
 
 
@@ -48,6 +49,9 @@ def main() -> None:
         parser.error('--runs must be at least 1')
 
     cases = _collect_cases()
+    # The suites' trees live for the whole run: frozen, they're out of the collection before each iteration, which
+    # then sweeps only what that iteration left, rather than every tree each time.
+    gc.freeze()
     measurements = []
     for run in range(args.runs):
         if args.runs > 1:

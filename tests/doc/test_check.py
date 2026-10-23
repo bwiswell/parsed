@@ -25,7 +25,7 @@ class TestTheFixtures:
         report = check(['_support_farlandia', '_support_rio'])
         assert report.ok, report.problems
         assert (report.commands, report.schemas) == (16, 16)
-        assert report.examples == 9
+        assert report.examples == 11
         assert report.round_trips > report.commands  # an instance with every field, where it isn't the other
         assert report.skipped == {}
 
@@ -50,6 +50,12 @@ class TestSeededFaults:
             ('example', '_support_check.examples.Mine', 'mien <fleet>', "no command 'mien'; did you mean mine?"),
             ('example', '_support_check.examples.Mine', 'dig <site>', 'it reads as Dig, not Mine'),
             ('example', '_support_check.examples.Log', 'log 0', 'log {n}: must be >= 1, got 0'),
+            (
+                'example',
+                '_support_check.examples.Look',
+                'look <fleet> --until dockd=true',
+                "--until 'dockd' names no field of Seen; did you mean 'docked'?",
+            ),
         ]
 
     def test_a_round_trip_that_fails(self):

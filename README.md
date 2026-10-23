@@ -2,11 +2,12 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.1.5 runs commands:** an app mounts trees of commands under prefixes of words, sends each line to its mount,
-> and runs it by its handler, with a context, between hooks, giving one envelope with an exit code; a handler may
-> ask before it acts. Lines are read with an app's names, completed as they're typed, written back from an
-> instance, and described as data for the tools that read commands. Waiting, chains of steps, argv and help arrive
-> in the 0.1.x releases that follow, and 0.2.0 is the first version to build a command line on.
+> **0.1.6 waits:** a read with a typed reply waits on it (`--until docked=true`), woken by the app's change
+> signal, or streams it as it changes (`--watch`). An app mounts trees of commands under prefixes of words and runs
+> each line by its handler, with a context, between hooks, giving one envelope with an exit code; lines are read
+> with an app's names, completed as they're typed, written back from an instance, and described as data for the
+> tools that read commands. Chains of steps, argv and help arrive in the 0.1.x releases that follow, and 0.2.0 is
+> the first version to build a command line on.
 
 ## Why parsed
 
@@ -24,14 +25,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.1.5
+uv add git+https://github.com/bwiswell/parsed --tag v0.1.6
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.5" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.6" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving
@@ -68,6 +69,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/app.md`](docs/app.md): a program's trees mounted under prefixes, with their handlers and names.
 - [`docs/context.md`](docs/context.md): what a handler is given beside its command.
 - [`docs/reply.md`](docs/reply.md): what running a line comes to, and its exit code.
+- [`docs/wait.md`](docs/wait.md): a read that waits on its reply.
 - [`docs/doc/index.md`](docs/doc/index.md): commands as data, for the tools that read them, and `parsed check`,
   for an app's CI.
 - [`docs/effect.md`](docs/effect.md): what running a command does.

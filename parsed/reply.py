@@ -16,15 +16,18 @@ A :class:`Result` holds what came of a line, however it went:
 - ``ok``, whether it went well, and ``done``, whether its handler ran for real: run to its end, not for a dry run,
   to answer ``--help``, or to stop at a question;
 - ``asks``, the question it stopped at, unanswered or answered no;
+- ``met``, for a line that waits (``--until``), whether its reply met every condition, and ``waited``, how long it
+  waited, in seconds;
 - ``reply``, the ``REPLY`` its handler returned;
 - ``text``, for people: the reply's ``str()`` (a reply class may define ``__str__``; seared leaves it free), the
   text the handler returned, the command's usage for ``--help``, the question it stopped at, or the error's message;
 - ``error``, what went wrong, as data, ``{'error': kind, 'message': …}``: a ``ReadError``'s own (``usage`` or
-  ``validation``), or ``handler`` for a handler that raised, has no binding, or returned what it shouldn't.
+  ``validation``), ``timeout`` for a wait whose bound passed (its reply the last read), or ``handler`` for a handler
+  that raised, has no binding, or returned what it shouldn't.
 
 ``result.code`` is the exit code: ``0`` when it went well (a question it stopped at among it), ``2`` for a line that
-doesn't read, ``4`` for a value its field refuses, ``1`` for a handler's failure, as ``tooled``'s codes are where the
-meanings match.
+doesn't read, ``4`` for a value its field refuses, ``7`` for a wait whose bound passed, ``1`` for a handler's
+failure, as ``tooled``'s codes are where the meanings match.
 ``result.to_json()`` is the envelope as ``--json`` writes it, every key always there.
 """
 
@@ -40,7 +43,7 @@ from types import MappingProxyType
 from seared import Seared  # noqa: TC002
 
 #: The exit code for each kind of error; ``0`` for none.
-CODES: Mapping[str, int] = MappingProxyType({'usage': 2, 'validation': 4, 'handler': 1})
+CODES: Mapping[str, int] = MappingProxyType({'usage': 2, 'validation': 4, 'timeout': 7, 'handler': 1})
 
 #: What answers a question a line asks: yes or no, from the question, sync or async (:func:`terminal` is one).
 type Answer = Callable[[str], bool | Awaitable[bool]]
@@ -95,6 +98,8 @@ class Result:
         done: Whether its handler ran for real: to its end, not for a dry run, to answer ``--help``, or to stop at a
             question.
         asks: The question it stopped at, unanswered or answered no; ``None`` if none.
+        met: Whether its reply met every ``--until`` condition; ``None`` for a line that doesn't wait.
+        waited: How long it waited, in seconds; ``None`` for a line that doesn't wait.
         reply: The ``REPLY`` its handler returned, or ``None``.
         text: For people: the reply's ``str()``, the handler's text, the usage, the question, or the error's message.
         error: What went wrong, as data: ``{'error': kind, 'message': …}`` and its parts; ``None`` if nothing did.
@@ -106,6 +111,8 @@ class Result:
     ok: bool = True
     done: bool = False
     asks: str | None = None
+    met: bool | None = None
+    waited: float | None = None
     reply: Seared | None = None
     text: str | None = None
     error: Mapping[str, object] | None = None
@@ -113,7 +120,7 @@ class Result:
 
     @property
     def code(self) -> int:
-        """The exit code: ``0``, or its error kind's (``usage`` 2, ``validation`` 4, ``handler`` 1)."""
+        """The exit code: ``0``, or its error kind's (``usage`` 2, ``validation`` 4, ``timeout`` 7, ``handler`` 1)."""
         if self.error is None:
             return 0
         return CODES.get(str(self.error.get('error')), 1)
@@ -126,6 +133,8 @@ class Result:
             'ok': self.ok,
             'done': self.done,
             'asks': self.asks,
+            'met': self.met,
+            'waited': self.waited,
             'reply': None if self.reply is None else type(self.reply).dump(self.reply),
             'text': self.text,
             'error': None if self.error is None else dict(self.error),
