@@ -9,7 +9,7 @@ import pytest
 import seared
 
 import parsed
-from parsed.wait import FLAGS, TIMEOUT, Condition, Wait, problem
+from parsed.wait import FLAGS, SWITCHES, TIMEOUT, Condition, Wait, problem
 
 
 class Mode(enum.Enum):
@@ -92,7 +92,12 @@ class TestTheWait:
         assert Wait(()).timeout == TIMEOUT == 30.0
 
     def test_its_flags(self):
-        assert FLAGS == ('until', 'timeout')
+        assert FLAGS == ('until', 'timeout', 'watch', 'count')
+        assert {'watch'} == SWITCHES
+
+    def test_a_watch_has_no_count_and_its_bound_by_default(self):
+        found = Wait((), watch=True)
+        assert (found.watch, found.count, found.timeout) == (True, None, TIMEOUT)
 
 
 class TestPaths:

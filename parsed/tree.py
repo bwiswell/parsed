@@ -53,6 +53,7 @@ from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
 from .wait import FLAGS as WAIT_FLAGS
+from .wait import SWITCHES as WAIT_SWITCHES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -127,8 +128,8 @@ class Tree:
         under: The prefix, its words separated by single spaces; ``''`` for none.
         root: Where every line's walk begins.
         top: Where every phrase begins: the node after the prefix's words, or the root.
-        flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until`` and
-            ``--timeout``) among them when a command can wait.
+        flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until``,
+            ``--timeout``, ``--watch``, ``--count``) among them when a command can wait.
         waits: Whether any of its commands can wait (:mod:`parsed.wait`).
 
     Raises:
@@ -152,7 +153,7 @@ class Tree:
         arities: dict[str, tuple[Arity, str]] = {}
         self.waits = any(found_declaration.can_wait for found_declaration in self.commands)
         for name in WAIT_FLAGS if self.waits else ():
-            _check_arity(name, Arity.VALUE, 'a wait', arities)
+            _check_arity(name, Arity.SWITCH if name in WAIT_SWITCHES else Arity.VALUE, 'a wait', arities)
         for found_declaration in self.commands:
             for bound in found_declaration.phrases:
                 for places in _routes(bound):

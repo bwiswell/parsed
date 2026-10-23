@@ -1,11 +1,12 @@
-# `wait.py`: a read that waits on its reply
+# `wait.py`: a read that waits on its reply, or watches it
 
 A command that declares `EFFECT = READ` and a `REPLY` can wait: running a read again is known to be safe, and its
 reply has typed values for a condition to read. Such a line takes `--until`, a condition on the reply, and
-`--timeout`, how long to wait:
+`--timeout`, how long to wait; or `--watch`, each reply as it changes:
 
 ```
 fleets show frigate --until docked=true --timeout 2m
+fleets show frigate --watch --count 10
 ```
 
 `declaration(cls).can_wait` says whether a command can, and `tree.waits` whether any of a tree's can.
@@ -33,18 +34,20 @@ A map takes any key, and a shape the schema doesn't say (an open object) takes a
 
 ## The bound
 
-`--timeout` is how long to wait, a span of time as a `Duration` reads one (`90s`, `2m`, `1h30m`); `30s` by default.
-It bounds a wait, so it's refused without an `--until`, and given once.
+`--timeout` is how long to wait, a span of time as a `Duration` reads one (`90s`, `2m`, `1h30m`); `30s` by default
+for a line with conditions, and no bound for a watch without them. It bounds a wait or a watch, so it's refused
+without an `--until` or a `--watch`, and given once.
 
 ## The flags are a tree's
 
 A line's flags are split off before its command is known, so a flag's name means one thing across a tree. Once
-any of its commands can wait, a tree takes `--until` and `--timeout`, each taking a value:
+any of its commands can wait, a tree takes `--until`, `--timeout` and `--count`, each taking a value, and
+`--watch`, a switch:
 
-- **a command that can wait** can't take either name for a field (give the field a `data_key`);
-- **any other command** may have a field of its own by either name, which then takes it as any flag; a switch by
-  either name is refused when the tree is built, since it would mean two things;
-- **without a field of its own**, a command that can't wait refuses `--until`, saying why:
+- **a command that can wait** can't take any of their names for a field (give the field a `data_key`);
+- **any other command** may have a field of its own by one of them, which then takes it as any flag, so long as it
+  agrees with the wait's on whether it takes a value: one that doesn't is refused when the tree is built;
+- **without a field of its own**, a command that can't wait refuses the flag, saying why:
   ``fleet f1 mine can't wait: --until is for a read, a command that declares EFFECT = READ and a REPLY``.
 
 ## What a line that waits reads to
@@ -78,13 +81,29 @@ Either way, the result's `waited` says how long it waited, in seconds ([`reply.m
 command and every condition: `fleets show {fleet}: docked=true not met within 30s`. A timeout is the line's
 failure, so the on-error hooks see it, and the after hooks don't run.
 
-With placeholders (`--until <until>`, `--timeout <timeout>`), as an example in help says them, a condition is any
-condition and the bound is the default.
+## Watching
+
+`--watch` gives the reply now, then again each time it changes (each reply whose wire form differs from the one
+given before), waking as a wait does: on a change, or on the interval. It stops:
+
+- **after `--count N` replies,** a whole number, 1 or more (`--count` needs `--watch`);
+- **at the bound:** `--timeout`, or, without conditions, none, so it watches until it's stopped;
+- **at its conditions,** with `--until`: the reply that meets them is its last. Unmet past the bound, its last
+  result is a `timeout`, exit 7, as for a wait;
+- **when the task running it is cancelled,** as a front end does on a signal.
+
+`session.watch(line)` gives a [`Result`](reply.md) for each reply, each one's `to_json()` a line of a stream for a
+tool that reads one (Claude Code's Monitor), as `tooled listen` gives a contract's values. `session.run` gives its
+last result, and `session.call` its last reply. Hooks run once around the whole watch; one stopped early, by a
+cancel, runs no after hooks.
+
+With placeholders (`--until <until>`, `--timeout <timeout>`, `--count <count>`), as an example in help says them, a
+condition is any condition, the bound is the default, and a count is none.
 
 | Name | What it is |
 |---|---|
 | `Condition(path, value, text)` | one `--until`; `Condition.parse(text)`, `find(wire)`, `met(wire)` |
-| `Wait(until, timeout)` | a read's wait; `met(reply)` |
+| `Wait(until, timeout, watch, count)` | a read's wait, or its watch; `met(reply)` |
 | `problem(condition, reply)` | why a condition's path names nothing in a reply class's dump schema, and what may have been meant; `None` when it names a field |
-| `FLAGS` | `('until', 'timeout')` |
+| `FLAGS` | `('until', 'timeout', 'watch', 'count')`; `SWITCHES`, `{'watch'}` |
 | `TIMEOUT` | `30.0`, seconds |

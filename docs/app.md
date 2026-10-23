@@ -148,6 +148,10 @@ false and a `timeout` error, exit 7 ([`wait.md`](wait.md#how-it-ends)), and `cal
 `waited` says how long it waited. Its handler returns its `REPLY`, since a wait reads it, and hooks run once around
 the whole wait.
 
+**`session.watch(line)`** gives a result each time a watching line's reply changes (`--watch`:
+[`wait.md`](wait.md#watching)), until its count, its bound, its conditions or a cancel; each one's `to_json()` is a
+line of a stream. Any other line gives its one result there, and `session.run` gives a watch's last.
+
 **`session.changed()`** says the app's state moved, from any thread: wire it where the app learns of a change
 (`controls.on_change = session.changed`). Every wait on the session reads again at once; a change while a read is
 under way isn't missed.

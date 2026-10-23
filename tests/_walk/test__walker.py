@@ -385,7 +385,16 @@ class TestWaits:
                 ),
                 'docked',
             ),
-            ('fleets show f1 --timeout 2m', '--timeout bounds a wait: give --until too', '--timeout'),
+            (
+                'fleets show f1 --timeout 2m',
+                '--timeout bounds a wait or a watch: give --until or --watch too',
+                '--timeout',
+            ),
+            ('fleets show f1 --count 3', '--count is how many replies a watch gives: give --watch too', '--count'),
+            ('fleets show f1 --watch --count 0', "--count: '0' is not a number of replies: say 1 or more", '0'),
+            ('fleets show f1 --watch --count lots', "--count: 'lots' is not a number of replies", 'lots'),
+            ('fleets show f1 --watch --watch', '--watch is given twice', '--watch'),
+            ('fleet f1 mine --watch', "fleet f1 mine can't wait: --watch is for a read", '--watch'),
             (
                 'fleets show f1 --until docked=true --timeout 1m --timeout 2m',
                 '--timeout is given twice',
@@ -418,6 +427,19 @@ class TestWaits:
     def test_placeholders_stand_for_a_condition_and_a_bound(self, tree):
         reading = tree.walk('fleets show <fleet> --until <until> --timeout <timeout>', placeholders=True)
         assert reading.wait == Wait((), 30.0)
+        assert tree.walk('fleets show <fleet> --watch --count <count>', placeholders=True).wait == Wait(
+            (), None, watch=True
+        )
+
+    def test_a_watch_with_no_bound_of_its_own(self, tree):
+        assert tree.walk('fleets show f1 --watch').wait == Wait((), None, watch=True)
+        assert tree.walk('fleets show f1 --watch --count 1,000 --timeout 5m').wait == Wait(
+            (), 300.0, watch=True, count=1000
+        )
+
+    def test_a_watch_until_its_conditions_has_their_bound(self, tree):
+        found = tree.walk('fleets show f1 --watch --until docked=true').wait
+        assert (found.watch, found.timeout, len(found.until)) == (True, 30.0, 1)
 
 
 class TestFlags:

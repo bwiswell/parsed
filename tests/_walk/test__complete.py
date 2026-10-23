@@ -230,5 +230,11 @@ class TestWaits:
         assert _words(tree, 'fleets show f1 --until ') == ['fleet=', 'docked=']
         assert _words(tree, 'fleets show f1 --until d') == ['docked=']
 
+    def test_a_watch_and_its_count(self, tree):
+        offered = _words(tree, 'fleets show f1 --')
+        assert {'--watch', '--count'} <= set(offered)
+        assert _words(tree, 'fleets show f1 --watch --count ') == ['1', '5', '10']
+        assert '--watch' not in _words(tree, 'fleets show f1 --watch --')
+
     def test_a_few_bounds(self, tree):
         assert _words(tree, 'fleets show f1 --until docked=true --timeout ') == ['30s', '1m', '2m', '5m']

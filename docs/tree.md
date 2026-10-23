@@ -108,9 +108,9 @@ says whether it takes a value, across the whole tree:
 - **a `Bool` flag is a switch,** written `--no-…` when its field defaults to `True`;
 - **every other flag takes a value.**
 
-**A wait's flags** join the table once any command can wait: `--until` and `--timeout`, each taking a value
-([`wait.md`](wait.md)), so a field of another command may take either name only as a value. `tree.waits` says
-whether any can.
+**A wait's flags** join the table once any command can wait: `--until`, `--timeout` and `--count`, each taking a
+value, and `--watch`, a switch ([`wait.md`](wait.md)). A field of another command may take one of their names only
+as the wait's does. `tree.waits` says whether any command can wait.
 
 `tree.flags` is the tree-wide table, name to arity; `tree.flags_of(cls)` is one command's flags, each with its name,
 its field, its arity and whether it's negated. parsed's own, `--help`, `--json`, `--yes` and `--dry-run`, are
@@ -128,7 +128,7 @@ Each is a `DeclarationError` naming the commands and the phrases:
 | two flags of one command with one name (`n`, and a field with `data_key='n'`) | |
 | a flag name that isn't lowercase words (`--Count`) | give the field a `data_key` |
 | a field whose flag is one of parsed's own: `--help`, `--json`, `--yes`, `--dry-run` | parsed takes them for every command |
-| a field whose flag is `--until` or `--timeout`, on a command that can wait | a wait takes them there |
+| a field whose flag is `--until`, `--timeout`, `--watch` or `--count`, on a command that can wait | a wait takes them there |
 
 A command whose own declaration doesn't check is refused as `declaration` refuses it
 ([`command.md`](command.md#declarationcls)).

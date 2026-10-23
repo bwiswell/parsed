@@ -94,7 +94,9 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | gives a key twice | `… {variables**}: ore is given twice` | |
 | waits on a path its reply hasn't | `--until 'dockd' names no field of FleetView; did you mean 'docked'?` | the reply's fields close to it |
 | gives a condition that isn't one | ``--until: a condition is path=value, … not 'docked' `--until <path>=<value>` `` | |
-| bounds a wait it doesn't give | `--timeout bounds a wait: give --until too` | |
+| bounds a wait it doesn't give | `--timeout bounds a wait or a watch: give --until or --watch too` | |
+| counts a watch it doesn't give | `--count is how many replies a watch gives: give --watch too` | |
+| counts nothing | `--count: '0' is not a number of replies: say 1 or more` | |
 | waits on a command that can't | ``fleet f1 mine can't wait: --until is for a read, … `fleet <fleet> mine [--for <for>]` `` | |
 
 A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the

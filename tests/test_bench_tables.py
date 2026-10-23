@@ -29,6 +29,7 @@ READ = ('reading', 'read')
 COMPLETE = ('completing', 'complete')
 RENDER = ('rendering', 'render')
 RUN = ('running', 'run')
+WAKE = ('waiting', 'wake')
 
 
 def _m(case: tuple[str, str], us: float, run: int = 0, per: int = 100) -> Measurement:
@@ -126,6 +127,11 @@ class TestBlocks:
         assert '`run`' in found['running']
         assert 'Every line' in found['running']
         assert found['run-us'] == '~30 µs'
+
+    def test_the_waiting_suite(self):
+        found = blocks(_report(_m(WAKE, 1_500.0, per=50)))
+        assert 'Per wake' in found['waiting']
+        assert found['wake-us'] == '~30 µs'
 
     def test_the_inline_numbers_per_line(self):
         found = blocks(_report(_m(WALK, 2_400.0, per=263), _m(READ, 3_500.0, per=263)))
