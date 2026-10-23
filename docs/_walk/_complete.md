@@ -25,7 +25,7 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | at a slot | its kind's literal words, its own offers (an `Enum`'s values, `true` and `false`, `10m`, `30m` and `1h` for a span of time), and for a name, the `options` of the resolver for its category, given its scope |
 | after a slot or a word | the literal words that may come next |
 | after a whole command | `then`, if it's a step; its flags not yet given (a list's again), `--yes` if it asks first, and `--until` (again), `--timeout`, `--watch` and `--count` (once) if it can wait |
-| after `then` | the chain's steps' words, where its shared part ends; then each step's own, its names scoped as the first step's line scopes them |
+| after `then` | the chain's steps' words, where its shared part ends; then each step's own, its names scoped as the first step's line scopes them, or, for a scope that follows the chain, where the steps before it have moved it |
 | at `--until`'s value | a condition on each of the reply's fields: `fleet=`, `docked=` |
 | at `--timeout`'s value | a few bounds: `30s`, `1m`, `2m`, `5m` |
 | at `--count`'s value | a few counts: `1`, `5`, `10` |
@@ -35,7 +35,8 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | in any other rest of the line | the command's flags not yet given, since a flag may stand anywhere |
 
 A name's scope is its field's words so far, read by the scope's own resolver: `fleet Hauler dock ` offers the
-stations within Hauler's reach, and `board --fleet Hauler ` does too. A quoted word is a value, so while one is
+stations within Hauler's reach, and `board --fleet Hauler ` does too; `fleet Hauler jump vruba then dock ` offers
+those in Vruba, where it will be. A quoted word is a value, so while one is
 typed, no literal word or flag is offered. A candidate with a space in it comes back quoted, so it replaces the word
 being typed whole. A line whose words don't read as far as they go is offered nothing.
 

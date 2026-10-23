@@ -17,9 +17,11 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - lines that say a command, its `EXAMPLES`, with `<name>` placeholders and without;
 - a fleet's orders as steps of a chain, joined by `then` (`fleet {fleet} jump {system} then move {to} then mine`), and
   the fleet's commands that aren't steps (`retreat`, `run`, `buy ship`);
+- steps that move the chain on (`jump`, `move`, `dock`, and `jump nearest`, to somewhere the line doesn't say), and
+  places looked for where the fleet will be (`move {to}`, `dock {station}`);
 - the app's names, as resolvers over fixed tables (:class:`Table`, :class:`Variables`, :data:`NAMES`): fleets,
-  detachments, goods, stations within a fleet's reach (one with an apostrophe in its name), routines, and each
-  routine's variables.
+  detachments, goods, systems, and the sites and stations in the system of a fleet or a place (one with an
+  apostrophe in its name), routines, and each routine's variables.
 """
 
 import difflib
@@ -84,10 +86,41 @@ class Variables(Table):
         return next((found[key] for found in held if key in found), None)
 
 
+#: The system each scope is in: a fleet, where it is; a system, itself; a site, its own.
+SYSTEM_OF = {
+    'f1': 'vruba',
+    'd2': 'vruba',
+    'f2': 'sol',
+    'vruba': 'vruba',
+    'sol': 'sol',
+    'vesta': 'vruba',
+    'vrubaa-belt-1': 'vruba',
+    'vruba-rings': 'vruba',
+    'ceres': 'sol',
+    'sol-belt': 'sol',
+}
+
+
+def in_systems(held: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Each scope's keys, as a :class:`Table` narrows by them: those in its system, by each system's keys."""
+    return {scope: held[system] for scope, system in SYSTEM_OF.items()}
+
+
 GOODS = Table({'Iron': 'iron', 'Coal': 'coal'})
+SYSTEMS = Table({'Vruba': 'vruba', 'Sol': 'sol'})
 STATIONS = Table(
     {'Vesta': 'vesta', "Vruba'a Belt 1": 'vrubaa-belt-1', 'Ceres': 'ceres'},
-    within={'f1': {'vesta', 'vrubaa-belt-1'}, 'f2': {'ceres'}},
+    within=in_systems({'vruba': {'vesta', 'vrubaa-belt-1'}, 'sol': {'ceres'}}),
+)
+SITES = Table(
+    {
+        'Vesta': 'vesta',
+        "Vruba'a Belt 1": 'vrubaa-belt-1',
+        'Vruba Rings': 'vruba-rings',
+        'Ceres': 'ceres',
+        'Sol Belt': 'sol-belt',
+    },
+    within=in_systems({'vruba': {'vesta', 'vrubaa-belt-1', 'vruba-rings'}, 'sol': {'ceres', 'sol-belt'}}),
 )
 
 #: The app's names, by category, as a line is read with them.
@@ -95,6 +128,8 @@ NAMES: dict[str, parsed.Resolver] = {
     'fleet': Table({'Prospector': 'f1', 'Hauler': 'f2'}),
     'detachment': Table({'Scouts': 'd2'}),
     'good': GOODS,
+    'system': SYSTEMS,
+    'site': SITES,
     'station': STATIONS,
     'routine': Table({'Mining': 'mining', 'Patrol': 'patrol'}),
     'variable': Variables({'mining': {'ore': GOODS, 'home': STATIONS}, 'patrol': {'route': None}}),
@@ -142,7 +177,8 @@ class FleetDock(FleetCommand):
     PHRASE = 'fleet {fleet} dock {station}'
     EXTRA_PHRASES = ('fleet {fleet} dock nearest',)
     EXAMPLES = ('fleet <fleet> dock <station>', 'fleet <fleet> dock nearest')
-    KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet')}
+    MOVES = 'station'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet', follows=True)}
 
     station: str | None = parsed.Str(default=None, doc='the station; left out, the nearest')
 
@@ -152,6 +188,7 @@ class FleetJump(FleetCommand):
     """Jump to a system."""
 
     PHRASE = 'fleet {fleet} jump {system}'
+    MOVES = 'system'
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'system': parsed.Name('system')}
 
     system: str = parsed.Str(required=True, doc='the system')
@@ -162,6 +199,7 @@ class FleetJumpNearest(FleetCommand):
     """Jump to the nearest system with an ore."""
 
     PHRASE = 'fleet {fleet} jump nearest {ore}'
+    MOVES = True
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'ore': parsed.Name('good')}
 
     ore: str = parsed.Str(required=True, doc='the ore')
@@ -172,7 +210,8 @@ class FleetMove(FleetCommand):
     """Move within the system, to a belt or a station."""
 
     PHRASE = 'fleet {fleet} move {to}'
-    KINDS: ClassVar[dict[str, parsed.Kind]] = {'to': parsed.Name('site')}
+    MOVES = 'to'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'to': parsed.Name('site', scope='fleet', follows=True)}
 
     to: str = parsed.Str(required=True, doc='where to')
 

@@ -31,6 +31,7 @@ class TestDefaults:
         assert dict(Command.KINDS) == {}
         assert Command.EXAMPLES == ()
         assert Command.STEPS is False
+        assert Command.MOVES is False
 
     def test_the_base_declares_nothing(self):
         found = declaration(Command)
@@ -46,6 +47,7 @@ class TestDefaults:
             reply=None,
             examples=(),
             chain=None,
+            moves=False,
             kinds=MappingProxyType({}),
             aliases=MappingProxyType({}),
             field_kinds=MappingProxyType({}),
@@ -353,6 +355,83 @@ class TestSteps:
             declaration(_declared(STEPS='yes'))
 
 
+class TestMoves:
+    @pytest.mark.parametrize(
+        ('cls', 'moves'),
+        [
+            (farlandia.FleetJump, 'system'),  # to where a field of its own says
+            (farlandia.FleetDock, 'station'),
+            (farlandia.FleetJumpNearest, True),  # to somewhere the line doesn't say
+            (farlandia.FleetMine, False),  # nowhere
+            (farlandia.Log, False),
+        ],
+    )
+    def test_where_a_step_takes_its_chain(self, cls, moves):
+        assert declaration(cls).moves == moves
+
+    @pytest.mark.parametrize(
+        ('constants', 'message'),
+        [
+            ({'MOVES': 'to'}, r'Declared\.MOVES says where a step takes its chain, and Declared is no step'),
+            ({'MOVES': True}, r'and Declared is no step: declare STEPS on its chain'),
+        ],
+    )
+    def test_only_a_step_moves(self, constants, message):
+        with pytest.raises(DeclarationError, match=message):
+            declaration(_declared(**constants))
+
+    @pytest.mark.parametrize(
+        ('moves', 'message'),
+        [
+            ('nowhere', r"Ordered\.MOVES = 'nowhere' names no field of .*Ordered$"),
+            ('fleet', r"MOVES = 'fleet' names a field of FleetCommand's, which every step shares: name the field"),
+            ('via', r"MOVES = 'via': via holds several values, and a chain is in one place"),
+            (3, r"MOVES = 3: the field that says where the step takes its chain \('to'\), True for somewhere"),
+        ],
+    )
+    def test_a_field_of_its_own_of_one_value(self, moves, message):
+        @parsed.parsed
+        class Ordered(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} go {to}'
+            MOVES = moves
+
+            to: str = parsed.Str(required=True)
+            via: list[str] = parsed.Str(many=True, default_factory=list)
+
+        with pytest.raises(DeclarationError, match=message):
+            declaration(Ordered)
+
+    def test_a_scope_that_follows_a_chain_is_on_a_step(self):
+        @parsed.parsed
+        class Docked(parsed.Command):
+            PHRASE = 'docked {fleet} {station}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet', follows=True)}
+
+            fleet: str = parsed.Str(required=True)
+            station: str = parsed.Str(required=True)
+
+        with pytest.raises(
+            DeclarationError, match=r"Docked: 'station' follows its scope along a chain, and .*Docked is no step"
+        ):
+            declaration(Docked)
+
+    def test_and_its_scope_is_a_field_the_chain_shares(self):
+        @parsed.parsed
+        class Unloaded(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} unload {good} at {station}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'good': parsed.Name('good', scope='station', follows=True)}
+
+            good: str = parsed.Str(required=True)
+            station: str = parsed.Str(required=True)
+
+        with pytest.raises(
+            DeclarationError,
+            match=r"'good' follows its scope along a chain, so its scope is a field the chain shares, which 'station'"
+            r" isn't: FleetCommand's are fleet",
+        ):
+            declaration(Unloaded)
+
+
 class TestInstead:
     def test_an_interactive_command_names_its_agent_form(self):
         found = declaration(farlandia.ShipFit)
@@ -432,7 +511,9 @@ class TestFieldKinds:
             'fleet': parsed.Name('fleet'),  # from its base's KINDS
             'for_': parsed.kinds.Duration(),  # a TimeDelta's default
         }
-        assert declaration(farlandia.FleetDock).field_kinds['station'] == parsed.Name('station', scope='fleet')
+        assert declaration(farlandia.FleetDock).field_kinds['station'] == parsed.Name(
+            'station', scope='fleet', follows=True
+        )
         assert declaration(farlandia.Log).field_kinds['n'] == parsed.kinds.Number()
         assert declaration(farlandia.Say).field_kinds['message'] == parsed.kinds.Word()
 

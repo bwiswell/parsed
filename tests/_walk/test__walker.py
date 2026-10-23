@@ -531,6 +531,95 @@ class TestChains:
         assert found.suggestions == ('mine', 'dock', 'jump', 'move', 'sell')
 
 
+@parsed.parsed
+class _Ship(Command):
+    """A chain's base whose names a step's scope may follow or not: where a ship goes, and what it carries."""
+
+    STEPS = True
+
+    ship: str = parsed.Str(required=True)
+
+
+@parsed.parsed
+class _ShipWarp(_Ship):
+    PHRASE = 'ship {ship} warp'
+    MOVES = 'to'
+
+    to: str = parsed.Str(required=True)  # a flag: --to
+
+
+@parsed.parsed
+class _ShipLoad(_Ship):
+    PHRASE = 'ship {ship} load {good} at {site}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {
+        'good': parsed.Name('good', scope='ship'),  # its hold: wherever it is
+        'site': parsed.Name('site', scope='ship', follows=True),
+    }
+
+    good: str = parsed.Str(required=True)
+    site: str = parsed.Str(required=True)
+
+
+_SHIP_NAMES = {
+    'good': farlandia.Table({'Iron': 'iron'}, within={'s1': {'iron'}}),
+    'site': farlandia.Table({'Vesta': 'vesta', 'Ceres': 'ceres'}, within={'s1': {'vesta'}, 'sol': {'ceres'}}),
+}
+
+
+class TestChainPlace:
+    # A step that MOVES takes its chain on, and a later step's name whose scope follows it is looked for there.
+    def test_each_step_s_names_where_the_fleet_will_be(self, tree):
+        line = 'fleet Prospector jump sol then move "Sol Belt" then dock ceres then mine'
+        reading = tree.walk(line, names=farlandia.NAMES)
+        assert [step.data() for step in reading.steps] == [
+            {'fleet': 'f1', 'system': 'sol'},
+            {'fleet': 'f1', 'to': 'sol-belt'},  # in sol, not where the Prospector is now
+            {'fleet': 'f1', 'station': 'ceres'},  # in the belt's system
+            {'fleet': 'f1'},
+        ]
+
+    def test_where_a_fleet_is_until_a_step_moves_it(self, tree):
+        assert tree.read('fleet Prospector dock vesta', names=farlandia.NAMES).station == 'vesta'
+        found = tree.walk('fleet Prospector mine then dock vesta', names=farlandia.NAMES)  # mine stays put
+        assert found.steps[1].data()['station'] == 'vesta'
+        refused = _refusal(tree, 'fleet Prospector jump sol then dock vesta', names=farlandia.NAMES)
+        assert str(refused) == (
+            "fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' "
+            '`fleet <fleet> dock [<station>]`'
+        )
+        assert (refused.word, refused.field) == ('vesta', 'station')
+
+    def test_a_step_that_doesn_t_move_leaves_it_where_it_was(self, tree):
+        reading = tree.walk('fleet Prospector jump sol then mine then dock ceres', names=farlandia.NAMES)
+        assert reading.steps[2].data()['station'] == 'ceres'
+
+    @pytest.mark.parametrize(
+        'line',
+        [
+            'fleet Prospector jump nearest iron then dock ceres',  # MOVES = True
+            'fleet Prospector dock nearest then move "Sol Belt"',  # its MOVES field left out
+        ],
+    )
+    def test_moved_somewhere_the_line_doesn_t_say_any_name(self, tree, line):
+        assert len(tree.walk(line, names=farlandia.NAMES).steps) == 2  # looked for across every name
+
+    def test_a_scope_that_doesn_t_follow_keeps_its_field_s(self):
+        reading = Tree([_ShipWarp, _ShipLoad]).walk('ship s1 warp --to sol then load iron at ceres', _SHIP_NAMES)
+        assert reading.steps[1].data() == {'ship': 's1', 'good': 'iron', 'site': 'ceres'}
+
+    def test_a_place_a_flag_says(self):
+        refused = _refusal(
+            Tree([_ShipWarp, _ShipLoad]), 'ship s1 warp --to sol then load iron at vesta', names=_SHIP_NAMES
+        )
+        assert str(refused).startswith(
+            "ship {ship} load {good} at {site}: no site 'vesta' for ship 's1', once at 'sol'"
+        )
+
+    def test_a_placeholder_says_no_place(self, tree):
+        reading = tree.walk('fleet <fleet> jump <system> then dock ceres', farlandia.NAMES, placeholders=True)
+        assert reading.steps[1].data()['station'] == 'ceres'
+
+
 class TestFlags:
     def test_anywhere_after_the_first_word(self, tree):
         expected = farlandia.FleetsMerge(fleet='f1', into='f2')

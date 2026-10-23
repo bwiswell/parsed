@@ -61,7 +61,7 @@ class TestCommandDoc:
 
     def test_its_kinds_and_its_schema(self):
         found = introspect_command(farlandia.FleetDock)
-        assert found.kinds['station'] == parsed.Name('station', scope='fleet')
+        assert found.kinds['station'] == parsed.Name('station', scope='fleet', follows=True)
         assert isinstance(found.schema, SchemaDoc)
         assert [f.attr for f in found.schema.fields] == ['fleet', 'station']
 

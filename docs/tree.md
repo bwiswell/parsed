@@ -90,6 +90,9 @@ reading.phrase                             # 'fleet {fleet} jump {system} then m
   own words, and its shared fields are the first step's.
 - **`then` only joins steps:** where the first piece isn't a step, the line is read as one command, `then` a word
   of it (`say hello then goodbye`). A step's phrase can't say `then`.
+- **A step may move the chain on** (`MOVES`), so a later step's names whose scope follows the chain are looked for
+  where the fleet will be: `jump sol then dock ceres` looks for ceres in sol
+  ([`command.md`](command.md#a-chains-place)).
 - **Refused:** `then` with no step on one side, a first piece that isn't a step where the line doesn't read as one
   command, a later step that isn't one of the chain's, and a wait (`--until`, `--watch`) in a chain.
 

@@ -42,6 +42,7 @@ class FleetMine(FleetCommand):
 | `ALIASES` | empty | other names a phrase's slot may fill a field by, slot name to field name: `{'detachment': 'fleet'}` |
 | `EXAMPLES` | `()` | lines that say it, for help and for `parsed check` to read; a `<name>` stands for any value |
 | `STEPS` | `False` | on a chain's base: the commands beneath it are steps, which `then` joins on a line ([chains](#chains)) |
+| `MOVES` | `False` | on a step: where it takes its chain, the field that says so (`'to'`), or `True` for somewhere the line doesn't say ([a chain's place](#a-chains-place)) |
 
 - **Every constant but `PHRASE` is optional, and none is inferred.** A command declares what it knows; nothing is
   required for one tool or another's sake.
@@ -122,6 +123,39 @@ class FleetCommand(parsed.Command):
 - **The base's own fields are the chain's shared fields:** the first step says them, and every step gets them.
 - **`STEPS = True` goes on a base,** a class without a `PHRASE`: on a command, it's refused.
 
+### A chain's place
+
+**A step that takes its chain somewhere declares `MOVES`:** the field that says where, so a later step's names are
+looked for where the fleet will be, not where it is:
+
+```python
+@parsed.parsed
+class FleetJump(FleetCommand):
+    PHRASE = 'fleet {fleet} jump {system}'
+    MOVES = 'system'
+    system: str = parsed.Str(required=True)
+
+@parsed.parsed
+class FleetDock(FleetCommand):
+    PHRASE = 'fleet {fleet} dock {station}'
+    MOVES = 'station'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'station': parsed.Name('station', scope='fleet', follows=True)}
+    station: str | None = parsed.Str(default=None)
+
+# fleet prospector jump sol then dock ceres: ceres looked for in sol
+```
+
+- **`MOVES` names a field of the step's own,** of one value (a slot or a flag): after the step, the chain is where
+  that field's value says, its key as its resolver read it. Left out (`dock nearest`), the step takes it somewhere
+  the line doesn't say: a default isn't the line's.
+- **`MOVES = True`** is a step that goes somewhere the line doesn't say (`jump nearest iron`). A step that declares
+  neither leaves the chain where it was.
+- **A name follows the chain** where its kind says `follows=True` ([`kinds.md`](kinds.md#name)): its scope is one
+  of the chain's shared fields, the fleet, and in a later step, once a step before it has moved the chain, the
+  resolver is given where it moved to instead ([`names.md`](names.md#a-chains-place)). Where the chain went
+  somewhere the line doesn't say, it's given no scope. A name whose scope doesn't follow (the fleet's hold) keeps
+  its field's.
+
 ## Bases
 
 A subclass of `Command` without a `PHRASE` is a base. It can carry fields and constants for the commands beneath
@@ -149,6 +183,7 @@ class HandheldConnect(parsed.Command, HandheldEndpoint):   # HandheldEndpoint: t
 - the class, its phrase (`None` for a base) and its extra phrases;
 - its effect (a name normalised to its member), `asks`, `interactive`, `polymorphic`, `instead` and `reply`;
 - `chain`: for a step, its chain's base, the nearest class above it declaring `STEPS = True`; `None` otherwise;
+- `moves`: where a step takes its chain, its `MOVES`: a field's name, `True`, or `False`;
 - its merged `kinds` and `aliases`, read-only, and `field_kinds`: each field's kind, its entry or its type's
   default;
 - `phrases`: `PHRASE` and each extra phrase, bound, each slot to the field it fills;
@@ -171,6 +206,10 @@ put it right:
 | `EXAMPLES` on a base | a base says nothing |
 | `STEPS = True` on a command, or inherited from one | it goes on a chain's base, a class without a `PHRASE` |
 | `STEPS` not `True` or `False` | |
+| `MOVES` on a command that isn't a step | it says where a step takes its chain |
+| `MOVES` naming no field, one of the chain's shared fields, or a field of several values | it names a field of the step's own, of one value: a chain is in one place |
+| `MOVES` not a field's name, `True` or `False` | |
+| a name that follows its chain on a command that isn't a step, or scoped by a field the chain doesn't share | it follows a field the chain shares, along its steps |
 | `EFFECT = 'reed'` | expected one of read, write, action |
 | `ASKS` or `INTERACTIVE` not `True` or `False`; `POLYMORPHIC` not either or left out | |
 | `INSTEAD` on a command that isn't interactive, naming itself, a base or a non-command, or another interactive command | it names a form an agent can use, in place of an interactive command |

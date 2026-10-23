@@ -21,6 +21,10 @@ gives none. A scoped name waits for its scope: the fields are read in an order t
 narrows, whatever their order on the line, and the resolver is given the scope's value. A word no name answers to is
 refused with the resolver's suggestions.
 
+**A chain's place moves on** with each step that declares ``MOVES``: after ``jump sol``, the fleet will be at
+``sol``. A later step's name whose scope follows the chain (``follows=True``) is given that place as its scope, or
+none where a step moved it somewhere the line doesn't say.
+
 **What a walk keeps** is a :class:`Reading`: the command, the phrase, and each field's words and value. A required
 flag left out is refused once the command is known. :meth:`Reading.load` hands the values to seared, which checks
 them as it checks any, bounds and all.
@@ -160,8 +164,9 @@ type _Said = tuple[str, Token, Token | None]
 #: A placeholder: ``<name>``, standing for any value in a line that's checked, not run.
 _PLACEHOLDER = re.compile(r'<[^<>\s]+>')
 
-#: A name's scope, once read: the field it is, its value as the resolver is given it, and its words as typed.
-type _Scope = tuple[str, str, str]
+#: A name's scope, once read: the field it is, its value as the resolver is given it, and its words as typed; and,
+#: where the chain's place gave the value, the words that said the place.
+type _Scope = tuple[str, str, str, str | None]
 
 
 def walk(tree: Tree, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
@@ -248,7 +253,7 @@ class _Walker:
             **self._slot_fields(end, slots, specs, skip=skip),
             **self._flag_fields(end, flags, words, specs, have=set(shared)),
         }
-        values = self._values(fields)
+        values = self._values(fields, None if later is None else later.moved)
         given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
         reading = Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line, wait=wait)
         return reading, fields
@@ -271,16 +276,18 @@ class _Walker:
             return self._whole(tokens, self.refuse(msg, word=joins[0]))
         attrs = _shared(base)
         shared = {attr: field for attr, field in fields.items() if attr in attrs}
-        later = _Later(_place_of(self.tree, first.end, _head(first.end, attrs)[0]), attrs, base)
+        start = _place_of(self.tree, first.end, _head(first.end, attrs)[0])
+        moved = _moved(first, None, placeholders=self.placeholders)
         said = list(pieces[0])
         then: list[Reading] = []
         for join, piece in zip(joins, pieces[1:], strict=True):
             said.append(join)
-            step, _ = self._step(piece, said=said, later=later, shared=shared)
+            step, _ = self._step(piece, said=said, later=_Later(start, attrs, base, moved), shared=shared)
             if step.chain is not base:
                 msg = f"`{THEN}` joins steps: {_said(piece)!r} is not one of {base.__qualname__}'s"
                 raise self.refuse(msg, word=piece[0])
             then.append(step)
+            moved = _moved(step, moved, placeholders=self.placeholders)
             said += piece
         if any(step.wait is not None for step in (first, *then)):
             msg = "a chain doesn't wait: --until and --watch are a read's, on a line of its own"
@@ -610,8 +617,11 @@ class _Walker:
         near = [f'--{found}' for found in close(name, self.tree.flags_of(end.declaration.cls))]
         return self.refuse(f'{_said(words)} takes no --{name}', word=token, hint=hint, near=near)
 
-    def _values(self, fields: Mapping[str, _Field]) -> dict[str, object]:
-        """Each field's value, a name's scope read before it; a switch's is ``True``, or ``False`` for ``--no-…``."""
+    def _values(self, fields: Mapping[str, _Field], moved: _Moved | None = None) -> dict[str, object]:
+        """Each field's value, a name's scope read before it; a switch's is ``True``, or ``False`` for ``--no-…``.
+
+        ``moved`` is where a chain's earlier steps have moved it, for a scope that follows the chain.
+        """
         values: dict[str, object] = {}
 
         def read(attr: str) -> None:
@@ -622,7 +632,10 @@ class _Walker:
             if not isinstance(found.by, Place) and found.by.arity is Arity.SWITCH:
                 values[attr] = not found.by.negated
                 return
-            read_scope = None if scope is None else self._scope(scope, fields, values)
+            if scope is not None and moved is not None and cast('Named', found.kind).follows:
+                read_scope = _at(scope, fields, moved)
+            else:
+                read_scope = None if scope is None else self._scope(scope, fields, values)
             if isinstance(found.kind, Pairs):
                 values[attr] = self._pairs(found, found.kind, read_scope)
             elif found.field.many:
@@ -640,7 +653,7 @@ class _Walker:
         value = values.get(scope) if scope is not None else None
         if scope is None or value is None or isinstance(value, list):
             return None
-        return scope, str(value), _said(fields[scope].values)
+        return scope, str(value), _said(fields[scope].values), None
 
     def _read(self, found: _Field, word: Token, scope: _Scope | None) -> object:
         """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
@@ -690,9 +703,17 @@ class _Walker:
         if key is not None:
             return key
         near = list(resolver.suggest(word.text, given))
-        within = '' if scope is None else f' for {scope[0]} {scope[2]!r}'
+        within = '' if scope is None else _within(scope)
         msg = f'{found.where}: no {what} {word.text!r}{within}'  # its text: a name may be quoted for its spaces
         raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end), near=near)
+
+
+def _within(scope: _Scope) -> str:
+    """Where a refusal says a name was looked for: ``for fleet 'Prospector'``, and ``once at 'sol'`` for a place."""
+    field, _, said, at = scope
+    parts = [f'for {field} {said!r}'] if said else []
+    parts += [] if at is None else [f'once at {at!r}']
+    return f' {", ".join(parts)}' if parts else ''
 
 
 def _pieces(tree: Tree, tokens: list[Token]) -> tuple[list[list[Token]], list[Token]]:
@@ -734,12 +755,50 @@ def _place_of(tree: Tree, end: End, parts: int) -> Node:
     return node
 
 
+class _Moved(NamedTuple):
+    """Where a chain's steps have moved it.
+
+    Its key is the place's, as a scope that follows the chain is given it, and ``said`` its words as typed; ``None``
+    for both where a step moved it somewhere the line doesn't say.
+    """
+
+    key: str | None
+    said: str | None
+
+
 class _Later(NamedTuple):
-    """A chain's later step, as its walk knows it: where in the tree it starts, the shared fields, and the chain."""
+    """A chain's later step, as its walk knows it: where in the tree it starts, the shared fields, and the chain.
+
+    ``moved`` is where the steps before it have moved the chain, or ``None`` while they haven't.
+    """
 
     start: Node
     shared: frozenset[str]
     chain: type
+    moved: _Moved | None = None
+
+
+def _moved(step: Reading, moved: _Moved | None, *, placeholders: bool = False) -> _Moved | None:
+    """Where a chain is after ``step``, from ``moved``, where it was before it.
+
+    Where its ``MOVES`` field says; somewhere unsaid for ``True``, or for a field the line leaves out (its default
+    isn't the line's); else where it was.
+    """
+    moves = step.end.declaration.moves
+    if moves is False:
+        return moved
+    given = None if moves is True else step.given.get(moves)
+    words = () if given is None else given.words if isinstance(given.by, Place) else given.words[1::2]
+    if given is None or given.value is None or (placeholders and any(_placeholder(word) for word in words)):
+        return _Moved(None, None)
+    return _Moved(str(given.value), _said(words))
+
+
+def _at(scope: str, fields: Mapping[str, _Field], moved: _Moved) -> _Scope | None:
+    """A scope that follows its chain, once the chain has moved: the place as its value; ``None`` where it's unsaid."""
+    if moved.key is None:
+        return None
+    return scope, moved.key, _said(fields[scope].values) if scope in fields else '', moved.said
 
 
 def _onward(node: Node, later: _Later | None) -> list[str]:
