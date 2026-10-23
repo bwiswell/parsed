@@ -2,7 +2,7 @@
 
 ::
 
-    python -m parsed check <target> [<target> …] [--max-schema-bytes N]
+    python -m parsed check <target> [<target> …] [--max-schema-bytes N] [--max-chain-bytes N]
 
 ``check`` runs :func:`parsed.doc.check` on a package's commands, for its CI, and writes the report as JSON on
 stdout. It exits ``0`` when every check passed and ``1`` when one didn't. A usage that doesn't read, or a target
@@ -17,7 +17,7 @@ import sys
 from typing import TYPE_CHECKING, NoReturn
 
 from parsed.doc import check
-from parsed.doc.check import MAX_SCHEMA_BYTES
+from parsed.doc.check import MAX_CHAIN_BYTES, MAX_SCHEMA_BYTES
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,7 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     checking = verbs.add_parser(
         'check',
         help="check a package's commands, for its CI",
-        description='Check every command in the targets: the tree, round trips, examples and schemas.',
+        description='Check every command in the targets, and every chain: the tree, round trips, examples and schemas.',
     )
     checking.add_argument('targets', nargs='+', metavar='target', help='a module or package of commands, by name')
     checking.add_argument(
@@ -55,9 +55,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=MAX_SCHEMA_BYTES,
         help=f"the most bytes a command's schema may take, written compactly (default: {MAX_SCHEMA_BYTES})",
     )
+    checking.add_argument(
+        '--max-chain-bytes',
+        type=int,
+        default=MAX_CHAIN_BYTES,
+        help=f"the most bytes a chain's schema may take, written compactly (default: {MAX_CHAIN_BYTES})",
+    )
     args = parser.parse_args(argv)
     try:
-        report = check(args.targets, max_schema_bytes=args.max_schema_bytes)
+        report = check(args.targets, max_schema_bytes=args.max_schema_bytes, max_chain_bytes=args.max_chain_bytes)
     except ImportError as e:
         _fail(f"a target doesn't import: {e}")
     sys.stdout.write(json.dumps(report.to_json(), indent=2) + '\n')

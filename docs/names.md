@@ -33,6 +33,24 @@ as the fleet field's value once it's read, as a string: its key, when the fleet 
 - **A command whose scopes go round** (a station scoped by a berth that's scoped by the station) is refused when
   it's declared, since neither could be read first.
 
+## A chain's place
+
+A name whose scope follows its chain (`Name('station', scope='fleet', follows=True)`) is looked for where the fleet
+will be. A chain's steps may move it on ([`MOVES`](command.md#a-chains-place)), and a later step's name is given the
+place as its scope:
+
+| The line | `dock`'s station looked for with the scope |
+|---|---|
+| `fleet Prospector dock vesta` | `'f1'`, the fleet's key, as any scope |
+| `fleet Prospector mine then dock vesta` | `'f1'`: mining moves nothing |
+| `fleet Prospector jump sol then dock ceres` | `'sol'`, where the jump took it |
+| `fleet Prospector move "Vruba Rings" then dock vesta` | `'vruba-rings'`, the site's key |
+| `fleet Prospector jump nearest iron then dock ceres` | `None`: somewhere the line doesn't say, so every station |
+
+So a resolver given a scope that follows a chain is given a fleet's key or a place's (a system's, a site's), and
+tells them apart as it tells its keys apart: a site's system is the resolver's to know. A word no name answers to
+there says where it was looked: `no station 'vesta' for fleet 'Prospector', once at 'sol'`.
+
 ## Pairs
 
 A [`Pairs`](kinds.md#pairs) category's resolver is a `parsed.names.PairsResolver`: a resolver for the keys (a

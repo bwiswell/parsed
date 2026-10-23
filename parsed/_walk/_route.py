@@ -11,6 +11,9 @@ a prefix, if no word begins a command in both.
 **A line that reaches no mount is refused** as a tree refuses a line: no command, with what may have been meant, or
 the words that may come next. parsed's own flags (``--yes``, ``--json``, …) may stand among the words that route it,
 and a field's flag ends them, since only a mount's tree knows whether it takes a value.
+
+**For a session's subjects** (:mod:`parsed.app`), :meth:`Routes.begins` says whether a word begins a line, and
+:meth:`Routes.reach` how far words go: to a mount, part of the way along a prefix, or nowhere.
 """
 
 from __future__ import annotations
@@ -132,6 +135,25 @@ class Routes[M: Mounted]:
         if not said:
             raise _refused(line, 'no command: the line has no words', suggestions=list(stop.words))
         raise _refused(line, *_next(stop, said))
+
+    def begins(self, token: Token) -> bool:
+        """Whether ``token`` begins a line: the first word of a mount's prefix, or of a command at the root."""
+        return not token.quoted and token.text.lower() in self.root.words
+
+    def reach(self, tokens: Sequence[Token]) -> M | bool:
+        """How far ``tokens``, words without flags, go: the mount they reach, or whether they go at all.
+
+        ``True`` where they stop along a prefix, short of a mount; ``False`` where a word goes nowhere.
+        """
+        stop = self.root
+        for token in tokens:
+            following = None if token.quoted else stop.words.get(token.text.lower())
+            if following is None:
+                return False
+            if following.held is not None:
+                return following.held
+            stop = following
+        return True
 
     def complete(self, text: str) -> M | Completion:
         """The mount whose tree completes ``text``, a line up to the cursor; short of one, what may follow there.

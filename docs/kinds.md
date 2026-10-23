@@ -96,9 +96,9 @@ a name's are its resolver's `options`. A kind of an app's own may override `offe
 
 ## `Name`
 
-`parsed.Name(category, scope=None)` is one of an app's names: a fleet, a station, a good. Its words read to the
-name's key by the resolver the app gives for its `category` with each line ([`names.md`](names.md)); with none,
-as typed.
+`parsed.Name(category, scope=None, *, follows=False)` is one of an app's names: a fleet, a station, a good. Its
+words read to the name's key by the resolver the app gives for its `category` with each line
+([`names.md`](names.md)); with none, as typed.
 
 ```python
 @parsed.parsed
@@ -125,6 +125,11 @@ class FleetDock(FleetCommand):
   station within the fleet's reach, the resolver given the fleet's key. It must name a field of every command that
   reads by it, other than the field itself, and a command's scopes mustn't go round, or the command is refused. An
   entry a base declares but a command never reads by isn't held to it.
+- **`follows=True`** makes the scope follow its chain's place, on a step whose scope is a field its chain shares:
+  `Name('station', scope='fleet', follows=True)` is a station where the fleet is, or, after a step that moves the
+  chain on, where it will be ([`command.md`](command.md#a-chains-place)). It needs a scope, and is refused on a
+  command that isn't a step, or with a scope the chain doesn't share. A kind that follows isn't equal to one that
+  doesn't.
 
 ## `Pairs`
 

@@ -7,6 +7,46 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.7 — 2026-10-23
+
+**Chains and subjects.** A line says a chain of steps, joined by `then`, run as one order, each step's names
+looked for where the fleet will be by then. A chain is one tool call too: its shared fields once and its steps
+tagged by their words, loaded to the steps and written back to its line. A session's subjects let a bare line read
+under a fleet.
+
+### Added
+
+- **Chains of steps:** `STEPS = True` on a base makes the commands beneath it steps, which `then` joins on a line
+  (`fleet prospector jump sol then move belt then mine`); a command beneath it that isn't one declares
+  `STEPS = False`. A step after `then` says only its own words, read where the first step's shared part ends, and
+  gets the chain's shared fields from it. `then` that joins nothing is a word (`say hello then goodbye`). A reading
+  holds the later steps (`reading.then`, `reading.steps`, `reading.chain`, `reading.phrase`), and completion offers
+  `then` after a step and the chain's steps after it. `tree.chains` lists each chain's steps.
+- **Running a chain:** `app.on_chain(Base, handler)` and `mount.on_chain` bind what a chain runs with, as
+  `handler(steps, ctx)`. A lone step with no handler of its own runs by its chain's, as a chain of one. Hooks may
+  name a chain's base, and a result's `command` is the chain's phrase.
+- **A chain's place:** a step declares `MOVES`, the field that says where it takes its chain
+  (`MOVES = 'system'`), or `MOVES = True` for somewhere the line doesn't say. A name whose kind says `follows=True`
+  (`Name('station', scope='fleet', follows=True)`) is looked for where the fleet will be: after `jump sol`, the
+  resolver is given `sol` as its scope, not the fleet's key. Completion offers names there too.
+- **A chain as one tool call:** `parsed.doc.chain_schema(tree, Base)` is its shared fields and `steps`, an array of
+  its steps, each tagged by its words after the shared part (`{"step": "jump", "system": "sol"}`), closed, joined
+  by `anyOf`; `x-effect` is the strongest step's, `x-asks` there if any step asks, and `x-moves` and `x-follows` say
+  where the chain moves. `load_chain` reads a call to its steps and `dump_chain` writes them back;
+  `introspect_chain` gives a `ChainDoc`; `chain_keys` gives each step's key, for a policy that allows a chain only
+  when it allows every step. `tree.render(steps)` and `app.render(steps)` write a chain back to its line, each
+  step's names where the fleet will be by then, and a step's value spelled `then` quoted. `CommandDoc` gains
+  `chain` and `moves`.
+- **`parsed check` checks chains:** each chain's steps round-trip through their line and through the chain's schema
+  as a call, the schema at most `--max-chain-bytes` (8192 by default). The report counts them under `chains`.
+- **Subjects:** the words a session tries before a bare line, `app.open(state, subjects=('fleet prospector',))` or
+  `session.use(…)` (from a handler, `ctx.session.use(…)`), so `mine` reads as `fleet prospector mine`. The line as
+  typed is read first; only where its first word begins no command is each subject tried, in turn, the first whose
+  words go on into it reading the line. A result's `line` is the line as read. `app.walk`, `app.read`,
+  `app.complete` and `app.run` take `subjects=` too, `app.subject_of` says which a line reads under, and
+  `session.complete` completes with the session's. A subject is checked: words, no flags, that a command begins
+  with. Subjects stay out of schemas and keys.
+
 ## 0.1.6 — 2026-10-22
 
 **Waiting.** A read with a typed reply can wait on it: `--until` conditions, checked against the reply's schema

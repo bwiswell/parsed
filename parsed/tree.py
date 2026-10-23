@@ -47,7 +47,7 @@ from seared.doc import collect
 
 from . import _walk
 from ._phrase import Word, parse
-from ._walk import RESERVED, Arity, Completion, Reading, SlotKind
+from ._walk import RESERVED, THEN, Arity, Completion, Reading, SlotKind
 from ._walk._hints import usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
@@ -56,7 +56,7 @@ from .wait import FLAGS as WAIT_FLAGS
 from .wait import SWITCHES as WAIT_SWITCHES
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from ._phrase import Bound, Place
     from .names import Resolver
@@ -131,6 +131,8 @@ class Tree:
         flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until``,
             ``--timeout``, ``--watch``, ``--count``) among them when a command can wait.
         waits: Whether any of its commands can wait (:mod:`parsed.wait`).
+        chains: Each chain's base, to the steps beneath it among the tree's commands, in their order: the commands
+            ``then`` joins on a line.
 
     Raises:
         DeclarationError: A command's declaration doesn't check, two phrases would read a line two ways, a flag
@@ -170,6 +172,7 @@ class Tree:
             for name, flag in flags.items():
                 _check_arity(name, flag.arity, found_declaration.cls.__qualname__, arities)
         self.flags: Mapping[str, Arity] = MappingProxyType({name: arity for name, (arity, _) in arities.items()})
+        self.chains = _chains(self.commands)
 
     @classmethod
     def collect(cls, *targets: str, under: str = '') -> Tree:
@@ -241,16 +244,19 @@ class Tree:
         """
         return _walk.complete(self, text, names)
 
-    def render(self, command: Command, names: Mapping[str, Resolver] | None = None) -> str:
+    def render(self, command: Command | Sequence[Command], names: Mapping[str, Resolver] | None = None) -> str:
         """The line that says ``command``, which reads back to it: the first of its phrases that can say it.
 
         Args:
-            command: An instance of one of the tree's commands.
+            command: An instance of one of the tree's commands; or a chain's steps, in order, said on one line
+                joined by ``then``.
             names: The app's resolvers, by category: with them, a phrase's names must be keys they know, so a
-                polymorphic command is said by the twin its value belongs to.
+                polymorphic command is said by the twin its value belongs to. A step's are known where the chain
+                will be by then.
 
         Raises:
-            RenderError: ``command`` isn't one of the tree's, or none of its phrases can say it.
+            RenderError: ``command`` isn't one of the tree's, or none of its phrases can say it; steps that aren't one
+                chain's, or that don't share its fields' values.
         """
         return _walk.render(self, command, names)
 
@@ -282,6 +288,27 @@ class Tree:
         if node.end is not None:
             raise DeclarationError(_same_lines(node.end, end))
         node.end = end
+
+
+def _chains(commands: tuple[Declaration, ...]) -> Mapping[type, tuple[Declaration, ...]]:
+    """Each chain's base, to its steps among ``commands``, in their order; a step whose phrase says ``then`` refused."""
+    found: dict[type, list[Declaration]] = {}
+    for command in commands:
+        if command.chain is not None:
+            _check_step(command)
+            found.setdefault(command.chain, []).append(command)
+    return MappingProxyType({base: tuple(steps) for base, steps in found.items()})
+
+
+def _check_step(found: Declaration) -> None:
+    """Refuse a step whose phrase says ``then``, the word that joins a chain's steps."""
+    for bound in found.phrases:
+        if THEN in bound.phrase.words:
+            msg = (
+                f"{found.cls.__qualname__}: {bound.phrase.text!r} says {THEN!r}, which joins a chain's steps on a "
+                f"line, so a step can't say it"
+            )
+            raise DeclarationError(msg)
 
 
 def _prefix(under: str) -> str:

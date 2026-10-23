@@ -5,7 +5,11 @@ shape of `zeared.doc` wherever the meaning matches, so a tool reads a command as
 
 - [`introspect.py`](introspect.md): `is_command_class(obj)`, and `introspect_command(cls)`, a `CommandDoc`;
 - [`json_schema.py`](json_schema.md): `json_schema(cls)`, a command's arguments as a closed JSON Schema;
-- [`keys.py`](keys.md): `command_key(command)`, an instance's key for policy, slashed as a topic is;
+- [`keys.py`](keys.md): `command_key(command)`, an instance's key for policy, slashed as a topic is, and
+  `chain_keys(steps)`, each of a chain's steps';
+- [`chains.py`](chains.md): a chain as one tool call: `introspect_chain(tree, base)`, a `ChainDoc`;
+  `chain_schema(tree, base)`, its arguments' schema; `load_chain` and `dump_chain`, its arguments to its steps and
+  back;
 - [`check.py`](check.md): `check(targets)`, and `python -m parsed check`, a package's commands checked in its CI.
 
 ```python

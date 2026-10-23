@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import pytest
 
 import parsed
-from parsed._walk import Completion
+from parsed._walk import Completion, goes, split
 from parsed._walk._complete import being_typed
 from parsed.command import Command
 from parsed.tree import Tree
@@ -31,10 +31,10 @@ class TestWhatComesNext:
         assert tree.complete('FL') == Completion(words=['fleet', 'fleets'], replace=2)
 
     def test_the_literal_words_after_a_slot(self, tree):
-        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
+        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy']
 
     def test_a_whole_command_s_flags(self, tree):
-        assert _words(tree, 'fleet f1 mine ') == ['--for']
+        assert _words(tree, 'fleet f1 mine ') == ['then', '--for']  # a step: another may follow
 
     def test_flags_given_aren_t_offered_again(self, tree):
         assert _words(tree, 'fleets merge f1 ') == ['--into', '--quiet', '--yes']  # asked first, so --yes
@@ -64,7 +64,7 @@ class TestWhatComesNext:
 
     def test_a_literal_beside_a_slot(self, tree):
         assert _words(tree, 'fleet f1 jump ') == ['nearest']
-        assert _words(tree, 'fleet f1 dock ') == ['nearest']
+        assert _words(tree, 'fleet f1 dock ') == ['nearest', 'then']
 
     def test_nothing_where_any_word_may_do(self, tree):
         assert _words(tree, 'log ') == []
@@ -81,8 +81,13 @@ class TestNames:
         assert _words(tree, 'fleets merge f1 --into ', farlandia.NAMES) == ['Prospector', 'Hauler']
 
     def test_scoped_by_the_scope_as_typed(self, tree):
-        assert _words(tree, 'fleet Prospector dock ', farlandia.NAMES) == ['Vesta', '"Vruba\'a Belt 1"', 'nearest']
-        assert _words(tree, 'fleet Hauler dock ', farlandia.NAMES) == ['Ceres', 'nearest']
+        assert _words(tree, 'fleet Prospector dock ', farlandia.NAMES) == [
+            'Vesta',
+            '"Vruba\'a Belt 1"',
+            'nearest',
+            'then',
+        ]
+        assert _words(tree, 'fleet Hauler dock ', farlandia.NAMES) == ['Ceres', 'nearest', 'then']
 
     def test_a_scope_given_as_a_flag(self):
         assert _words(Tree([Board]), 'board --fleet Hauler ', farlandia.NAMES) == ['Ceres']
@@ -101,7 +106,7 @@ class TestNames:
         assert _words(tree, 'fleet Prospector dock "', farlandia.NAMES) == ['Vesta', '"Vruba\'a Belt 1"']
 
     def test_another_of_a_list_s_names(self, tree):
-        assert _words(tree, 'fleet f1 sell iron ', farlandia.NAMES) == ['Iron', 'Coal']
+        assert _words(tree, 'fleet f1 sell iron ', farlandia.NAMES) == ['Iron', 'Coal', 'then']
 
     def test_no_resolver_no_names(self, tree):
         assert _words(tree, 'fleet ') == []
@@ -167,11 +172,11 @@ class TestFarlandiasCases:
     """
 
     def test_completion_offers_words_slots_and_flags(self, tree):
-        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
-        assert _words(tree, 'fleet f1 mine ') == ['--for']
+        assert _words(tree, 'fleet f1 ') == ['mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy']
+        assert _words(tree, 'fleet f1 mine ') == ['then', '--for']  # a step: another may follow
         assert _words(tree, 'fleet f1 mine --for ') == ['10m', '30m', '1h']
         assert _words(tree, 'fleet f1 jump ') == ['nearest']
-        assert _words(tree, 'fleet f1 dock ') == ['nearest']
+        assert _words(tree, 'fleet f1 dock ') == ['nearest', 'then']
         assert _words(tree, 'fleets merge f1 ') == ['--into', '--quiet', '--yes']
         assert tree.complete('fleets merge f1 --q') == Completion(words=['--quiet'], replace=3)
 
@@ -238,3 +243,64 @@ class TestWaits:
 
     def test_a_few_bounds(self, tree):
         assert _words(tree, 'fleets show f1 --until docked=true --timeout ') == ['30s', '1m', '2m', '5m']
+
+
+class TestChains:
+    def test_then_after_a_step(self, tree):
+        assert 'then' in _words(tree, 'fleet f1 jump sol ')
+        assert 'then' not in _words(tree, 'fleet f1 retreat 30 ')  # not a step
+        assert 'then' not in _words(tree, 'log ')
+
+    def test_after_then_the_chain_s_steps(self, tree):
+        assert _words(tree, 'fleet f1 jump sol then ') == ['mine', 'dock', 'jump', 'move', 'sell']
+        assert tree.complete('fleet f1 jump sol then m') == Completion(['mine', 'move'], 1)
+
+    def test_a_later_step_s_words_and_names(self, tree):
+        assert _words(tree, 'fleet f1 jump sol then move belt ') == ['then']
+        assert _words(tree, 'fleet Hauler jump sol then dock ', farlandia.NAMES) == ['Ceres', 'nearest', 'then']
+
+    def test_nothing_after_steps_that_don_t_read(self, tree):
+        assert _words(tree, 'fleet f1 jump then ') == []
+        assert _words(tree, 'fleet f1 mine then zzz ') == []
+
+    def test_then_as_a_word_of_a_command_that_isn_t_a_step(self, tree):
+        assert _words(tree, 'say hello then ') == []
+
+
+class TestChainPlace:
+    # A later step's names, offered where the steps before it have moved the fleet.
+    def test_where_the_fleet_will_be(self, tree):
+        assert _words(tree, 'fleet Prospector dock ', farlandia.NAMES) == [
+            'Vesta',
+            '"Vruba\'a Belt 1"',
+            'nearest',
+            'then',
+        ]
+        assert _words(tree, 'fleet Prospector jump sol then dock ', farlandia.NAMES) == ['Ceres', 'nearest', 'then']
+        line = 'fleet Prospector jump sol then move "Sol Belt" then move '
+        assert _words(tree, line, farlandia.NAMES) == ['Ceres', '"Sol Belt"']
+
+    def test_until_a_step_moves_it(self, tree):
+        offered = _words(tree, 'fleet Prospector mine then dock ', farlandia.NAMES)
+        assert offered == ['Vesta', '"Vruba\'a Belt 1"', 'nearest', 'then']
+
+    def test_somewhere_the_line_doesn_t_say_every_name(self, tree):
+        offered = _words(tree, 'fleet Prospector jump nearest iron then move ', farlandia.NAMES)
+        assert offered == ['Vesta', '"Vruba\'a Belt 1"', '"Vruba Rings"', 'Ceres', '"Sol Belt"']
+
+
+class TestGoes:
+    # Whether words go along a tree as far as they're given, read loosely: for a session's subjects.
+    @pytest.mark.parametrize(
+        ('words', 'goes_on'),
+        [
+            ('fleet prospector', True),  # a slot takes any word
+            ('fleet prospector mine', True),
+            ('detachment scouts dock', False),  # a detachment's only step here is mine
+            ('fleet', True),
+            ('flet', False),
+            ('log 5 more', False),  # left over
+        ],
+    )
+    def test_words_that_go_on(self, tree, words, goes_on):
+        assert goes(tree, split(words)) is goes_on

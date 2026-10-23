@@ -9,7 +9,9 @@ and change while it runs. So an app passes its resolvers with each line it reads
 for a word that names nothing; ``suggest`` gives the names close to a word, for a did-you-mean; ``options`` gives
 every name it may be, for completion. Each takes the scope: the value of the field the ``Name`` is scoped by, once
 that field is read (``Name('station', scope='fleet')`` looks for a station given the fleet's key), or ``None`` when
-the ``Name`` has no scope or the line leaves its scope out.
+the ``Name`` has no scope or the line leaves its scope out. A scope that follows its chain (``follows=True``) is, in
+a later step, where the steps before it have moved the chain: a place's key, or ``None`` where it's somewhere the
+line doesn't say.
 
 **Pairs** (:class:`~parsed.kinds.Pairs`, a keyed field's ``key value`` words, as a routine's variables) take a
 :class:`PairsResolver`: a resolver for the keys, which gives each key's values a resolver of their own, since which

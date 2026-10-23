@@ -13,6 +13,7 @@ def test_it_gathers_its_modules():
     assert _walk.Routes is _route.Routes
     assert set(_walk.__all__) == {
         'RESERVED',
+        'THEN',
         'Arity',
         'Completion',
         'Given',
@@ -22,7 +23,9 @@ def test_it_gathers_its_modules():
         'SlotKind',
         'Token',
         'complete',
+        'goes',
         'key',
+        'moved_by',
         'render',
         'split',
         'walk',

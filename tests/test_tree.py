@@ -36,6 +36,7 @@ class TestCompiling:
             'FleetDock',
             'FleetJump',
             'FleetJumpNearest',
+            'FleetMove',
             'FleetRetreat',
             'FleetRun',
             'FleetSell',
@@ -66,7 +67,7 @@ class TestCompiling:
     def test_a_slot_shared_by_the_commands_after_it(self, fixtures):
         fleet = fixtures.root.words['fleet'].slot
         assert fleet.kind is SlotKind.ONE
-        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'retreat', 'run', 'sell']
+        assert sorted(fleet.node.words) == ['buy', 'dock', 'jump', 'mine', 'move', 'retreat', 'run', 'sell']
 
     def test_a_literal_beside_a_slot(self, fixtures):
         dock = fixtures.root.words['fleet'].slot.node.words['dock']
@@ -95,6 +96,7 @@ class TestCompiling:
             'FleetDock',
             'FleetJump',
             'FleetJumpNearest',
+            'FleetMove',
             'FleetRetreat',
             'FleetRun',
             'FleetSell',
@@ -111,7 +113,7 @@ class TestCompiling:
 
     def test_so_a_node_s_words_come_as_declared(self, fixtures):
         after = fixtures.root.words['fleet'].slot.node
-        assert list(after.words) == ['mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy']
+        assert list(after.words) == ['mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy']
 
     def test_classes_given_keep_the_order_given(self):
         assert [found.cls for found in Tree([farlandia.Log, farlandia.FleetMine]).commands] == [
@@ -396,3 +398,32 @@ class TestUnder:
     def test_refused_unless_it_s_words(self, under, message):
         with pytest.raises(DeclarationError, match=message):
             Tree([farlandia.Log], under=under)
+
+
+class TestChains:
+    def test_each_chain_s_steps(self, fixtures):
+        steps = [found.cls for found in fixtures.chains[farlandia.FleetCommand]]
+        assert steps == [
+            farlandia.FleetMine,
+            farlandia.FleetDock,
+            farlandia.FleetJump,
+            farlandia.FleetJumpNearest,
+            farlandia.FleetMove,
+            farlandia.FleetSell,
+        ]
+        assert list(fixtures.chains) == [farlandia.FleetCommand]
+
+    def test_none_without_steps(self):
+        assert dict(Tree([farlandia.Log]).chains) == {}
+
+    def test_a_step_can_t_say_then(self):
+        @parsed.parsed
+        class Hop(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} hop then skip'
+
+        with pytest.raises(DeclarationError, match=r"Hop: 'fleet \{fleet\} hop then skip' says 'then', which joins"):
+            Tree([Hop])
+
+    def test_a_command_that_isn_t_a_step_may(self):
+        said = _command('say then {word}', word=parsed.Str())
+        assert Tree([said]).read('say then hi').word == 'hi'

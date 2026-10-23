@@ -35,6 +35,10 @@ resolver for its category** ([`names.md`](../names.md)), when `walk(tree, line, 
 gives the key. The walk first gathers each field's words, then reads them in an order that puts a scope before
 the names it narrows, whatever their order on the line, and gives each resolver its scope's value.
 
+**A chain's place moves on** with each step that declares `MOVES`. A later step's name whose scope follows the
+chain is given that place instead of its field's value, or no scope where a step went somewhere the line doesn't
+say ([`names.md`](../names.md#a-chains-place)). A placeholder is a place the line doesn't say.
+
 ## Placeholders
 
 `walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes
@@ -52,7 +56,9 @@ command. Without `placeholders`, a `<name>` is a word like any other.
 | `own` | parsed's own flags the line gives, by name: `yes`, `json`, … |
 | `line` | the line read |
 | `wait` | its wait, when it gives `--until` on a command that can wait: its conditions and its bound ([`wait.md`](../wait.md)) |
-| `command` | the command class (a property) |
+| `then` | a chain's steps after this one, each a reading of its own holding the chain's shared fields; none for a line of one command |
+| `command` | the command class (a property): a chain's first step's |
+| `chain`, `steps`, `phrase` | the chain's base for a step, else `None`; every step, this one first; the phrase that says the line, a chain's joined by `then` (properties) |
 
 Each of `given` is a `Given`: `by`, the slot (a `Place`) or the flag (a `Flag`) that took the words; `words`, every
 `Token` that went into the field, flags and all, in the line's order; and `value`, what seared loads for it: each
@@ -88,10 +94,14 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
 | gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]` `` | the resolver's |
+| gives a later step a name not where the chain will be | ``fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> dock [<station>]` `` | the resolver's |
 | gives a pair's key no key answers to | `… {variables**}: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
 | gives a pair's value no name answers to | `… {variables**}: no home 'mars'` | the key's resolver's |
 | leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
 | gives a key twice | `… {variables**}: ore is given twice` | |
+| joins nothing with `then` | `` `then` needs a step on each side: dock then sell `` | |
+| joins what isn't a step | `` `then` joins steps: 'retreat 30%' is not one of FleetCommand's `` | |
+| waits in a chain | `a chain doesn't wait: --until and --watch are a read's, on a line of its own` | |
 | waits on a path its reply hasn't | `--until 'dockd' names no field of FleetView; did you mean 'docked'?` | the reply's fields close to it |
 | gives a condition that isn't one | ``--until: a condition is path=value, … not 'docked' `--until <path>=<value>` `` | |
 | bounds a wait it doesn't give | `--timeout bounds a wait or a watch: give --until or --watch too` | |

@@ -22,7 +22,7 @@ class TestMain:
     def test_a_clean_package(self, capsys):
         assert main(['check', '_support_farlandia', '_support_rio']) == 0
         report = json.loads(capsys.readouterr().out)
-        assert (report['ok'], report['commands']) == (True, 16)
+        assert (report['ok'], report['commands']) == (True, 17)
 
     def test_problems_exit_1(self, capsys):
         assert main(['check', '_support_check.round_trip']) == 1
@@ -32,6 +32,11 @@ class TestMain:
     def test_the_schema_bound(self, capsys):
         assert main(['check', '_support_rio', '--max-schema-bytes', '100']) == 1
         assert json.loads(capsys.readouterr().out)['problems'][0]['check'] == 'schema'
+
+    def test_the_chain_s_bound(self, capsys):
+        assert main(['check', '_support_farlandia', '--max-chain-bytes', '100']) == 1
+        (problem,) = json.loads(capsys.readouterr().out)['problems']
+        assert (problem['check'], problem['command']) == ('chain', '_support_farlandia.FleetCommand')
 
     @pytest.mark.parametrize(
         ('argv', 'says'),

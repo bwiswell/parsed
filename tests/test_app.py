@@ -8,7 +8,7 @@ import sys
 import threading
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import _support_farlandia as farlandia
 import _support_handlers as handlers
@@ -16,7 +16,9 @@ import _support_service as service
 import pytest
 
 import parsed
+from parsed._walk import Completion
 from parsed.app import App, Mount, Routed
+from parsed.doc import command_key, load_chain
 from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.tree import Tree
 
@@ -160,6 +162,12 @@ class TestRendering:
     def test_a_mount_that_doesn_t_hold_it(self, app):
         with pytest.raises(RenderError, match=r"Log is not mounted in _support_service under 'relay'"):
             app.render(farlandia.Log(), mount=_mount(app, 'relay'))
+
+    def test_a_chain_s_steps_by_its_first_s_mount(self, app):
+        steps = [farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetMine(fleet='f1')]
+        assert app.render(steps) == 'fleet f1 jump sol then mine'
+        with pytest.raises(RenderError, match=r'a chain has a step at least'):
+            app.render([])
 
     def test_a_mount_of_another_app(self, app):
         other = App('other').mount('_support_service')
@@ -1278,3 +1286,300 @@ class TestWatching:
         assert [result.to_json()['reply'] for result in found] == [
             {'fleet': 'f1', 'docked': docked} for docked in (False, True, False, True)
         ]
+
+
+class _Orders:
+    """A fake state for a fleet's orders: what each chain sent, in order."""
+
+    def __init__(self) -> None:
+        self.sent: list[list[object]] = []
+
+
+def _ordered(steps, ctx):
+    """A chain's handler: the steps, sent as one order."""
+    ctx.state.sent.append(steps)
+    return f'{len(steps)} steps'
+
+
+class TestChains:
+    @pytest.fixture
+    def game(self) -> App:
+        found = App('farlandia')
+        found.names('fleet', farlandia.NAMES['fleet'])
+        found.mount('_support_farlandia')
+        found.on_chain(farlandia.FleetCommand, _ordered)
+        return found
+
+    async def test_a_chain_runs_as_one_order(self, game):
+        orders = _Orders()
+        async with game.open(orders) as session:
+            found = await session.run('fleet Prospector jump sol then move belt then mine')
+        assert orders.sent == [
+            [
+                farlandia.FleetJump(fleet='f1', system='sol'),
+                farlandia.FleetMove(fleet='f1', to='belt'),
+                farlandia.FleetMine(fleet='f1'),
+            ]
+        ]
+        assert (found.ok, found.text, found.command) == (
+            True,
+            '3 steps',
+            'fleet {fleet} jump {system} then move {to} then mine',
+        )
+
+    async def test_each_step_s_names_where_the_fleet_will_be(self, game):
+        for category in ('system', 'site', 'station'):
+            game.names(category, farlandia.NAMES[category])
+        orders = _Orders()
+        async with game.open(orders) as session:
+            found = await session.run('fleet Prospector jump sol then move "Sol Belt" then mine')
+            refused = await session.run('fleet Prospector jump sol then move Vesta')
+        assert orders.sent == [
+            [
+                farlandia.FleetJump(fleet='f1', system='sol'),
+                farlandia.FleetMove(fleet='f1', to='sol-belt'),
+                farlandia.FleetMine(fleet='f1'),
+            ]
+        ]
+        assert found.ok
+        assert (refused.code, refused.error and refused.error['message']) == (
+            2,
+            "fleet {fleet} move {to}: no site 'Vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> move <to>`",
+        )
+
+    async def test_a_chain_called_as_a_tool(self, game):
+        for category in ('system', 'site', 'station'):
+            game.names(category, farlandia.NAMES[category])
+        call = {
+            'fleet': 'f1',
+            'steps': [{'step': 'jump', 'system': 'sol'}, {'step': 'move', 'to': 'sol-belt'}, {'step': 'mine'}],
+        }
+        steps = load_chain(game.mounts[0].tree, farlandia.FleetCommand, call)
+        line = game.render(steps)
+        assert line == 'fleet f1 jump sol then move sol-belt then mine'
+        orders = _Orders()
+        async with game.open(orders) as session:
+            found = await session.run(line)
+        assert (found.ok, orders.sent) == (True, [steps])
+
+    async def test_a_lone_step_as_a_chain_of_one(self, game):
+        orders = _Orders()
+        async with game.open(orders) as session:
+            await session.run('fleet f1 mine')
+        assert orders.sent == [[farlandia.FleetMine(fleet='f1')]]
+
+    async def test_a_step_s_own_handler_runs_it_alone(self, game):
+        game.on(farlandia.FleetMine, lambda command, ctx: f'{command.fleet} mines')
+        orders = _Orders()
+        async with game.open(orders) as session:
+            alone = await session.run('fleet f1 mine')
+            chained = await session.run('fleet f1 mine then dock')
+        assert alone.text == 'f1 mines'
+        assert orders.sent == [[farlandia.FleetMine(fleet='f1'), farlandia.FleetDock(fleet='f1')]]
+        assert chained.text == '2 steps'
+
+    async def test_a_chain_s_context_says_its_steps(self, game):
+        seen = []
+        mount = game.mounts[0]  # its own, over the app's
+        mount.on_chain(farlandia.FleetCommand, lambda steps, ctx: seen.append(ctx))
+        async with game.open() as session:
+            await session.run('fleet f1 jump sol then mine')
+        (ctx,) = seen
+        assert [step.command for step in ctx.reading.steps] == [farlandia.FleetJump, farlandia.FleetMine]
+        assert ctx.line == 'fleet f1 jump sol then mine'
+
+    async def test_a_chain_with_no_handler(self):
+        game = App('farlandia')
+        game.mount('_support_farlandia')
+        async with game.open() as session:
+            chained = await session.run('fleet f1 jump sol then mine')
+            alone = await session.run('fleet f1 mine')
+        assert chained.code == 1
+        assert chained.text == (
+            "LookupError: FleetCommand's chain has no handler in _support_farlandia at the root: bind one with "
+            'app.on_chain'
+        )
+        assert alone.text.endswith("nor has FleetCommand's chain: bind one with app.on, or app.on_chain")
+
+    async def test_hooks_of_the_chain_s_base(self, game):
+        seen = []
+        game.before(lambda steps, ctx: seen.append(('chain', len(steps))), farlandia.FleetCommand)
+        game.before(lambda command, ctx: seen.append('mine alone'), farlandia.FleetMine)
+        async with game.open(_Orders()) as session:
+            await session.run('fleet f1 jump sol then mine')
+        assert seen == [('chain', 2)]
+
+    async def test_a_value_a_later_step_refuses(self, game):
+        @parsed.parsed
+        class Hold(farlandia.FleetCommand):
+            PHRASE = 'fleet {fleet} hold {hours}'
+
+            hours: int = parsed.Int(required=True, ge=1)
+
+        game = App('farlandia')
+        game.mount(Tree([farlandia.FleetMine, Hold]))
+        game.on_chain(farlandia.FleetCommand, _ordered)
+        async with game.open(_Orders()) as session:
+            found = await session.run('fleet f1 mine then hold 0')
+        assert (found.code, found.error['field']) == (4, 'hours')
+
+    async def test_a_chain_s_reply_its_base_s(self, game):
+        game.mounts[0].on_chain(farlandia.FleetCommand, lambda steps, ctx: farlandia.FleetView(fleet='f1'))
+        async with game.open() as session:
+            found = await session.run('fleet f1 mine then dock')
+        assert found.code == 1
+        assert found.text.startswith("TypeError: FleetCommand's handler returned a FleetView")
+
+    @pytest.mark.parametrize(
+        ('base', 'message'),
+        [
+            (farlandia.FleetMine, r"on_chain\(.*FleetMine.*, …\): a chain's base"),
+            (farlandia.Log, r"on_chain\(.*Log.*, …\): a chain's base"),
+            ('fleet', r"on_chain\('fleet', …\): a chain's base"),
+        ],
+    )
+    def test_refused_unless_a_chain_s_base(self, game, base, message):
+        with pytest.raises(DeclarationError, match=message):
+            game.on_chain(base, _ordered)
+
+    def test_bound_once(self, game):
+        with pytest.raises(DeclarationError, match=r"FleetCommand has a chain's handler already: bind one once"):
+            game.on_chain(farlandia.FleetCommand, _ordered)
+
+    def test_a_mount_binds_only_a_chain_it_holds(self):
+        relay = App('rio').mount('_support_service', under='relay')
+        with pytest.raises(DeclarationError, match=r"has no step of FleetCommand's chain"):
+            relay.on_chain(farlandia.FleetCommand, _ordered)
+
+    def test_hooks_may_name_a_chain_s_base_but_no_other_base(self, game):
+        game.after(print, farlandia.FleetCommand)
+        with pytest.raises(DeclarationError, match=r"a command class, with a PHRASE, or a chain's base"):
+            game.after(print, service.ServiceCommand)
+
+
+@parsed.parsed
+class Use(parsed.Command):
+    """Make a fleet the subject: its bare verbs read under it."""
+
+    PHRASE = 'use {fleet}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': farlandia.FLEET}
+
+    fleet: str = parsed.Str(required=True)
+
+
+def _use(command, ctx):
+    ctx.session.use(f'fleet {command.fleet}')
+    return f'orders now go to {command.fleet}'
+
+
+def _mined(command, ctx):
+    return f'{command.fleet} mines, read as {ctx.line!r}'
+
+
+#: The terminal game's subject: a fleet, by its name.
+_PROSPECTOR = ('fleet prospector',)
+
+
+class TestSubjects:
+    @pytest.fixture
+    def game(self, app) -> App:
+        app.names('detachment', farlandia.NAMES['detachment'])
+        app.mount(Tree([Use]))
+        app.on(Use, _use)
+        app.on(farlandia.FleetMine, _mined)
+        app.on_chain(farlandia.FleetCommand, _ordered)
+        return app
+
+    async def test_a_bare_line_reads_under_a_subject(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mine')
+        assert (found.ok, found.text) == (True, "f1 mines, read as 'fleet prospector mine'")
+        assert (found.line, found.command) == ('fleet prospector mine', 'fleet {fleet} mine')  # the line as read
+
+    async def test_the_line_as_typed_first(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert (await session.run('fleet hauler mine')).text == "f2 mines, read as 'fleet hauler mine'"
+        assert game.walk('relay status', subjects=_PROSPECTOR).command is service.Status  # a mount's words too
+
+    def test_each_subject_in_turn(self, game):
+        subjects = ('relay', 'ship s1', 'fleet prospector')
+        assert game.read('run', subjects=subjects) == service.Run()
+        assert game.read('fit', subjects=subjects) == farlandia.ShipFit(ship='s1')
+        assert game.read('mine', subjects=subjects) == farlandia.FleetMine(fleet='f1')  # past those that don't go on
+        assert game.subject_of('mine', subjects) == 'fleet prospector'
+        assert game.subject_of('log', subjects) is None  # as typed
+
+    def test_a_twin_s_subject(self, game):
+        routed = game.walk('mine', subjects=('detachment scouts',))
+        assert (routed.load(), routed.said) == (farlandia.FleetMine(fleet='d2'), 'detachment {detachment} mine')
+
+    async def test_a_chain_under_a_subject(self, game):
+        orders = _Orders()
+        async with game.open(orders, subjects=_PROSPECTOR) as session:
+            await session.run('jump sol then mine')
+        assert orders.sent == [[farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetMine(fleet='f1')]]
+
+    async def test_a_line_no_subject_takes_is_read_as_typed(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mien')
+        assert (found.code, found.line) == (2, 'mien')
+        assert found.text.startswith("no command 'mien'")
+
+    async def test_a_refusal_says_the_line_read(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mine --for soon')
+        assert (found.code, found.line) == (2, 'fleet prospector mine --for soon')
+        assert found.error is not None
+        assert (found.error['line'], found.error['column']) == ('fleet prospector mine --for soon', 28)
+
+    async def test_help_under_a_subject(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert (await session.run('mine --help')).text == 'fleet <fleet> mine [--for <for>]'
+
+    async def test_a_handler_makes_one_the_session_s(self, game):
+        async with game.open() as session:
+            assert (await session.run('use prospector')).text == 'orders now go to f1'
+            assert session.subjects == ('fleet f1',)
+            assert (await session.run('mine')).text == "f1 mines, read as 'fleet f1 mine'"
+            session.use()
+            assert (await session.run('mine')).code == 2  # none now
+
+    def test_one_line_in_a_session_of_its_own(self, game):
+        assert game.run('mine', subjects=_PROSPECTOR).text == "f1 mines, read as 'fleet prospector mine'"
+
+    @pytest.mark.parametrize(
+        ('subjects', 'message'),
+        [
+            (('flet prospector',), r"subject 'flet prospector': no command of farlandia begins with its words"),
+            (('fleet prospector --yes',), r'a subject is words a line begins with, no flags'),
+            (('',), r"subject '': a subject is words a line begins with"),
+            (('fleet "open',), r"subject 'fleet \"open': the quote at column 7 is never closed"),
+            ('fleet prospector', r'a sequence of subjects; one alone needs a trailing comma'),
+        ],
+    )
+    def test_a_subject_is_words_a_command_begins_with(self, game, subjects, message):
+        with pytest.raises(ValueError, match=message):
+            game.open(subjects=subjects)
+        with pytest.raises(ValueError, match=message):
+            game.read('mine', subjects=subjects)
+
+    async def test_and_so_is_one_used(self, game):
+        async with game.open() as session:
+            with pytest.raises(ValueError, match=r'no command of farlandia begins with its words'):
+                session.use('flet prospector')
+            assert session.subjects == ()
+
+    def test_completing_a_bare_line(self, game):
+        words = game.complete('', subjects=_PROSPECTOR).words
+        assert words[:3] == ['fleet', 'detachment', 'log']  # the commands' first words, then the subject's
+        assert words[-8:] == ['mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy']
+        assert game.complete('mi', subjects=_PROSPECTOR) == Completion(['mine'], 2)
+        assert game.complete('dock ', subjects=_PROSPECTOR).words == ['nearest', 'then']
+        assert game.complete('lo', subjects=_PROSPECTOR).words == ['log']
+
+    async def test_the_session_completes_with_its_own(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert session.complete('mi') == Completion(['mine'], 2)
+
+    def test_kept_out_of_keys(self, game):
+        assert command_key(game.read('mine', subjects=_PROSPECTOR)) == command_key(game.read('fleet f1 mine'))

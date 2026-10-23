@@ -61,7 +61,7 @@ class TestCommandDoc:
 
     def test_its_kinds_and_its_schema(self):
         found = introspect_command(farlandia.FleetDock)
-        assert found.kinds['station'] == parsed.Name('station', scope='fleet')
+        assert found.kinds['station'] == parsed.Name('station', scope='fleet', follows=True)
         assert isinstance(found.schema, SchemaDoc)
         assert [f.attr for f in found.schema.fields] == ['fleet', 'station']
 
@@ -79,6 +79,13 @@ class TestCommandDoc:
         assert (fit.interactive, fit.instead) == (True, farlandia.ShipsMakeAdd)
         assert introspect_command(farlandia.FleetsShow).reply is farlandia.FleetView
         assert introspect_command(farlandia.ShipsMakeAdd).polymorphic is None
+
+    def test_a_step_s_chain_and_where_it_moves_it(self):
+        jump = introspect_command(farlandia.FleetJump)
+        assert (jump.chain, jump.moves) == (farlandia.FleetCommand, 'system')
+        assert introspect_command(farlandia.FleetJumpNearest).moves is True
+        log = introspect_command(farlandia.Log)
+        assert (log.chain, log.moves) == (None, False)
 
     def test_its_examples(self):
         assert introspect_command(farlandia.FleetDock).examples == (

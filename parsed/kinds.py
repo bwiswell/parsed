@@ -278,16 +278,20 @@ class Named(Kind):
         category: What it names (``fleet``, ``station``, ``good``): the key the app's resolvers are given by.
         scope: Another field of the command, whose value narrows the lookup: a station within the fleet's reach,
             with ``scope='fleet'``. ``None`` looks across every name of the category.
+        follows: Whether the scope follows its chain's place, on a step whose scope is a field its chain shares: once
+            an earlier step has moved the chain on (its ``MOVES``), the scope is where it moved to, so a station is
+            looked for where the fleet will be. Keyword-only.
 
     Raises:
-        DeclarationError: The category or the scope isn't a name.
+        DeclarationError: The category or the scope isn't a name, or ``follows`` has no scope to follow.
     """
 
     category: str
     scope: str | None = None
+    follows: bool = dataclasses.field(default=False, kw_only=True)
 
     def __post_init__(self) -> None:
-        """Refuse a category or a scope that isn't a name."""
+        """Refuse a category or a scope that isn't a name, and a ``follows`` with no scope."""
         Kind.__post_init__(self)
         said = type(self).__name__
         if not isinstance(self.category, str) or not self.category.isidentifier():
@@ -295,6 +299,15 @@ class Named(Kind):
             raise DeclarationError(msg)
         if self.scope is not None and (not isinstance(self.scope, str) or not self.scope.isidentifier()):
             msg = f'{said}({self.category!r}, scope={self.scope!r}): a scope is the name of another field'
+            raise DeclarationError(msg)
+        if not isinstance(self.follows, bool):
+            msg = f'{said}({self.category!r}, follows={self.follows!r}): True or False'
+            raise DeclarationError(msg)
+        if self.follows and self.scope is None:
+            msg = (
+                f"{said}({self.category!r}, follows=True): it follows its scope's place along a chain, so it needs "
+                f"a scope, the chain's field: scope='fleet'"
+            )
             raise DeclarationError(msg)
 
 
