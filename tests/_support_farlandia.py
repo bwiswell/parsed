@@ -15,6 +15,8 @@ It grows with each release that needs more of it. So far, the declarations, and 
 - a share in percent, or off (`fleet {fleet} retreat {share}`), and a routine taken up with its variables, each
   read by the variable's own names (`fleet {fleet} run {routine} {variables**}`);
 - lines that say a command, its `EXAMPLES`, with `<name>` placeholders and without;
+- a fleet's orders as steps of a chain, joined by `then` (`fleet {fleet} jump {system} then move {to} then mine`), and
+  the fleet's commands that aren't steps (`retreat`, `run`, `buy ship`);
 - the app's names, as resolvers over fixed tables (:class:`Table`, :class:`Variables`, :data:`NAMES`): fleets,
   detachments, goods, stations within a fleet's reach (one with an apostrophe in its name), routines, and each
   routine's variables.
@@ -109,9 +111,12 @@ class FleetView(parsed.Parsed):
 
 @parsed.parsed
 class FleetCommand(parsed.Command):
-    """A base: the fleet every command beneath it acts on, their effect, and how a fleet or a detachment is read."""
+    """A base: the fleet every command beneath it acts on, their effect, how a fleet or a detachment is read, and
+    the chain its orders are steps of.
+    """
 
     EFFECT = parsed.Effect.WRITE
+    STEPS = True
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': FLEET, 'detachment': DETACHMENT}
     ALIASES: ClassVar[dict[str, str]] = {'detachment': 'fleet'}
 
@@ -163,10 +168,21 @@ class FleetJumpNearest(FleetCommand):
 
 
 @parsed.parsed
+class FleetMove(FleetCommand):
+    """Move within the system, to a belt or a station."""
+
+    PHRASE = 'fleet {fleet} move {to}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'to': parsed.Name('site')}
+
+    to: str = parsed.Str(required=True, doc='where to')
+
+
+@parsed.parsed
 class FleetRetreat(FleetCommand):
-    """Set the share of its hull at which a fleet retreats, or turn retreating off."""
+    """Set the share of its hull at which a fleet retreats, or turn retreating off: a setting, not a step."""
 
     PHRASE = 'fleet {fleet} retreat {share}'
+    STEPS = False
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'share': parsed.kinds.Number(suffix='%', words={'off': None})}
 
     share: float | None = parsed.Float(
@@ -179,6 +195,7 @@ class FleetRun(FleetCommand):
     """Take up a routine, its variables given."""
 
     PHRASE = 'fleet {fleet} run {routine} {variables**}'
+    STEPS = False
     EXAMPLES = ('fleet <fleet> run <routine> <variable> <value>', 'fleet prospector run mining ore iron home vesta')
     KINDS: ClassVar[dict[str, parsed.Kind]] = {
         'routine': parsed.Name('routine'),
@@ -227,6 +244,7 @@ class FleetBuyShip(FleetCommand):
     PHRASE = 'fleet {fleet} buy ship {hull}'
     EFFECT = parsed.Effect.ACTION
     ASKS = True
+    STEPS = False
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'hull': parsed.Name('hull')}
 
     hull: str = parsed.Str(required=True, doc='the hull to buy')

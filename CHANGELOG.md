@@ -7,6 +7,22 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.7 — unreleased
+
+**Chains and subjects.**
+
+### Added
+
+- **Chains of steps:** `STEPS = True` on a base makes the commands beneath it steps, which `then` joins on a line
+  (`fleet prospector jump sol then move belt then mine`); a command beneath it that isn't one declares
+  `STEPS = False`. A step after `then` says only its own words, read where the first step's shared part ends, and
+  gets the chain's shared fields from it. `then` that joins nothing is a word (`say hello then goodbye`). A reading
+  holds the later steps (`reading.then`, `reading.steps`, `reading.chain`, `reading.phrase`), and completion offers
+  `then` after a step and the chain's steps after it. `tree.chains` lists each chain's steps.
+- **Running a chain:** `app.on_chain(Base, handler)` and `mount.on_chain` bind what a chain runs with, as
+  `handler(steps, ctx)`. A lone step with no handler of its own runs by its chain's, as a chain of one. Hooks may
+  name a chain's base, and a result's `command` is the chain's phrase.
+
 ## 0.1.6 — 2026-10-22
 
 **Waiting.** A read with a typed reply can wait on it: `--until` conditions, checked against the reply's schema

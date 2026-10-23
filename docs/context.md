@@ -21,7 +21,7 @@ async def mine(command: FleetMine, ctx: parsed.Context[Controls]) -> str:
 | `params` | the mount's parameters: what the app gave it when it mounted it (a service's settings) |
 | `names` | the resolvers the line was read with, by category: the app's, and the mount's over them |
 | `line` | the line called |
-| `reading` | what the line was read to ([`Reading`](_walk/_walker.md#reading)): each field's words and value, and parsed's own flags |
+| `reading` | what the line was read to ([`Reading`](_walk/_walker.md#reading)): each field's words and value, parsed's own flags, and a chain's `steps` |
 | `phrase` | the phrase that said the line, as its command declares it, without its mount's prefix: `'detachment {detachment} mine'`, so a handler tells a twin's wording from its command's |
 | `dry_run` | whether the line gave `--dry-run`: what the command would do, done by nothing |
 | `verbosity` | how much to say, as the session was opened with: `0` by default, more for more |

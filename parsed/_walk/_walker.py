@@ -35,24 +35,24 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 from seared import ValidationError
 
-from parsed._phrase import Place, Slot
+from parsed._phrase import Place, Slot, Word
 from parsed.errors import ReadError
 from parsed.kinds import NOT_LITERAL, Name, Named, Pairs, span
 from parsed.wait import FLAGS as WAIT_FLAGS
 from parsed.wait import TIMEOUT, Condition, Wait, problem
 
 from ._hints import close, either, usage
-from ._terms import RESERVED, Arity, SlotKind
+from ._terms import RESERVED, THEN, Arity, SlotKind
 from ._words import Token, split
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
     from seared import Field, Seared
 
@@ -94,6 +94,8 @@ class Reading:
         own: parsed's own flags the line gives, by name (``yes``, ``json``, …), for whatever runs the command.
         line: The line read.
         wait: Its wait, when it gives ``--until`` on a command that can wait: the conditions and the bound.
+        then: A chain's steps after this one, each a reading of its own, in the line's order; none for a line of
+            one command. Each holds the chain's shared fields too, as its first step gave them.
     """
 
     end: End
@@ -101,11 +103,37 @@ class Reading:
     own: frozenset[str]
     line: str
     wait: Wait | None = None
+    then: tuple[Reading, ...] = ()
 
     @property
     def command(self) -> type[Command]:
-        """The command the line says."""
+        """The command the line says: a chain's first step."""
         return self.end.declaration.cls
+
+    @property
+    def chain(self) -> type[Command] | None:
+        """The chain's base, when the command is a step; ``None`` otherwise."""
+        return self.end.declaration.chain
+
+    @property
+    def steps(self) -> tuple[Reading, ...]:
+        """Every step the line says, this one first; this one alone, for a line of one command."""
+        return (self, *self.then)
+
+    @property
+    def phrase(self) -> str:
+        """The phrase that says the line: for a chain, its steps' joined by ``then``.
+
+        Each step after the first says its phrase from where the chain's shared part ends:
+        ``fleet {fleet} jump {system} then move {to} then mine``.
+        """
+        said = [self.end.bound.phrase.text]
+        if self.then:
+            shared = _shared(cast('type', self.chain))
+            for step in self.then:
+                parts = step.end.bound.phrase.parts[_head(step.end, shared)[0] :]
+                said.append(' '.join(part.text if isinstance(part, Word) else _slot_text(part) for part in parts))
+        return f' {THEN} '.join(said)
 
     def data(self) -> dict[str, object]:
         """The fields' values by wire name, as seared's ``load`` takes them."""
@@ -188,17 +216,84 @@ class _Walker:
         if tokens and _flag(tokens[0]) is not None:
             msg = f'{tokens[0].raw} comes before a command: a flag follows the first word'
             raise self.refuse(msg, word=tokens[0])
+        pieces, joins = _pieces(self.tree, tokens) if self.tree.chains else ([tokens], [])
+        if not joins:
+            return self._step(tokens)[0]
+        return self._chain(tokens, pieces, joins)
+
+    def _step(
+        self,
+        tokens: list[Token],
+        *,
+        said: Sequence[Token] = (),
+        later: _Later | None = None,
+        shared: Mapping[str, _Field] | None = None,
+    ) -> tuple[Reading, dict[str, _Field]]:
+        """One command's words read: from the root, or a chain's later step from the chain's place in the tree.
+
+        A later step comes with the words said before it, for its refusals, where it starts, and the chain's shared
+        fields, as its first step gave them.
+        """
         words, flags, own = self._split_flags(tokens)
         if not words:
             msg = 'no command: the line has no words'
             raise self.refuse(msg, suggestions=list(self.tree.root.words))
-        end, slots = self._walk_words(words)
+        shared = shared or {}
+        end, slots = self._walk_words(words, said=said, later=later)
         flags, wait = self._wait(end, flags)
         specs = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
-        fields = {**self._slot_fields(end, slots, specs), **self._flag_fields(end, flags, words, specs)}
+        skip = 0 if not shared else _head(end, set(shared))[1]
+        fields = {
+            **shared,
+            **self._slot_fields(end, slots, specs, skip=skip),
+            **self._flag_fields(end, flags, words, specs, have=set(shared)),
+        }
         values = self._values(fields)
         given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
-        return Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line, wait=wait)
+        reading = Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line, wait=wait)
+        return reading, fields
+
+    # --- a chain ----------------------------------------------------------------------------------------------
+
+    def _chain(self, tokens: list[Token], pieces: list[list[Token]], joins: list[Token]) -> Reading:
+        """A line whose first piece is a step: each piece a step of its chain. Otherwise, the line as one command."""
+        if not all(pieces):
+            word = joins[0] if not pieces[0] else joins[next(at for at, piece in enumerate(pieces) if not piece) - 1]
+            msg = f'`{THEN}` needs a step on each side: dock {THEN} sell'
+            raise self.refuse(msg, word=word)
+        try:
+            first, fields = self._step(pieces[0])
+        except ReadError as refused:
+            return self._whole(tokens, refused)
+        base = first.chain
+        if base is None:
+            msg = f'`{THEN}` joins steps: {_said(pieces[0])!r} is not one'
+            return self._whole(tokens, self.refuse(msg, word=joins[0]))
+        attrs = _shared(base)
+        shared = {attr: field for attr, field in fields.items() if attr in attrs}
+        later = _Later(_place_of(self.tree, first.end, _head(first.end, attrs)[0]), attrs, base)
+        said = list(pieces[0])
+        then: list[Reading] = []
+        for join, piece in zip(joins, pieces[1:], strict=True):
+            said.append(join)
+            step, _ = self._step(piece, said=said, later=later, shared=shared)
+            if step.chain is not base:
+                msg = f"`{THEN}` joins steps: {_said(piece)!r} is not one of {base.__qualname__}'s"
+                raise self.refuse(msg, word=piece[0])
+            then.append(step)
+            said += piece
+        if any(step.wait is not None for step in (first, *then)):
+            msg = "a chain doesn't wait: --until and --watch are a read's, on a line of its own"
+            raise self.refuse(msg, word=joins[0])
+        own = frozenset().union(*(step.own for step in (first, *then)))
+        return replace(first, own=own, then=tuple(then))
+
+    def _whole(self, tokens: list[Token], refused: ReadError) -> Reading:
+        """The line read as one command, ``then`` and all; refused as ``refused`` says, if it doesn't read so."""
+        try:
+            return self._step(tokens)[0]
+        except ReadError:
+            raise refused from None
 
     def refuse(  # noqa: PLR0913 -- one refusal, its parts named
         self,
@@ -278,11 +373,17 @@ class _Walker:
             raise self.refuse(msg, word=token)
         own.add(name)
 
-    # --- the words ---------------------------------------------------------------------------------------------
+    # --- the words ---
 
-    def _walk_words(self, words: list[Token]) -> tuple[End, list[tuple[Token, ...]]]:
-        """Walk the words from the root: where they end, and each slot's words on the way, in order."""
-        node, said = self.tree.root, []
+    def _walk_words(
+        self, words: list[Token], *, said: Sequence[Token] = (), later: _Later | None = None
+    ) -> tuple[End, list[tuple[Token, ...]]]:
+        """Walk the words from the root, or a chain's place: where they end, and each slot's words on the way.
+
+        ``said`` is the words before them on the line, for a refusal to say; ``later``, a chain's later step's place
+        and shared fields, so a refusal offers only the chain's steps there.
+        """
+        node, said = self.tree.root if later is None else later.start, list(said)
         slots: list[tuple[Token, ...]] = []
         at = 0
         while at < len(words):
@@ -294,10 +395,10 @@ class _Walker:
                 continue
             edge = node.slot
             if edge is None:
-                raise self._unknown(node, said, words[at])
+                raise self._unknown(node, said, words[at], later)
             taken = _taken(edge.kind, edge.node, words, at)
             if not taken:
-                raise self._which(edge, said, words[at], len(slots))
+                raise self._which(edge, said, words[at], len(slots), later)
             slots.append(taken)
             said += taken
             node = edge.node
@@ -305,24 +406,26 @@ class _Walker:
         if node.end is not None:
             return node.end, slots
         if node.slot is not None:
-            raise self._which(node.slot, said, None, len(slots))
-        words_next = list(node.words)
+            raise self._which(node.slot, said, None, len(slots), later)
+        words_next = _onward(node, later)
         msg = f'{_said(said)}: then what? {" | ".join(words_next)}'
         raise self.refuse(msg, suggestions=words_next)
 
-    def _unknown(self, node: Node, said: list[Token], word: Token) -> ReadError:
+    def _unknown(self, node: Node, said: list[Token], word: Token, later: _Later | None = None) -> ReadError:
         """A word no command says here: one left over after a command, or one the node has no branch for."""
         if node.end is not None and not node.words:
             hint = self._usage(node.end)
             return self.refuse(f'{_said(said)}: {word.raw!r} is left over', word=word, hint=hint)
         asked = _said([*said, word])
-        near = close(word.text.lower(), node.words)
+        words_next = _onward(node, later)
+        near = close(word.text.lower(), words_next)
         if near:
             return self.refuse(f'no command {asked!r}', word=word, near=near)
-        words_next = list(node.words)
         return self.refuse(f'no command {asked!r}: {" | ".join(words_next)}', word=word, suggestions=words_next)
 
-    def _which(self, edge: Edge, said: list[Token], word: Token | None, before: int) -> ReadError:
+    def _which(
+        self, edge: Edge, said: list[Token], word: Token | None, before: int, later: _Later | None = None
+    ) -> ReadError:
         """A slot left empty: which value, and the line so far with the rest of how it's said.
 
         Where one command lies past the slot, the hint is the rest of its usage, flags and all; where several do, the
@@ -331,7 +434,7 @@ class _Walker:
         past = {(end.declaration.cls, end.bound.phrase.text): end for end in _ends(edge.node)}
         if len(past) == 1:
             end = next(iter(past.values()))
-            name = end.places[before].slot
+            name = end.places[before + (0 if later is None else _head(end, later.shared)[1])].slot
             parts = end.bound.phrase.parts
             start = next(at for at, part in enumerate(parts) if isinstance(part, Slot) and part.name == name)
             fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
@@ -347,11 +450,16 @@ class _Walker:
 
     # --- the values --------------------------------------------------------------------------------------------
 
-    def _slot_fields(self, end: End, slots: list[tuple[Token, ...]], fields: Mapping[str, Field]) -> dict[str, _Field]:
-        """Each slot's words, as its field's: one word, several, or the rest of the line, joined."""
+    def _slot_fields(
+        self, end: End, slots: list[tuple[Token, ...]], fields: Mapping[str, Field], *, skip: int = 0
+    ) -> dict[str, _Field]:
+        """Each slot's words, as its field's: one word, several, or the rest of the line, joined.
+
+        ``skip`` passes over the first slots of the phrase, a chain's that its first step read.
+        """
         found = end.declaration
         out: dict[str, _Field] = {}
-        for place, words in zip(end.places, slots, strict=True):
+        for place, words in zip(end.places[skip:], slots, strict=True):
             kind = found.kind_of(place)
             joined = place.rest and not place.many and not isinstance(kind, Pairs)
             out[place.field] = _Field(
@@ -366,9 +474,18 @@ class _Walker:
         return out
 
     def _flag_fields(
-        self, end: End, flags: list[_Said], words: list[Token], fields: Mapping[str, Field]
+        self,
+        end: End,
+        flags: list[_Said],
+        words: list[Token],
+        fields: Mapping[str, Field],
+        *,
+        have: Collection[str] = (),
     ) -> dict[str, _Field]:
-        """Each flag's words, as its field's, once the command is known; a required flag left out is refused."""
+        """Each flag's words, as its field's, once the command is known; a required flag left out is refused.
+
+        ``have`` are fields given already, a chain's from its first step.
+        """
         by_name: dict[str, list[_Said]] = defaultdict(list)
         for said in flags:
             by_name[said[0]].append(said)
@@ -393,7 +510,7 @@ class _Walker:
                 end=end,
             )
         for flag in takes.values():
-            if fields[flag.field].required and flag.field not in out:
+            if fields[flag.field].required and flag.field not in out and flag.field not in have:
                 said = f'{self.line.strip()} --{flag.name}'  # the line as given, the flag added
                 hint = said if flag.arity is Arity.SWITCH else f'{said} <{flag.name}>'
                 msg = f'{_said(words)} needs --{flag.name}'
@@ -576,6 +693,88 @@ class _Walker:
         within = '' if scope is None else f' for {scope[0]} {scope[2]!r}'
         msg = f'{found.where}: no {what} {word.text!r}{within}'  # its text: a name may be quoted for its spaces
         raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end), near=near)
+
+
+def _pieces(tree: Tree, tokens: list[Token]) -> tuple[list[list[Token]], list[Token]]:
+    """A line cut at each unquoted ``then``: its pieces, and the ``then`` between each two.
+
+    A flag's value is never a cut, nor is a word after ``--``.
+    """
+    pieces: list[list[Token]] = [[]]
+    joins: list[Token] = []
+    at = 0
+    while at < len(tokens):
+        token = tokens[at]
+        at += 1
+        found = _flag(token)
+        if token.raw == '--':
+            pieces[-1] += tokens[at - 1 :]
+            break
+        if found is not None:
+            pieces[-1].append(token)
+            if found[1] is None and tree.flags.get(found[0]) is Arity.VALUE and at < len(tokens):
+                pieces[-1].append(tokens[at])
+                at += 1
+        elif not token.quoted and token.text.lower() == THEN:
+            joins.append(token)
+            pieces.append([])
+        else:
+            pieces[-1].append(token)
+    return pieces, joins
+
+
+def _place_of(tree: Tree, end: End, parts: int) -> Node:
+    """Where in ``tree`` a step's first ``parts`` of its phrase lead, by the slots its line read."""
+    node, read = tree.top, {place.slot for place in end.places}
+    for part in end.bound.phrase.parts[:parts]:
+        if isinstance(part, Word):
+            node = node.words[part.text]
+        elif part.name in read:
+            node = cast('Edge', node.slot).node
+    return node
+
+
+class _Later(NamedTuple):
+    """A chain's later step, as its walk knows it: where in the tree it starts, the shared fields, and the chain."""
+
+    start: Node
+    shared: frozenset[str]
+    chain: type
+
+
+def _onward(node: Node, later: _Later | None) -> list[str]:
+    """The words that may follow at ``node``: for a chain's later step, only those that lead to one of its steps."""
+    if later is None:
+        return list(node.words)
+    return [
+        word for word, child in node.words.items() if any(end.declaration.chain is later.chain for end in _ends(child))
+    ]
+
+
+def _slot_text(slot: Slot) -> str:
+    """A slot as its phrase writes it: ``{name}``, or ``{name**}`` for the rest of the line."""
+    return f'{{{slot.name}**}}' if slot.rest else f'{{{slot.name}}}'
+
+
+def _shared(base: type) -> frozenset[str]:
+    """A chain's shared fields: those its base declares, which its first step gives for every step."""
+    return frozenset(spec.attr for spec in getattr(base, '__seared_fields__', ()))
+
+
+def _head(end: End, shared: Collection[str]) -> tuple[int, int]:
+    """How much of a step's phrase is its chain's: how many parts, and how many of its line's slots among them.
+
+    A chain's part of a phrase runs up to its last slot of a shared field: ``fleet {fleet}``, or a twin's
+    ``detachment {detachment}``.
+    """
+    places = {place.slot: place for place in end.bound.places}
+    parts = end.bound.phrase.parts
+    head = 1 + max(
+        (at for at, part in enumerate(parts) if isinstance(part, Slot) and places[part.name].field in shared),
+        default=-1,
+    )
+    slots = {part.name for part in parts[:head] if isinstance(part, Slot)}
+    return head, sum(1 for place in end.places if place.slot in slots)
 
 
 def _flag(token: Token) -> tuple[str, Token | None] | None:

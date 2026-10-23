@@ -442,6 +442,95 @@ class TestWaits:
         assert (found.watch, found.timeout, len(found.until)) == (True, 30.0, 1)
 
 
+class TestChains:
+    # A chain's steps, joined by `then`: each a reading, the later ones read where the chain's shared part ends.
+    def test_each_step_a_reading(self, tree):
+        reading = tree.walk('fleet f1 jump sol then move belt then mine')
+        assert [step.command for step in reading.steps] == [
+            farlandia.FleetJump,
+            farlandia.FleetMove,
+            farlandia.FleetMine,
+        ]
+        assert [step.data() for step in reading.steps] == [
+            {'fleet': 'f1', 'system': 'sol'},
+            {'fleet': 'f1', 'to': 'belt'},  # the shared fleet, from the first step
+            {'fleet': 'f1'},
+        ]
+        assert reading.chain is farlandia.FleetCommand
+        assert reading.then == reading.steps[1:]
+
+    def test_its_phrase(self, tree):
+        reading = tree.walk('fleet f1 jump nearest iron then dock vesta then mine')
+        assert reading.phrase == 'fleet {fleet} jump nearest {ore} then dock {station} then mine'
+
+    def test_a_twin_s_steps_read_under_its_own_words(self, tree):
+        reading = tree.walk('detachment d2 mine then mine')
+        assert [step.data() for step in reading.steps] == [{'fleet': 'd2'}, {'fleet': 'd2'}]
+        with pytest.raises(ReadError, match=r"no command 'detachment d2 mine then dock': mine"):
+            tree.walk('detachment d2 mine then dock')  # a detachment's only step here is mine
+
+    def test_each_step_s_own_flags(self, tree):
+        reading = tree.walk('fleet f1 mine --for 90s then sell iron coal --yes')
+        assert [step.data() for step in reading.steps] == [
+            {'fleet': 'f1', 'for': 90.0},
+            {'fleet': 'f1', 'goods': ['iron', 'coal']},
+        ]
+        assert reading.own == {'yes'}  # parsed's own, for the whole line
+
+    def test_names_by_their_resolvers_in_every_step(self, tree):
+        reading = tree.walk('fleet Prospector mine then dock vesta', names=farlandia.NAMES)
+        assert [step.data() for step in reading.steps] == [{'fleet': 'f1'}, {'fleet': 'f1', 'station': 'vesta'}]
+
+    def test_a_line_of_one_step(self, tree):
+        reading = tree.walk('fleet f1 mine')
+        assert (reading.chain, reading.then, reading.steps) == (farlandia.FleetCommand, (), (reading,))
+
+    @pytest.mark.parametrize(
+        ('line', 'expected'),
+        [
+            ('say hello then goodbye', farlandia.Say(message='hello then goodbye')),  # not a step: one command
+            ('fleets merge f1 --into then', farlandia.FleetsMerge(fleet='f1', into='then')),  # a flag's value
+        ],
+    )
+    def test_then_that_joins_nothing_is_a_word(self, tree, line, expected):
+        assert tree.read(line) == expected
+
+    @pytest.mark.parametrize(
+        ('line', 'says', 'word'),
+        [
+            ('fleet f1 mine then', '`then` needs a step on each side: dock then sell', 'then'),
+            ('then fleet f1 mine', '`then` needs a step on each side', 'then'),
+            ('fleet f1 mine then then dock', '`then` needs a step on each side', 'then'),
+            ('fleet f1 retreat 30% then mine', "`then` joins steps: 'fleet f1 retreat 30%' is not one", 'then'),
+            (
+                'fleet f1 mine then retreat 30%',
+                "`then` joins steps: 'retreat 30%' is not one of FleetCommand's",
+                'retreat',
+            ),
+            ('fleet f1 jump then mine', 'fleet f1 jump: which system? `fleet f1 jump <system>`', None),
+            (
+                'fleet f1 jump sol then move',
+                'fleet f1 jump sol then move: which to? `fleet f1 jump sol then move <to>`',
+                None,
+            ),
+            ('fleet f1 jump sol then mov belt', "no command 'fleet f1 jump sol then mov'; did you mean move?", 'mov'),
+            (
+                'fleets show f1 --until docked=true then mine',
+                "`then` joins steps: 'fleets show f1 --until docked=true' is not one",
+                'then',
+            ),
+        ],
+    )
+    def test_refused(self, tree, line, says, word):
+        found = _refusal(tree, line)
+        assert str(found).startswith(says)
+        assert found.word == word
+
+    def test_after_then_only_the_chain_s_steps(self, tree):
+        found = _refusal(tree, 'fleet f1 mine then zzz')
+        assert found.suggestions == ('mine', 'dock', 'jump', 'move', 'sell')
+
+
 class TestFlags:
     def test_anywhere_after_the_first_word(self, tree):
         expected = farlandia.FleetsMerge(fleet='f1', into='f2')
@@ -519,7 +608,7 @@ class TestRefusals:
             ('--', r'no command: the line has no words'),
             ('frobnicate', r"no command 'frobnicate'"),
             ('fleet', r'fleet: which fleet\?'),
-            ('fleet f1', r'fleet f1: then what\? mine \| dock \| jump \| retreat \| run \| sell \| buy'),
+            ('fleet f1', r'fleet f1: then what\? mine \| dock \| jump \| move \| retreat \| run \| sell \| buy'),
             ('fleet f1 jump', r'fleet f1 jump: which system\?'),
             ('fleet f1 jump nearest', r'fleet f1 jump nearest: which ore\?'),
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
@@ -616,8 +705,8 @@ class TestRefusalsAsData:
         [
             ('flet f1 mine', ('fleet', 'fleets')),
             ('fleet f1 mien', ('mine',)),
-            ('fleet f1 xyz', ('mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy')),
-            ('fleet f1', ('mine', 'dock', 'jump', 'retreat', 'run', 'sell', 'buy')),
+            ('fleet f1 xyz', ('mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy')),
+            ('fleet f1', ('mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy')),
             ('log --fro 3', ('--for',)),
             ('log --jsno', ('--json',)),
         ],
@@ -629,7 +718,7 @@ class TestRefusalsAsData:
         assert str(_refusal(tree, 'log --fro 3')) == 'no command takes --fro; did you mean --for?'
         assert (
             str(_refusal(tree, 'fleet f1 xyz'))
-            == "no command 'fleet f1 xyz': mine | dock | jump | retreat | run | sell | buy"
+            == "no command 'fleet f1 xyz': mine | dock | jump | move | retreat | run | sell | buy"
         )
 
     def test_the_field_where_the_walk_knows_it(self, tree):

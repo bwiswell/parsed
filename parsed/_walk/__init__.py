@@ -11,12 +11,13 @@ a tree's root, keeping each field's words; ``_complete.py`` offers what may come
 from ._complete import Completion, complete
 from ._render import key, render
 from ._route import Mounted, Routes
-from ._terms import RESERVED, Arity, SlotKind
+from ._terms import RESERVED, THEN, Arity, SlotKind
 from ._walker import Given, Reading, walk
 from ._words import Token, split
 
 __all__ = [
     'RESERVED',
+    'THEN',
     'Arity',
     'Completion',
     'Given',

@@ -24,7 +24,8 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | at its first word | the first words of every command |
 | at a slot | its kind's literal words, its own offers (an `Enum`'s values, `true` and `false`, `10m`, `30m` and `1h` for a span of time), and for a name, the `options` of the resolver for its category, given its scope |
 | after a slot or a word | the literal words that may come next |
-| after a whole command | its flags not yet given (a list's again), `--yes` if it asks first, and `--until` (again), `--timeout`, `--watch` and `--count` (once) if it can wait |
+| after a whole command | `then`, if it's a step; its flags not yet given (a list's again), `--yes` if it asks first, and `--until` (again), `--timeout`, `--watch` and `--count` (once) if it can wait |
+| after `then` | the chain's steps' words, where its shared part ends; then each step's own, its names scoped as the first step's line scopes them |
 | at `--until`'s value | a condition on each of the reply's fields: `fleet=`, `docked=` |
 | at `--timeout`'s value | a few bounds: `30s`, `1m`, `2m`, `5m` |
 | at `--count`'s value | a few counts: `1`, `5`, `10` |

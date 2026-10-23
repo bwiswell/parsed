@@ -22,7 +22,7 @@ class TestMain:
     def test_a_clean_package(self, capsys):
         assert main(['check', '_support_farlandia', '_support_rio']) == 0
         report = json.loads(capsys.readouterr().out)
-        assert (report['ok'], report['commands']) == (True, 16)
+        assert (report['ok'], report['commands']) == (True, 17)
 
     def test_problems_exit_1(self, capsys):
         assert main(['check', '_support_check.round_trip']) == 1

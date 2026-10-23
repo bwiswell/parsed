@@ -24,7 +24,7 @@ class TestTheFixtures:
     def test_every_one_passes(self):
         report = check(['_support_farlandia', '_support_rio'])
         assert report.ok, report.problems
-        assert (report.commands, report.schemas) == (16, 16)
+        assert (report.commands, report.schemas) == (17, 17)
         assert report.examples == 11
         assert report.round_trips > report.commands  # an instance with every field, where it isn't the other
         assert report.skipped == {}
