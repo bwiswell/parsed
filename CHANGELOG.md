@@ -7,9 +7,11 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.6 — unreleased
+## 0.1.6 — 2026-10-22
 
-**Waiting.**
+**Waiting.** A read with a typed reply can wait on it: `--until` conditions, checked against the reply's schema
+before anything runs, read again on the app's change signal or an interval until they're met, or the bound passes
+(exit 7, with the last reply). `--watch` streams each reply as it changes, one JSON line each.
 
 ### Added
 
@@ -35,8 +37,8 @@ lines as it lands, and the entry is dated when that version is released.
   (`--timeout`; none by default without conditions), its conditions (`--until`), or a cancel.
   `session.watch(line)` gives a result for each, each one's `to_json()` a line of a stream for a tool that reads
   one; `session.run` gives its last, and `session.call` its last reply.
-- **The waiting benchmark** times a change to its wake: a watch reads again and gives its next reply.
 - **`parsed.kinds.span(word)` and `spell_span(seconds)`:** a span of time read to its seconds, and written back.
+- **The waiting benchmark** times a change to its wake: a watch reads again and gives its next reply.
 
 ### Changed
 
