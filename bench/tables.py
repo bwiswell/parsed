@@ -43,6 +43,7 @@ _ROWS = (
     ('completing', 'complete', "what may come after a line's words but its last"),
     ('rendering', 'render', 'an instance back to its line: its phrase picked, its values spelled, its flags given'),
     ('running', 'run', 'a line run in a session: routed, read, its handler called between hooks, its envelope made'),
+    ('waiting', 'wake', 'a change to its wake: a watch reads again and gives its next reply, its envelope made'),
 )
 
 #: Run counts the prose spells out; anything else stays a numeral.
@@ -163,6 +164,11 @@ def running_table(results: Results) -> str:
     return _suite_table(results, 'running', 'Every line', 'Per line')
 
 
+def waiting_table(results: Results) -> str:
+    """The waiting suite: its case's median time for every wake in an operation, and per wake."""
+    return _suite_table(results, 'waiting', 'Every wake', 'Per wake')
+
+
 def spread_table(results: Results) -> str:
     """How far each case's rate moved between runs; ``n/a`` for one run."""
     rows = [['Case', 'Spread']]
@@ -206,6 +212,7 @@ def blocks(report: Report) -> dict[str, str]:
         'completing': f'\n{completing_table(r)}\n',
         'rendering': f'\n{rendering_table(r)}\n',
         'running': f'\n{running_table(r)}\n',
+        'waiting': f'\n{waiting_table(r)}\n',
         'spread': f'\n{spread_table(r)}\n',
         # Inline blocks: the provenance, then the numbers the prose quotes.
         'run': run_line(report),
@@ -220,6 +227,7 @@ def blocks(report: Report) -> dict[str, str]:
         'complete-us': _fmt(r.us_per_command(('completing', 'complete')), lambda v: f'~{v:.0f} µs'),
         'render-us': _fmt(r.us_per_command(('rendering', 'render')), lambda v: f'~{v:.0f} µs'),
         'run-us': _fmt(r.us_per_command(('running', 'run')), lambda v: f'~{v:.0f} µs'),
+        'wake-us': _fmt(r.us_per_command(('waiting', 'wake')), lambda v: f'~{v:.0f} µs'),
     }
 
 

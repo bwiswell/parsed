@@ -31,7 +31,18 @@ lines as it lands, and the entry is dated when that version is released.
   `timeout` error, exit 7, naming every condition (`fleets show {fleet}: docked=true not met within 30s`).
   `result.waited` says how long it waited. `session.call` raises `parsed.TimedOutError`, a `TimeoutError` carrying
   the last reply and the time waited.
+- **Watching:** `--watch` gives the reply now, then each time it changes, until `--count N` replies, the bound
+  (`--timeout`; none by default without conditions), its conditions (`--until`), or a cancel.
+  `session.watch(line)` gives a result for each, each one's `to_json()` a line of a stream for a tool that reads
+  one; `session.run` gives its last, and `session.call` its last reply.
+- **The waiting benchmark** times a change to its wake: a watch reads again and gives its next reply.
 - **`parsed.kinds.span(word)` and `spell_span(seconds)`:** a span of time read to its seconds, and written back.
+
+### Changed
+
+- **The benchmarks freeze the suites' trees** out of the collection before each iteration, so it sweeps only what
+  the iterations left. A run takes seconds, not minutes, and the smaller cases read faster than in earlier records,
+  which swept every tree and flushed the processor's caches before each operation: a break in the series.
 
 ## 0.1.5 — 2026-10-22
 

@@ -1,4 +1,4 @@
-"""Waiting on a read: ``--until`` conditions on its reply, and ``--timeout``, how long to wait.
+"""Waiting on a read: ``--until`` conditions on its reply, ``--timeout``, how long to wait, and ``--watch``.
 
 **A command can wait** when it declares ``EFFECT = READ`` and a ``REPLY``: running a read again is known to be
 safe, and its reply has typed values for a condition to read. On it, ``--until PATH=VALUE`` is a condition on the
@@ -13,9 +13,14 @@ Each path is checked against the reply's dump schema (seared's, ``mode='dump'``)
 anything runs, with what may have been meant. ``--timeout`` is how long to wait, a span of time (``90s``, ``2m``),
 :data:`TIMEOUT` seconds by default.
 
-**The flags are a tree's** once any of its commands can wait: both take a value, as a line's flags are split before
-its command is known. A command that can wait can't take either name for a field. On any other command, a field
-of its own may take them; without one, ``--until`` is refused, saying why it can't wait.
+**Watching** (``--watch``) gives the reply now, then again each time it changes, until ``--count N`` replies, the
+bound, the conditions (with ``--until``), or a signal. Without conditions a watch has no bound, unless
+``--timeout`` gives one.
+
+**The flags are a tree's** once any of its commands can wait, as a line's flags are split before its command is
+known: ``--watch`` a switch, the others taking a value. A command that can wait can't take any of their names for a
+field. On any other command, a field of its own may take them; without one, the flag is refused, saying why the
+command can't wait.
 """
 
 from __future__ import annotations
@@ -34,7 +39,10 @@ if TYPE_CHECKING:
     from seared import Seared
 
 #: The flags a wait takes, which a tree takes once any of its commands can wait.
-FLAGS = ('until', 'timeout')
+FLAGS = ('until', 'timeout', 'watch', 'count')
+
+#: Those of :data:`FLAGS` that are switches; the others take a value.
+SWITCHES = frozenset({'watch'})
 
 #: How long a wait waits, in seconds, unless ``--timeout`` says.
 TIMEOUT = 30.0
@@ -98,15 +106,19 @@ class Condition:
 
 @dataclass(frozen=True, slots=True)
 class Wait:
-    """A read's wait: the conditions its reply must meet, every one, and how long to wait for it.
+    """A read's wait: the conditions its reply must meet, every one, how long to wait, and whether to watch.
 
     Attributes:
-        until: The conditions, in the order given.
-        timeout: How long to wait, in seconds.
+        until: The conditions, in the order given; none, for a watch until its count, its bound or a signal.
+        timeout: How long to wait, in seconds; ``None`` for a watch with no bound.
+        watch: Whether to give each reply as it changes (``--watch``), rather than the last.
+        count: How many replies a watch gives, at most; ``None`` for no count.
     """
 
     until: tuple[Condition, ...]
-    timeout: float = TIMEOUT
+    timeout: float | None = TIMEOUT
+    watch: bool = False
+    count: int | None = None
 
     def met(self, reply: Seared) -> bool:
         """Whether ``reply`` meets every condition, read in its wire form as seared dumps it."""

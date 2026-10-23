@@ -408,28 +408,44 @@ class _Walker:
         if not found.can_wait:
             return flags, None
         kept: list[_Said] = []
+        given: dict[str, Token] = {}  # each flag's first word
         until: list[Condition] = []
-        given: list[Token] = []
-        timeout: tuple[Token, float] | None = None
+        timeout: float | None = None
+        count: int | None = None
         for said in flags:
             name, token, value = said
-            if name not in WAIT_FLAGS or value is None:
+            if name not in WAIT_FLAGS:
                 kept.append(said)
-            elif name == 'until':
-                given.append(token)
-                condition = self._condition(found.reply, value)
-                until += [] if condition is None else [condition]
-            elif timeout is not None:
-                msg = '--timeout is given twice'
+                continue
+            if name in given and name != 'until':
+                msg = f'--{name} is given twice'
                 raise self.refuse(msg, word=token)
-            else:
-                timeout = (token, self._timeout(value))
-        if not given:
-            if timeout is not None:
-                msg = '--timeout bounds a wait: give --until too'
-                raise self.refuse(msg, word=timeout[0])
-            return kept, None
-        return kept, Wait(tuple(until), TIMEOUT if timeout is None else timeout[1])
+            given.setdefault(name, token)
+            if name == 'until':
+                condition = self._condition(found.reply, cast('Token', value))
+                until += [] if condition is None else [condition]
+            elif name == 'timeout':
+                timeout = self._timeout(cast('Token', value))
+            elif name == 'count':
+                count = self._count(cast('Token', value))
+        return kept, self._waiting(given, tuple(until), timeout, count)
+
+    def _waiting(
+        self, given: Mapping[str, Token], until: tuple[Condition, ...], timeout: float | None, count: int | None
+    ) -> Wait | None:
+        """The wait the flags make, if they make one; refused where a flag needs another the line doesn't give."""
+        watch = 'watch' in given
+        if 'count' in given and not watch:
+            msg = '--count is how many replies a watch gives: give --watch too'
+            raise self.refuse(msg, word=given['count'])
+        if 'until' not in given and not watch:
+            if 'timeout' in given:
+                msg = '--timeout bounds a wait or a watch: give --until or --watch too'
+                raise self.refuse(msg, word=given['timeout'])
+            return None
+        if 'timeout' not in given:
+            timeout = TIMEOUT if 'until' in given else None  # a watch with no conditions has no bound of its own
+        return Wait(until, timeout, watch=watch, count=count)
 
     def _condition(self, reply: type[Seared] | None, value: Token) -> Condition | None:
         """An ``--until``'s condition, its path checked against the reply's dump schema; ``None`` for a placeholder."""
@@ -455,6 +471,16 @@ class _Walker:
         except ValueError as e:
             msg = f'--timeout: {e}'
             raise self.refuse(msg, word=value) from None
+
+    def _count(self, value: Token) -> int | None:
+        """A ``--count``'s number of replies, a whole number, 1 or more: none, for a placeholder."""
+        if self.placeholders and _placeholder(value):
+            return None
+        text = value.text.replace(',', '')
+        if not text.isdigit() or int(text) < 1:
+            msg = f'--count: {value.text!r} is not a number of replies: say 1 or more'
+            raise self.refuse(msg, word=value)
+        return int(text)
 
     def _not_taken(self, end: End, name: str, token: Token, words: list[Token]) -> ReadError:
         """A flag its command doesn't take, with its usage, and its own flags close to the one given."""

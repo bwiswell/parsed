@@ -216,6 +216,8 @@ class TestFlags:
         assert fixtures.flags == {
             'until': Arity.VALUE,  # a wait's, as `fleets show` can wait
             'timeout': Arity.VALUE,
+            'watch': Arity.SWITCH,
+            'count': Arity.VALUE,
             'for': Arity.VALUE,
             'into': Arity.VALUE,
             'quiet': Arity.SWITCH,
@@ -297,7 +299,12 @@ class TestWaiting:
 
     def test_a_wait_s_flags_only_then(self):
         assert 'until' not in Tree([farlandia.Log]).flags
-        assert Tree([farlandia.FleetsShow]).flags == {'until': Arity.VALUE, 'timeout': Arity.VALUE}
+        assert Tree([farlandia.FleetsShow]).flags == {
+            'until': Arity.VALUE,
+            'timeout': Arity.VALUE,
+            'watch': Arity.SWITCH,
+            'count': Arity.VALUE,
+        }
 
     def test_a_waiting_command_can_t_name_a_field_for_one(self):
         cls = _waiting(until=parsed.Str(default=None))

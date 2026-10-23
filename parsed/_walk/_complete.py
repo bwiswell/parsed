@@ -250,6 +250,8 @@ def _waits(end: End, name: str) -> list[_Offer]:
     """What a wait's flag offers: a condition on each of the reply's fields, ``docked=``; or a few bounds."""
     if name == 'timeout':
         return [(span, False) for span in ('30s', '1m', '2m', '5m')]
+    if name == 'count':
+        return [(count, False) for count in ('1', '5', '10')]
     reply = end.declaration.reply
     fields = [] if reply is None else reply.__seared_fields__
     return [(f'{spec.wire}=', False) for spec in fields]
