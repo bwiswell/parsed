@@ -7,9 +7,12 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.7 — unreleased
+## 0.1.7 — 2026-10-23
 
-**Chains and subjects.**
+**Chains and subjects.** A line says a chain of steps, joined by `then`, run as one order, each step's names
+looked for where the fleet will be by then. A chain is one tool call too: its shared fields once and its steps
+tagged by their words, loaded to the steps and written back to its line. A session's subjects let a bare line read
+under a fleet.
 
 ### Added
 
@@ -34,6 +37,8 @@ lines as it lands, and the entry is dated when that version is released.
   when it allows every step. `tree.render(steps)` and `app.render(steps)` write a chain back to its line, each
   step's names where the fleet will be by then, and a step's value spelled `then` quoted. `CommandDoc` gains
   `chain` and `moves`.
+- **`parsed check` checks chains:** each chain's steps round-trip through their line and through the chain's schema
+  as a call, the schema at most `--max-chain-bytes` (8192 by default). The report counts them under `chains`.
 - **Subjects:** the words a session tries before a bare line, `app.open(state, subjects=('fleet prospector',))` or
   `session.use(…)` (from a handler, `ctx.session.use(…)`), so `mine` reads as `fleet prospector mine`. The line as
   typed is read first; only where its first word begins no command is each subject tried, in turn, the first whose
@@ -41,8 +46,6 @@ lines as it lands, and the entry is dated when that version is released.
   `app.complete` and `app.run` take `subjects=` too, `app.subject_of` says which a line reads under, and
   `session.complete` completes with the session's. A subject is checked: words, no flags, that a command begins
   with. Subjects stay out of schemas and keys.
-- **`parsed check` checks chains:** each chain's steps round-trip through their line and through the chain's schema
-  as a call, the schema at most `--max-chain-bytes` (8192 by default). The report counts them under `chains`.
 
 ## 0.1.6 — 2026-10-22
 
