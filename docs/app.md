@@ -58,9 +58,10 @@ A line goes to its mount by its first words, then the mount's tree reads the who
 
 | Call | Gives |
 |---|---|
-| `app.walk(line, placeholders=False)` | a `Routed`: its `mount`, its `reading` ([`Reading`](_walk/_walker.md#reading)), its `command` class, and `load()` |
-| `app.read(line)` | the command, loaded |
-| `app.complete(text)` | what may come next on a line being typed: its mount's tree's offers, or, short of a mount, the words that may follow |
+| `app.walk(line, subjects=(), placeholders=False)` | a `Routed`: its `mount`, its `reading` ([`Reading`](_walk/_walker.md#reading)), its `command` class, and `load()` |
+| `app.read(line, subjects=())` | the command, loaded |
+| `app.complete(text, subjects=())` | what may come next on a line being typed: its mount's tree's offers, or, short of a mount, the words that may follow |
+| `app.subject_of(line, subjects)` | the subject a line reads under, or `None` where it's read as typed ([subjects](#subjects)) |
 | `app.render(command, mount=None)` | the line that says an instance, by its mount's tree, prefix and all; or a chain's steps, in its first step's mount |
 
 A line that reaches no mount is refused as a tree refuses one: `no command 'rela'; did you mean relay?`, or
@@ -133,7 +134,7 @@ reaches a handler. Hooks are the app's; a mount's own come later.
 
 ## Sessions
 
-`app.open(state=None, verbosity=0, answer=None, interval=1.0)` gives a `Session`, used once, as
+`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=())` gives a `Session`, used once, as
 `async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
@@ -145,6 +146,7 @@ reaches a handler. Hooks are the app's; a mount's own come later.
   left unanswered.
 - **`interval`** is how often, in seconds, a wait reads again when nothing says the state moved: a second by
   default; `None` for an app that calls `session.changed()` on every change, so a wait reads only then.
+- **`subjects`** are the words tried before a bare line, in turn ([subjects](#subjects)): none by default.
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -179,13 +181,51 @@ under way isn't missed.
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
 
-**`app.run(line, state=None, verbosity=0, yes=False, answer=None)`** runs one line in a session of its own,
-opened around it and closed after, and gives its `Result`: for a program that runs one line and exits. It runs an
-event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
+**`app.run(line, state=None, verbosity=0, yes=False, answer=None, interval=1.0, subjects=())`** runs one line in a
+session of its own, opened around it and closed after, and gives its `Result`: for a program that runs one line and
+exits. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
 line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
 is opening a session twice. An error the session's body raises goes on past it, whatever the state makes of it.
+`session.subjects` are its subjects, and `session.complete(text)` what may come next on a line being typed, with
+them; neither needs it open.
+
+## Subjects
+
+A subject is the words a session tries before a bare line: with `fleet prospector`, `mine` reads as
+`fleet prospector mine`, as a player who has said `use prospector` goes on:
+
+```python
+async with app.open(controls, subjects=('fleet prospector',)) as session:
+    await session.run('mine')                  # FleetMine(fleet='f1'), read as 'fleet prospector mine'
+    await session.run('fleet hauler mine')     # as typed
+    session.use('detachment scouts')           # in place of the subjects it had
+```
+
+- **The line as typed first.** Only where its first word begins no command (no mount's prefix, nor a command's
+  first word at the root) is each subject tried, in turn, and the first whose words go on into that word reads the
+  line: `log 5` stays `log 5`, and `fit`, with subjects `ship s1` and `fleet prospector`, reads under the ship.
+- **Its refusals are the line's as read:** `mine --for soon` is refused as `fleet prospector mine --for soon` is,
+  at its column there. A line no subject goes on into is read as typed, and refused so (`no command 'mien'`).
+- **A result's `line` is the line as read** ([`reply.md`](reply.md)), and so is `ctx.line`: an agent that said
+  `mine` sees what it was read as.
+- **They stay out of schemas and keys:** a bare line reads to the instance the whole line does, and its key is that
+  instance's.
+- **Chains, `--help` and waits** read as the whole line would: `jump sol then mine` is the fleet's chain.
+
+`session.use(*subjects)` makes them the session's, in place of those it had; none, for none. A handler says it as
+`ctx.session.use(f'fleet {command.fleet}')`, so a `use` command of the app's sets the subject for the lines after
+it. `app.walk`, `app.read` and `app.complete` take `subjects=` too, for a front end that holds its own.
+
+**Completing** a line's first word offers the commands' first words, then each subject's next words (`mine`, `dock`,
+…); after it, a line whose first word begins no command is completed under the subject that would read it.
+
+**A subject is words a command begins with:** a string, no flags among its words, that goes along a mount's prefix
+or into its commands (`relay`, `fleet prospector`, `ship s1`). Anything else is refused with a `ValueError`, when
+the session is opened or `use` is called:
+`subject 'flet prospector': no command of farlandia begins with its words`. Several subjects are a sequence
+(`('fleet prospector',)`, not the string).
 
 ## Names
 

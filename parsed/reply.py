@@ -11,8 +11,8 @@ unanswered, or answered no, leaves the line undone, its question in the result.
 
 A :class:`Result` holds what came of a line, however it went:
 
-- ``line``, and ``command``, the phrase that said it after its mount's prefix (``'relay run'``,
-  ``'fleet {fleet} mine'``); ``None`` when the line doesn't read;
+- ``line``, as read (a session's subject before it, where one was tried), and ``command``, the phrase that said it
+  after its mount's prefix (``'relay run'``, ``'fleet {fleet} mine'``); ``None`` when the line doesn't read;
 - ``ok``, whether it went well, and ``done``, whether its handler ran for real: run to its end, not for a dry run,
   to answer ``--help``, or to stop at a question;
 - ``asks``, the question it stopped at, unanswered or answered no;
@@ -92,7 +92,7 @@ class Result:
     """What came of a line (see the module).
 
     Attributes:
-        line: The line run.
+        line: The line run, as read: a subject's words before it, where one was tried.
         command: The phrase that said it, after its mount's prefix; ``None`` when it doesn't read.
         ok: Whether it went well.
         done: Whether its handler ran for real: to its end, not for a dry run, to answer ``--help``, or to stop at a

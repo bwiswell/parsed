@@ -8,7 +8,7 @@ import sys
 import threading
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import _support_farlandia as farlandia
 import _support_handlers as handlers
@@ -16,8 +16,9 @@ import _support_service as service
 import pytest
 
 import parsed
+from parsed._walk import Completion
 from parsed.app import App, Mount, Routed
-from parsed.doc import load_chain
+from parsed.doc import command_key, load_chain
 from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.tree import Tree
 
@@ -1454,3 +1455,131 @@ class TestChains:
         game.after(print, farlandia.FleetCommand)
         with pytest.raises(DeclarationError, match=r"a command class, with a PHRASE, or a chain's base"):
             game.after(print, service.ServiceCommand)
+
+
+@parsed.parsed
+class Use(parsed.Command):
+    """Make a fleet the subject: its bare verbs read under it."""
+
+    PHRASE = 'use {fleet}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'fleet': farlandia.FLEET}
+
+    fleet: str = parsed.Str(required=True)
+
+
+def _use(command, ctx):
+    ctx.session.use(f'fleet {command.fleet}')
+    return f'orders now go to {command.fleet}'
+
+
+def _mined(command, ctx):
+    return f'{command.fleet} mines, read as {ctx.line!r}'
+
+
+#: The terminal game's subject: a fleet, by its name.
+_PROSPECTOR = ('fleet prospector',)
+
+
+class TestSubjects:
+    @pytest.fixture
+    def game(self, app) -> App:
+        app.names('detachment', farlandia.NAMES['detachment'])
+        app.mount(Tree([Use]))
+        app.on(Use, _use)
+        app.on(farlandia.FleetMine, _mined)
+        app.on_chain(farlandia.FleetCommand, _ordered)
+        return app
+
+    async def test_a_bare_line_reads_under_a_subject(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mine')
+        assert (found.ok, found.text) == (True, "f1 mines, read as 'fleet prospector mine'")
+        assert (found.line, found.command) == ('fleet prospector mine', 'fleet {fleet} mine')  # the line as read
+
+    async def test_the_line_as_typed_first(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert (await session.run('fleet hauler mine')).text == "f2 mines, read as 'fleet hauler mine'"
+        assert game.walk('relay status', subjects=_PROSPECTOR).command is service.Status  # a mount's words too
+
+    def test_each_subject_in_turn(self, game):
+        subjects = ('relay', 'ship s1', 'fleet prospector')
+        assert game.read('run', subjects=subjects) == service.Run()
+        assert game.read('fit', subjects=subjects) == farlandia.ShipFit(ship='s1')
+        assert game.read('mine', subjects=subjects) == farlandia.FleetMine(fleet='f1')  # past those that don't go on
+        assert game.subject_of('mine', subjects) == 'fleet prospector'
+        assert game.subject_of('log', subjects) is None  # as typed
+
+    def test_a_twin_s_subject(self, game):
+        routed = game.walk('mine', subjects=('detachment scouts',))
+        assert (routed.load(), routed.said) == (farlandia.FleetMine(fleet='d2'), 'detachment {detachment} mine')
+
+    async def test_a_chain_under_a_subject(self, game):
+        orders = _Orders()
+        async with game.open(orders, subjects=_PROSPECTOR) as session:
+            await session.run('jump sol then mine')
+        assert orders.sent == [[farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetMine(fleet='f1')]]
+
+    async def test_a_line_no_subject_takes_is_read_as_typed(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mien')
+        assert (found.code, found.line) == (2, 'mien')
+        assert found.text.startswith("no command 'mien'")
+
+    async def test_a_refusal_says_the_line_read(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            found = await session.run('mine --for soon')
+        assert (found.code, found.line) == (2, 'fleet prospector mine --for soon')
+        assert found.error is not None
+        assert (found.error['line'], found.error['column']) == ('fleet prospector mine --for soon', 28)
+
+    async def test_help_under_a_subject(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert (await session.run('mine --help')).text == 'fleet <fleet> mine [--for <for>]'
+
+    async def test_a_handler_makes_one_the_session_s(self, game):
+        async with game.open() as session:
+            assert (await session.run('use prospector')).text == 'orders now go to f1'
+            assert session.subjects == ('fleet f1',)
+            assert (await session.run('mine')).text == "f1 mines, read as 'fleet f1 mine'"
+            session.use()
+            assert (await session.run('mine')).code == 2  # none now
+
+    def test_one_line_in_a_session_of_its_own(self, game):
+        assert game.run('mine', subjects=_PROSPECTOR).text == "f1 mines, read as 'fleet prospector mine'"
+
+    @pytest.mark.parametrize(
+        ('subjects', 'message'),
+        [
+            (('flet prospector',), r"subject 'flet prospector': no command of farlandia begins with its words"),
+            (('fleet prospector --yes',), r'a subject is words a line begins with, no flags'),
+            (('',), r"subject '': a subject is words a line begins with"),
+            (('fleet "open',), r"subject 'fleet \"open': the quote at column 7 is never closed"),
+            ('fleet prospector', r'a sequence of subjects; one alone needs a trailing comma'),
+        ],
+    )
+    def test_a_subject_is_words_a_command_begins_with(self, game, subjects, message):
+        with pytest.raises(ValueError, match=message):
+            game.open(subjects=subjects)
+        with pytest.raises(ValueError, match=message):
+            game.read('mine', subjects=subjects)
+
+    async def test_and_so_is_one_used(self, game):
+        async with game.open() as session:
+            with pytest.raises(ValueError, match=r'no command of farlandia begins with its words'):
+                session.use('flet prospector')
+            assert session.subjects == ()
+
+    def test_completing_a_bare_line(self, game):
+        words = game.complete('', subjects=_PROSPECTOR).words
+        assert words[:3] == ['fleet', 'detachment', 'log']  # the commands' first words, then the subject's
+        assert words[-8:] == ['mine', 'dock', 'jump', 'move', 'retreat', 'run', 'sell', 'buy']
+        assert game.complete('mi', subjects=_PROSPECTOR) == Completion(['mine'], 2)
+        assert game.complete('dock ', subjects=_PROSPECTOR).words == ['nearest', 'then']
+        assert game.complete('lo', subjects=_PROSPECTOR).words == ['log']
+
+    async def test_the_session_completes_with_its_own(self, game):
+        async with game.open(subjects=_PROSPECTOR) as session:
+            assert session.complete('mi') == Completion(['mine'], 2)
+
+    def test_kept_out_of_keys(self, game):
+        assert command_key(game.read('mine', subjects=_PROSPECTOR)) == command_key(game.read('fleet f1 mine'))

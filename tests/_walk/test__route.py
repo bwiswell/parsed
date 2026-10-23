@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import pytest
 
 import parsed
-from parsed._walk import Completion, Routes
+from parsed._walk import Completion, Routes, split
 from parsed.errors import DeclarationError, ReadError
 from parsed.tree import Tree
 
@@ -176,3 +176,20 @@ class TestCompleting:
         found = routes.complete(text)
         assert not isinstance(found, Completion)
         assert found.label == label
+
+
+class TestHowFarWordsGo:
+    # For a session's subjects: whether a word begins a line, and how far words go.
+    def test_a_word_that_begins_a_line(self, routes):
+        assert routes.begins(split('fleet')[0])
+        assert routes.begins(split('Relay')[0])  # case aside
+        assert routes.begins(split('rio')[0])  # a prefix's first word
+        assert not routes.begins(split('mine')[0])
+        assert not routes.begins(split('"fleet"')[0])  # quoted, a value
+
+    def test_how_far_words_go(self, routes, farm, relay):
+        assert routes.reach(split('fleet f1 mine')) is farm  # its first word is the mount's
+        assert routes.reach(split('relay run')) is relay
+        assert routes.reach(split('rio')) is True  # along a prefix, short of a mount
+        assert routes.reach(split('mine')) is False
+        assert routes.reach(split('rio zzz')) is False

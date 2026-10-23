@@ -8,7 +8,7 @@ a tree's root, keeping each field's words; ``_complete.py`` offers what may come
 :meth:`~parsed.tree.Tree.render` use them, and :class:`parsed.app.App` its routes.
 """
 
-from ._complete import Completion, complete
+from ._complete import Completion, complete, goes
 from ._render import key, moved_by, render
 from ._route import Mounted, Routes
 from ._terms import RESERVED, THEN, Arity, SlotKind
@@ -27,6 +27,7 @@ __all__ = [
     'SlotKind',
     'Token',
     'complete',
+    'goes',
     'key',
     'moved_by',
     'render',

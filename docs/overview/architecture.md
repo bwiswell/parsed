@@ -41,8 +41,8 @@ seared  <-  zeared
   a path imported when first looked up; the names lines are read with; and sessions, which hold the app's state
   open and call each line's handler with a fresh context ([`../context.md`](../context.md)), giving what came of
   it as one envelope, with its exit code ([`../reply.md`](../reply.md)); a handler that asks first, answered by
-  `--yes`, the session's answer, or left undone with its question; and hooks before and after each command, and on
-  its error, in a stated order.
+  `--yes`, the session's answer, or left undone with its question; hooks before and after each command, and on its
+  error, in a stated order; and a session's subjects, the words tried before a bare line.
 - **Waits** ([`../wait.md`](../wait.md)): a read with a `REPLY` takes `--until` conditions on its reply and a
   `--timeout`, each condition's path checked against the reply's schema before anything runs; a session reads it
   again on the app's change signal, or on an interval, until they're met or the bound passes. `--watch` streams each
@@ -55,5 +55,5 @@ seared  <-  zeared
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
   no line can say.
 
-A chain's schema and subjects, then argv and help, arrive in the releases that follow, each adding its part
-here. What each part costs is in [`benchmarks.md`](benchmarks.md).
+Argv and help arrive in the release that follows, adding their part here. What each part costs is in
+[`benchmarks.md`](benchmarks.md).

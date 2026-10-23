@@ -28,6 +28,12 @@ handlers see what entering it gave. Each line's handler is called as ``handler(c
 
 A line that gives ``--help`` runs nothing: it's answered with its command's usage.
 
+**Subjects** are the words a session tries before a bare line (``fleet prospector``, so ``mine`` reads as
+``fleet prospector mine``): ``app.open(state, subjects=…)``, or ``session.use(…)``, from a handler too
+(``ctx.session``). The line is read as typed first; only where its first word begins no command is each subject tried,
+in turn, and the first whose words go on into it is the line's. They stay out of schemas and keys, as the instance a
+line reads to is the same either way. ``app.walk``, ``app.read`` and ``app.complete`` take ``subjects=`` too.
+
 **A handler asks first** by returning :class:`~parsed.reply.Ask` ``(question, then)``, having done nothing yet. A
 yes runs ``then``, which may ask again: ``--yes`` on the line (or ``yes=True``) answers each question yes; else the
 session's ``answer`` does, if it has one (``app.open(state, answer=parsed.reply.terminal)`` prompts a person). A
@@ -57,7 +63,9 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, NamedTuple, cast, overload
 
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
-from ._walk import Reading, Routes
+from ._walk import Completion, Reading, Routes, goes, split
+from ._walk._complete import being_typed
+from ._walk._walker import _flag
 from .command import Command, declaration, is_chain_base
 from .errors import DeclarationError, ReadError, RenderError, TimedOutError
 from .kinds import spell_span
@@ -70,7 +78,7 @@ if TYPE_CHECKING:
 
     from seared import Seared
 
-    from ._walk import Completion
+    from ._walk import Token
     from .context import Context
     from .names import Resolver
     from .reply import Answer
@@ -278,7 +286,13 @@ class App:
 
     @overload
     def open(
-        self, state: None = None, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+        self,
+        state: None = None,
+        *,
+        verbosity: int = 0,
+        answer: Answer | None = None,
+        interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Session[None]: ...
     @overload
     def open[S](
@@ -288,6 +302,7 @@ class App:
         verbosity: int = 0,
         answer: Answer | None = None,
         interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Session[S]: ...
     @overload
     def open[S](
@@ -297,13 +312,26 @@ class App:
         verbosity: int = 0,
         answer: Answer | None = None,
         interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Session[S]: ...
     @overload
     def open[S](
-        self, state: S, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+        self,
+        state: S,
+        *,
+        verbosity: int = 0,
+        answer: Answer | None = None,
+        interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Session[S]: ...
     def open(
-        self, state: object = None, *, verbosity: int = 0, answer: Answer | None = None, interval: float | None = 1.0
+        self,
+        state: object = None,
+        *,
+        verbosity: int = 0,
+        answer: Answer | None = None,
+        interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Session[Any]:
         """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
 
@@ -316,11 +344,13 @@ class App:
                 or async (``parsed.reply.terminal`` asks a person). With none, a question is left unanswered.
             interval: How often, in seconds, a wait reads again when the app says nothing has changed; ``None`` for
                 an app that calls ``session.changed()`` on every change, so a wait reads only then.
+            subjects: The words tried before a bare line, in turn (``'fleet prospector'``); none by default.
 
         Raises:
-            ValueError: ``interval`` isn't a positive number of seconds, or ``None``.
+            ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
+                command begins with (:meth:`Session.use`).
         """
-        return Session(self, state, verbosity=verbosity, answer=answer, interval=interval)
+        return Session(self, state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects)
 
     def run(  # noqa: PLR0913 -- the line, its state, and how it's said, answered and waited on
         self,
@@ -331,6 +361,7 @@ class App:
         yes: bool = False,
         answer: Answer | None = None,
         interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
     ) -> Result:
         """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
 
@@ -344,47 +375,139 @@ class App:
             yes: Whether to answer every question the line asks yes, as ``--yes`` does.
             answer: What answers a question otherwise, as :meth:`open` takes it.
             interval: How often a wait reads again, as :meth:`open` takes it.
+            subjects: The words tried before a bare line, as :meth:`open` takes them.
 
         Raises:
             RuntimeError: It's called inside a running event loop.
+            ValueError: As :meth:`open` raises it.
         """
         if _looping():
             msg = 'app.run(line) runs an event loop of its own; inside one, open a session: async with app.open(state)'
             raise RuntimeError(msg)
 
+        opened = self.open(state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects)
+
         async def once() -> Result:
-            async with self.open(state, verbosity=verbosity, answer=answer, interval=interval) as session:
+            async with opened as session:
                 return await session.run(line, yes=yes)
 
         return asyncio.run(once())
 
-    def walk(self, line: str, *, placeholders: bool = False) -> Routed:
+    def walk(self, line: str, *, subjects: Sequence[str] = (), placeholders: bool = False) -> Routed:
         """The mount ``line`` goes to, and what its tree reads the line to, with the mount's names.
 
         Args:
             line: The line.
+            subjects: The words tried before a bare line, in turn (see the module): the line read as typed first.
             placeholders: Whether a ``<name>`` word stands for any value, as :meth:`Tree.walk` takes it.
 
         Raises:
             ReadError: The line reaches no mount, or its mount's tree refuses it.
+            ValueError: A subject isn't words a command begins with.
         """
-        mount = self._routes.route(line)
-        return Routed(mount, mount.tree.walk(line, mount.resolvers, placeholders=placeholders))
+        return self._walk(line, self._subjects(subjects), placeholders=placeholders)
 
-    def read(self, line: str) -> Command:
+    def _walk(self, line: str, subjects: tuple[str, ...], *, placeholders: bool = False) -> Routed:
+        said = self._said(line, subjects)
+        mount = self._routes.route(said)
+        return Routed(mount, mount.tree.walk(said, mount.resolvers, placeholders=placeholders))
+
+    def read(self, line: str, *, subjects: Sequence[str] = ()) -> Command:
         """The command ``line`` says, loaded by seared, as :meth:`walk` routes and reads it.
 
         Raises:
             ReadError: As :meth:`walk` does, or a value seared refuses.
+            ValueError: A subject isn't words a command begins with.
         """
-        return self.walk(line).load()
+        return self.walk(line, subjects=subjects).load()
 
-    def complete(self, text: str) -> Completion:
-        """What may come next on ``text``, a line up to the cursor: its mount's tree's offers, or a prefix's words."""
+    def complete(self, text: str, *, subjects: Sequence[str] = ()) -> Completion:
+        """What may come next on ``text``, a line up to the cursor: its mount's tree's offers, or a prefix's words.
+
+        With ``subjects``, a first word offers the commands' first words and then each subject's next words; after
+        it, a line whose first word begins no command is completed under the subject that would read it.
+
+        Raises:
+            ValueError: A subject isn't words a command begins with.
+        """
+        return self._complete(text, self._subjects(subjects))
+
+    def _complete(self, text: str, subjects: tuple[str, ...]) -> Completion:
+        if not subjects:
+            return self._offered(text)
+        tokens, _ = being_typed(text)
+        if tokens:
+            return self._offered(self._said(text, subjects, partial=True))
+        found = self._offered(text)
+        words = list(found.words)
+        for subject in subjects:
+            words += [word for word in self._offered(f'{subject} {text}').words if word not in words]
+        return Completion(words=words, replace=found.replace)
+
+    def _offered(self, text: str) -> Completion:
         found = self._routes.complete(text)
         if isinstance(found, Mount):
             return found.tree.complete(text, found.resolvers)
         return found
+
+    def subject_of(self, line: str, subjects: Sequence[str]) -> str | None:
+        """The subject ``line`` reads under: ``None`` where it's read as typed (see the module).
+
+        Raises:
+            ValueError: A subject isn't words a command begins with.
+        """
+        return self._subject(line, self._subjects(subjects))
+
+    def _said(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str:
+        """The line to read: ``line``, after the subject it reads under, if one."""
+        subject = self._subject(line, subjects, partial=partial)
+        return line if subject is None else f'{subject} {line}'
+
+    def _subject(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str | None:
+        """The first subject whose words go on into ``line``'s first word, where that word begins no command.
+
+        A line whose words don't split is read as typed, to be refused.
+        """
+        if not subjects:
+            return None
+        try:
+            tokens = being_typed(line)[0] if partial else split(line)
+        except ReadError:
+            return None
+        if not tokens or _flag(tokens[0]) is not None or self._routes.begins(tokens[0]):
+            return None
+        return next((subject for subject in subjects if self._goes([*split(subject), tokens[0]])), None)
+
+    def _goes(self, tokens: list[Token]) -> bool:
+        """Whether words go on in the app: along a mount's prefix, or into a mount whose tree takes them."""
+        reached = self._routes.reach(tokens)
+        return reached if isinstance(reached, bool) else goes(reached.tree, tokens)
+
+    def _subjects(self, subjects: Sequence[str]) -> tuple[str, ...]:
+        """``subjects``, checked: each words, no flag among them, that a command of the app begins with.
+
+        Raises:
+            ValueError: One isn't.
+        """
+        if isinstance(subjects, str):
+            msg = f"subjects={subjects!r}: a sequence of subjects; one alone needs a trailing comma: ('…',)"
+            raise ValueError(msg)  # noqa: TRY004 -- a value of the right type, said the wrong way
+        checked: list[str] = []
+        for subject in subjects:
+            said = subject.strip() if isinstance(subject, str) else ''
+            try:
+                tokens = split(said)
+            except ReadError as e:
+                msg = f'subject {subject!r}: {e}'
+                raise ValueError(msg) from None
+            if not tokens or any(_flag(token) is not None or token.raw == '--' for token in tokens):
+                msg = f"subject {subject!r}: a subject is words a line begins with, no flags: 'fleet prospector'"
+                raise ValueError(msg)
+            if not self._goes(tokens):
+                msg = f'subject {subject!r}: no command of {self.prog} begins with its words'
+                raise ValueError(msg)
+            checked.append(said)
+        return tuple(checked)
 
     def render(self, command: Command | Sequence[Command], *, mount: Mount | None = None) -> str:
         """The line that says ``command``, by its mount's tree, prefix and all.
@@ -526,10 +649,22 @@ class Session[S]:
         interval: How often, in seconds, a wait reads again when nothing has changed; ``None``: only on a change.
     """
 
-    def __init__(
-        self, app: App, state: object, *, verbosity: int, answer: Answer | None, interval: float | None
+    def __init__(  # noqa: PLR0913 -- the app, its state, and how its lines are said, answered, waited on and read
+        self,
+        app: App,
+        state: object,
+        *,
+        verbosity: int,
+        answer: Answer | None,
+        interval: float | None,
+        subjects: Sequence[str] = (),
     ) -> None:
-        """Hold what to open; nothing is entered until the session opens."""
+        """Hold what to open; nothing is entered until the session opens.
+
+        Raises:
+            ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
+                command begins with.
+        """
         if interval is not None and (
             isinstance(interval, bool) or not isinstance(interval, int | float) or interval <= 0
         ):
@@ -545,6 +680,7 @@ class Session[S]:
         self._closed = False
         self._loop: asyncio.AbstractEventLoop | None = None
         self._change = asyncio.Event()
+        self._subjects = app._subjects(subjects)  # noqa: SLF001 -- the session is the app's
 
     def __repr__(self) -> str:
         """The session, by its app and whether it's open."""
@@ -555,6 +691,26 @@ class Session[S]:
     def is_open(self) -> bool:
         """Whether it's open: entered, and not yet left."""
         return self._stack is not None
+
+    @property
+    def subjects(self) -> tuple[str, ...]:
+        """The words tried before a bare line, in turn: the first whose words go on into it reads it."""
+        return self._subjects
+
+    def use(self, *subjects: str) -> None:
+        """Make ``subjects`` the session's, in place of those it had; none, for none.
+
+        A handler says it as ``ctx.session.use(f'fleet {command.fleet}')``: the lines after it read under them. The
+        line as typed is read first, and each subject is tried only where its first word begins no command.
+
+        Raises:
+            ValueError: A subject isn't words, without a flag, that a command of the app begins with.
+        """
+        self._subjects = self.app._subjects(subjects)  # noqa: SLF001 -- the session is the app's
+
+    def complete(self, text: str) -> Completion:
+        """What may come next on ``text``, a line up to the cursor, as the app offers it with the session's subjects."""
+        return self.app._complete(text, self._subjects)  # noqa: SLF001 -- the session is the app's
 
     @property
     def state(self) -> S:
@@ -648,12 +804,12 @@ class Session[S]:
         """
         self._check_open()
         try:
-            routed = self.app.walk(line)
+            routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError as e:
             yield _refused(line, None, e)
             return
         if 'help' in routed.reading.own:
-            yield Result(line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
+            yield Result(routed.reading.line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
             return
         try:
             steps = [step.load() for step in routed.reading.steps]
@@ -692,7 +848,7 @@ class Session[S]:
             Exception: Whatever its handler raises, or its answer.
         """
         self._check_open()
-        routed = self.app.walk(line)
+        routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
         found: Seared | str | Ask | None = None
@@ -970,8 +1126,8 @@ def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | N
 
 
 def _refused(line: str, said: str | None, error: ReadError) -> Result:
-    """A line that doesn't read, or a value its field refuses: the error's own data."""
-    return Result(line, said, ok=False, text=str(error), error=error.to_json(), exception=error)
+    """A line that doesn't read, or a value its field refuses: the error's own data, and the line it read."""
+    return Result(error.line or line, said, ok=False, text=str(error), error=error.to_json(), exception=error)
 
 
 def _timed_out(routed: Routed, error: TimedOutError) -> Result:

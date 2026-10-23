@@ -42,6 +42,13 @@ whether a flag takes a value. A line that reaches no mount is a `ReadError`, as 
 | a word no mount says there | `no command 'rela'; did you mean relay?`, or the words that may come there |
 | ending, or reaching a flag, at a prefix | `relay: then what? run \| validate-config \| status` |
 
+## How far words go
+
+For a session's subjects ([`app.md`](../app.md#subjects)): `routes.begins(token)` says whether a word begins a
+line, the first word of a mount's prefix or of a command at the root, case aside, never a quoted one; and
+`routes.reach(tokens)` how far words go: the mount they reach, `True` where they stop along a prefix short of one,
+or `False` where a word goes nowhere.
+
 ## Completing a line
 
 `routes.complete(text)` follows the words before the one being typed. Where they reach a mount, it gives the mount,

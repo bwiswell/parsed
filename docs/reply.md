@@ -6,7 +6,7 @@ envelope, the same for every parsed app, however the line went ([`app.md`](app.m
 
 | Attribute | Holds |
 |---|---|
-| `line` | the line run |
+| `line` | the line run, as read: a session's subject's words before it, where one was tried ([`app.md`](app.md#subjects)) |
 | `command` | the phrase that said it, after its mount's prefix: `'relay run'`, `'fleet {fleet} mine'`; `None` when it doesn't read |
 | `ok` | whether it went well |
 | `done` | whether its handler ran for real: to its end, not for a dry run (`--dry-run`), to answer `--help`, or to stop at a question |

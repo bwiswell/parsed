@@ -36,9 +36,13 @@ The words before the one being typed are read loosely, as far as they go, and wh
 
 A name's scope is its field's words so far, read by the scope's own resolver: `fleet Hauler dock ` offers the
 stations within Hauler's reach, and `board --fleet Hauler ` does too; `fleet Hauler jump vruba then dock ` offers
-those in Vruba, where it will be. A quoted word is a value, so while one is
-typed, no literal word or flag is offered. A candidate with a space in it comes back quoted, so it replaces the word
-being typed whole. A line whose words don't read as far as they go is offered nothing.
+those in Vruba, where it will be. A quoted word is a value, so while one is typed, no literal word or flag is
+offered. A candidate with a space in it comes back quoted, so it replaces the word being typed whole. A line whose
+words don't read as far as they go is offered nothing.
+
+`goes(tree, tokens)` says whether words without flags go along a tree as far as they're given, read loosely as
+completion reads them: each a literal word or a slot's. A session's subjects are checked by it
+([`app.md`](../app.md#subjects)).
 
 The line is split as a line being typed is (`split(text, partial=True)`): a quote left open holds the last word, so
 `dock "Vru` completes inside the quotes.
