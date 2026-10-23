@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import _support_rio as rio
 import pytest
 
-from parsed.doc import command_key, introspect_command
+from parsed.doc import chain_keys, command_key, introspect_command
 from parsed.errors import RenderError
 
 
@@ -56,6 +56,26 @@ class TestCommandKey:
     def test_not_a_command_s_instance(self):
         with pytest.raises(TypeError, match=r'command_key\(\) takes an instance of a command'):
             command_key(farlandia.FleetView(fleet='f1'))  # ty: ignore[invalid-argument-type]
+
+
+class TestChainKeys:
+    def test_each_step_s_own(self):
+        steps = [farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetMine(fleet='f1')]
+        assert chain_keys(steps) == ['fleet/f1/jump/sol', 'fleet/f1/mine']
+
+    def test_its_names_where_the_fleet_will_be(self):
+        steps = [farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetDock(fleet='f1', station='ceres')]
+        assert chain_keys(steps, farlandia.NAMES) == ['fleet/f1/jump/sol', 'fleet/f1/dock/ceres']
+        with pytest.raises(RenderError, match=r'no phrase of FleetDock says'):
+            command_key(steps[1], farlandia.NAMES)  # alone, ceres isn't where the Prospector is
+
+    def test_a_twin_s(self):
+        steps = [farlandia.FleetMine(fleet='d2'), farlandia.FleetMine(fleet='d2')]
+        assert chain_keys(steps, farlandia.NAMES) == ['detachment/d2/mine', 'detachment/d2/mine']
+
+    def test_commands_instances(self):
+        with pytest.raises(TypeError, match=r"chain_keys\(\) takes a chain's steps, instances of commands"):
+            chain_keys([farlandia.FleetView(fleet='f1')])  # ty: ignore[invalid-argument-type]
 
 
 class TestTemplates:

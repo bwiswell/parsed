@@ -34,6 +34,7 @@ words, single-spaced, or as one quoted word where its own spacing differs.
 | holding a space | `"Vruba'a Belt 1"` |
 | beginning with `--` | `say "--loud" now` |
 | nothing at all | `""` |
+| in a step, spelled `then`, case aside, since a step's line is cut there | `move "then"` |
 
 A value holding a double quote can't be said, since a line has no escapes, and raises a `RenderError`.
 
@@ -43,3 +44,28 @@ flag once for each of its values (`--tag a --tag b`).
 
 A `RenderError` also says when the instance isn't one of the tree's commands, or when no phrase can say it: with
 names, a value no resolver knows.
+
+## A chain
+
+`render(tree, steps, names)`, given a chain's steps in a list, writes them on one line, joined by `then`, which the
+tree reads back to the same steps ([`tree.md`](../tree.md#chains)):
+
+```python
+tree.render([FleetJump(fleet='f1', system='sol'), FleetDock(fleet='f1', station='ceres'), FleetMine(fleet='f1')])
+# 'fleet f1 jump sol then dock ceres then mine'
+```
+
+- **The first step** is said as a line of its own says it; **each after it** says its phrase from where the first
+  step's shared part ends, by a phrase that shares that part (a twin's steps under the twin's words), then its own
+  flags.
+- **With names,** a step's names are known where the chain will be by then: a name whose scope follows the chain
+  is known where the steps before it have moved it ([`names.md`](../names.md#a-chains-place)). So `dock ceres`
+  after `jump sol` is said, where `ceres` alone, beyond the fleet's reach, isn't.
+- **One step** is its own line, as the command alone is.
+
+| Refused | Because |
+|---|---|
+| no steps | a chain has a step at least |
+| a first step that isn't one; a step of another chain, or none | a chain's steps are one base's |
+| steps whose shared fields differ (`fleet` `f1`, then `f2`) | the chain's shared fields are said once |
+| a step with no phrase under the first step's shared part (`detachment d2 mine then dock`) | a later step reads under it |

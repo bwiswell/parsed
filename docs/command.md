@@ -122,6 +122,8 @@ class FleetCommand(parsed.Command):
   setting, or a purchase that asks first.
 - **The base's own fields are the chain's shared fields:** the first step says them, and every step gets them.
 - **`STEPS = True` goes on a base,** a class without a `PHRASE`: on a command, it's refused.
+- **As one tool call,** a chain is its shared fields and its steps, each tagged by its words after the shared part
+  ([`doc/chains.md`](doc/chains.md)): its effect is its strongest step's, and it asks first if any step does.
 
 ### A chain's place
 

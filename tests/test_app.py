@@ -17,6 +17,7 @@ import pytest
 
 import parsed
 from parsed.app import App, Mount, Routed
+from parsed.doc import load_chain
 from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.tree import Tree
 
@@ -160,6 +161,12 @@ class TestRendering:
     def test_a_mount_that_doesn_t_hold_it(self, app):
         with pytest.raises(RenderError, match=r"Log is not mounted in _support_service under 'relay'"):
             app.render(farlandia.Log(), mount=_mount(app, 'relay'))
+
+    def test_a_chain_s_steps_by_its_first_s_mount(self, app):
+        steps = [farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetMine(fleet='f1')]
+        assert app.render(steps) == 'fleet f1 jump sol then mine'
+        with pytest.raises(RenderError, match=r'a chain has a step at least'):
+            app.render([])
 
     def test_a_mount_of_another_app(self, app):
         other = App('other').mount('_support_service')
@@ -1338,6 +1345,21 @@ class TestChains:
             2,
             "fleet {fleet} move {to}: no site 'Vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> move <to>`",
         )
+
+    async def test_a_chain_called_as_a_tool(self, game):
+        for category in ('system', 'site', 'station'):
+            game.names(category, farlandia.NAMES[category])
+        call = {
+            'fleet': 'f1',
+            'steps': [{'step': 'jump', 'system': 'sol'}, {'step': 'move', 'to': 'sol-belt'}, {'step': 'mine'}],
+        }
+        steps = load_chain(game.mounts[0].tree, farlandia.FleetCommand, call)
+        line = game.render(steps)
+        assert line == 'fleet f1 jump sol then move sol-belt then mine'
+        orders = _Orders()
+        async with game.open(orders) as session:
+            found = await session.run(line)
+        assert (found.ok, orders.sent) == (True, [steps])
 
     async def test_a_lone_step_as_a_chain_of_one(self, game):
         orders = _Orders()

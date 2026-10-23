@@ -48,8 +48,8 @@ seared  <-  zeared
   again on the app's change signal, or on an interval, until they're met or the bound passes. `--watch` streams each
   reply as it changes.
 - **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
-  its arguments as a closed JSON Schema, for the tools that read commands; and `python -m parsed check`, a
-  package's commands checked in its CI.
+  its arguments as a closed JSON Schema, for the tools that read commands; a chain as one tool call, its steps
+  tagged by their words; and `python -m parsed check`, a package's commands and chains checked in its CI.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`; `ReadError`, one error for a line
   that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance

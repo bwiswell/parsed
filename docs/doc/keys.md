@@ -24,6 +24,16 @@ parsed writes it as it is, and the tool reading it refuses it, naming the kind w
 to a key. An instance no phrase can say raises a `RenderError`, as `render` does; a value that isn't a command's,
 a `TypeError`.
 
+**A chain's steps** each keep their own key, so a policy allows a chain only when it allows every step, deny
+winning: `chain_keys(steps, names=None)` gives them in order. A step's names are known where the chain will be by
+then, as its line says them ([`chains.md`](chains.md)), so `dock ceres` after `jump sol` has its key where
+`ceres` alone, beyond the fleet's reach, raises a `RenderError`:
+
+```python
+chain_keys([FleetJump(fleet='f1', system='sol'), FleetDock(fleet='f1', station='ceres')], names)
+# ['fleet/f1/jump/sol', 'fleet/f1/dock/ceres']
+```
+
 **Templates:** a `CommandDoc`'s `keys` are each phrase's key with a `{slot}` where each one-word slot stands:
 `fleet/{fleet}/dock/{station}`, `detachment/{detachment}/mine`. An optional slot is in its template, and out of an
 instance's key while it holds its default.

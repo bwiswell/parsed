@@ -65,7 +65,7 @@ from .reply import Ask, Result
 from .tree import Tree
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
     from types import TracebackType
 
     from seared import Seared
@@ -386,18 +386,21 @@ class App:
             return found.tree.complete(text, found.resolvers)
         return found
 
-    def render(self, command: Command, *, mount: Mount | None = None) -> str:
+    def render(self, command: Command | Sequence[Command], *, mount: Mount | None = None) -> str:
         """The line that says ``command``, by its mount's tree, prefix and all.
 
         Args:
-            command: An instance of a mounted command.
+            command: An instance of a mounted command; or a chain's steps, said in the mount of its first.
             mount: The mount to say it in, where its command is mounted more than once.
 
         Raises:
             RenderError: Its command is mounted nowhere, more than once and ``mount`` doesn't say which, or not in
-                ``mount``; or no phrase can say it.
+                ``mount``; or no phrase can say it; or the steps aren't one chain's (:meth:`Tree.render`).
         """
-        cls = type(command)
+        if isinstance(command, (list, tuple)) and not command:
+            msg = 'a chain has a step at least: no steps, no line'
+            raise RenderError(msg)
+        cls = type(command[0] if isinstance(command, (list, tuple)) else command)
         if mount is None:
             holding = [found for found in self._mounts if found.holds(cls)]
             if not holding:

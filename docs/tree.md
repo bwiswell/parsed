@@ -96,7 +96,9 @@ reading.phrase                             # 'fleet {fleet} jump {system} then m
 - **Refused:** `then` with no step on one side, a first piece that isn't a step where the line doesn't read as one
   command, a later step that isn't one of the chain's, and a wait (`--until`, `--watch`) in a chain.
 
-`tree.chains` holds each chain's base, to its steps among the tree's commands.
+`tree.chains` holds each chain's base, to its steps among the tree's commands. As one tool call, a chain is the
+shared fields and its steps tagged by their words ([`doc/chains.md`](doc/chains.md)), and `tree.render(steps)`
+writes the steps back to their line.
 
 ## Completing a line
 
@@ -121,6 +123,9 @@ not at their defaults ([`_walk/_render.md`](_walk/_render.md)):
 tree.render(FleetDock(fleet='f1', station='nearest'))
 # 'fleet f1 dock "nearest"'
 ```
+
+Given a chain's steps in a list, it writes them on one line joined by `then`, each step's names where the chain will
+be by then: `fleet f1 jump sol then dock ceres` ([`_walk/_render.md`](_walk/_render.md#a-chain)).
 
 ## Flags
 

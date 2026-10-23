@@ -33,6 +33,11 @@ class TestMain:
         assert main(['check', '_support_rio', '--max-schema-bytes', '100']) == 1
         assert json.loads(capsys.readouterr().out)['problems'][0]['check'] == 'schema'
 
+    def test_the_chain_s_bound(self, capsys):
+        assert main(['check', '_support_farlandia', '--max-chain-bytes', '100']) == 1
+        (problem,) = json.loads(capsys.readouterr().out)['problems']
+        assert (problem['check'], problem['command']) == ('chain', '_support_farlandia.FleetCommand')
+
     @pytest.mark.parametrize(
         ('argv', 'says'),
         [

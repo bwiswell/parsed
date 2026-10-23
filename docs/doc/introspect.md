@@ -15,6 +15,7 @@ A base, a reply's class, a protocol's request class and an undecorated subclass 
 | `flags` | its flags, in the order its fields are declared: `FlagDoc`s |
 | `kinds` | each field's kind, by attribute name |
 | `effect`, `asks`, `interactive`, `polymorphic`, `instead`, `reply` | the constants, as declared; none inferred |
+| `chain`, `moves` | for a step, its chain's base and where it takes its chain (`MOVES`: a field's name, `True`, or `False`); `None` and `False` for any other command |
 | `fields_from` | the seared classes it takes fields from that aren't commands, nearest first |
 
 A **`SlotDoc`** is a slot's `name` as a phrase writes it (a field's name, or an alias), the `field` it fills, the

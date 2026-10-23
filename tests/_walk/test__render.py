@@ -155,6 +155,64 @@ class TestRoundTrips:
             assert built.read(built.render(command)) == command
 
 
+class TestChains:
+    # A chain's steps on one line, joined by `then`: each after the first in its own words, read back to the steps.
+    def test_its_steps_on_one_line(self, fixtures):
+        steps = [
+            farlandia.FleetJump(fleet='f1', system='sol'),
+            farlandia.FleetMove(fleet='f1', to='sol-belt'),
+            farlandia.FleetMine(fleet='f1', for_=timedelta(minutes=90)),
+            farlandia.FleetSell(fleet='f1', goods=['iron', 'coal']),
+        ]
+        line = fixtures.render(steps)
+        assert line == 'fleet f1 jump sol then move sol-belt then mine --for 1h30m then sell iron coal'
+        assert [step.load() for step in fixtures.walk(line).steps] == steps
+
+    def test_one_step_is_its_own_line(self, fixtures):
+        assert fixtures.render([farlandia.FleetMine(fleet='f1')]) == 'fleet f1 mine'
+
+    def test_a_twin_s_steps_under_its_own_words(self, fixtures):
+        steps = [farlandia.FleetMine(fleet='d2'), farlandia.FleetMine(fleet='d2')]
+        assert fixtures.render(steps, farlandia.NAMES) == 'detachment d2 mine then mine'
+
+    def test_each_step_s_names_where_the_fleet_will_be(self, fixtures):
+        steps = [farlandia.FleetJump(fleet='f1', system='sol'), farlandia.FleetDock(fleet='f1', station='ceres')]
+        line = fixtures.render(steps, farlandia.NAMES)  # ceres isn't where the Prospector is, but where it will be
+        assert [step.load() for step in fixtures.walk(line, farlandia.NAMES).steps] == steps
+        with pytest.raises(RenderError, match=r'no phrase of FleetDock says'):
+            fixtures.render([farlandia.FleetDock(fleet='f1', station='ceres')], farlandia.NAMES)
+
+    def test_then_in_a_step_quoted(self, fixtures):
+        assert fixtures.render(farlandia.FleetMove(fleet='f1', to='then')) == 'fleet f1 move "then"'
+        line = fixtures.render([farlandia.FleetMine(fleet='f1'), farlandia.FleetSell(fleet='f1', goods=['Then'])])
+        assert line == 'fleet f1 mine then sell "Then"'
+        assert fixtures.render(farlandia.Say(message='hello then goodbye')) == 'say hello then goodbye'  # no step
+
+    @pytest.mark.parametrize(
+        ('steps', 'message'),
+        [
+            ([], r'a chain has a step at least'),
+            ([farlandia.Log(), farlandia.Log()], r"Log\(n=20\) is no step: a chain's steps are the commands beneath"),
+            (
+                [farlandia.FleetMine(fleet='f1'), farlandia.FleetRetreat(fleet='f1', share=30.0)],
+                r"step 2 of the chain, FleetRetreat\(.*\), is not a step of FleetCommand's chain",
+            ),
+            (
+                [farlandia.FleetMine(fleet='f1'), farlandia.FleetMine(fleet='f2')],
+                r"a chain's steps share FleetCommand's fields: fleet is 'f1' in its first step and 'f2' in step 2",
+            ),
+        ],
+    )
+    def test_refused(self, fixtures, steps, message):
+        with pytest.raises(RenderError, match=message):
+            fixtures.render(steps)
+
+    def test_a_step_with_no_phrase_under_the_first_s_words(self, fixtures):
+        steps = [farlandia.FleetMine(fleet='d2'), farlandia.FleetDock(fleet='d2')]
+        with pytest.raises(RenderError, match=r"FleetDock has no phrase under 'detachment \{detachment\}', the chain"):
+            fixtures.render(steps, farlandia.NAMES)
+
+
 @parsed.parsed
 class Retreat(Command):
     """A share, or off."""

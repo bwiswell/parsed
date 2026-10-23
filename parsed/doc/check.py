@@ -13,6 +13,16 @@ command:
   a list of distinct JSON scalars, a field of choices (an ``Enum``'s) an ``enum``, and compact, at most
   ``max_schema_bytes`` written compactly.
 
+Then each chain (:attr:`parsed.tree.Tree.chains`), from the same examples. Its steps are grouped by the shared part
+their phrase says (``fleet {fleet}``), since a later step reads under its first's; each group gives one chain of
+every step's instance with only its required fields, and one of every step's with every field it can give, each step
+in the tree's order.
+
+- **round trips:** each renders to a line that reads back to its steps;
+- **its schema:** ``chain_schema`` builds, closed, each step's branch closed and tagged by a ``const``, at most
+  ``max_chain_bytes``; and each chain, dumped as a tool call (``dump_chain``), has only keys the schema names, each it
+  requires, and loads back to its steps (``load_chain``).
+
 A command whose required fields can't all be given a value (a pattern no example word fits, a type with no
 example) has no round trips, and is listed as skipped, with those fields; its examples and its schema are still
 checked. The :class:`CheckReport` says what was checked, what was skipped, and each :class:`Problem`, with the
@@ -37,6 +47,7 @@ from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.kinds import Choice
 from parsed.tree import Tree
 
+from .chains import TAG, chain_schema, dump_chain, head_text, load_chain
 from .json_schema import json_schema
 
 if TYPE_CHECKING:
@@ -48,6 +59,9 @@ if TYPE_CHECKING:
 
 #: The most bytes a command's schema may take, written compactly, unless the check is told otherwise.
 MAX_SCHEMA_BYTES = 2048
+
+#: The most bytes a chain's schema may take, written compactly: a union of its steps, so more than a command's.
+MAX_CHAIN_BYTES = 8192
 
 _PLACEHOLDER = re.compile(r'<[^<>\s]+>')
 
@@ -63,9 +77,10 @@ class Problem:
     """A check a command failed.
 
     Attributes:
-        check: Which: ``tree``, ``round-trip``, ``example`` or ``schema``.
+        check: Which: ``tree``, ``round-trip``, ``example``, ``schema`` or ``chain``.
         message: What's wrong.
-        command: The command's class, by module and name; ``None`` for the tree's own.
+        command: The command's class, by module and name (a chain's base, for a chain's); ``None`` for the tree's
+            own.
         line: The line at fault, where there's one.
     """
 
@@ -90,6 +105,7 @@ class CheckReport:
         round_trips: How many generated instances were rendered and read back.
         examples: How many ``EXAMPLES`` lines were read.
         schemas: How many schemas were built.
+        chains: How many chains were checked, each its round trips and its schema.
         skipped: The commands with no round trips, by module and name, each with the fields that had no example.
         problems: Each check a command failed.
     """
@@ -99,6 +115,7 @@ class CheckReport:
     round_trips: int
     examples: int
     schemas: int
+    chains: int
     skipped: Mapping[str, tuple[str, ...]]
     problems: tuple[Problem, ...]
 
@@ -113,14 +130,21 @@ class CheckReport:
             'targets': list(self.targets),
             'ok': self.ok,
             'commands': self.commands,
-            'checked': {'round-trips': self.round_trips, 'examples': self.examples, 'schemas': self.schemas},
+            'checked': {
+                'round-trips': self.round_trips,
+                'examples': self.examples,
+                'schemas': self.schemas,
+                'chains': self.chains,
+            },
             'skipped': {command: list(fields) for command, fields in self.skipped.items()},
             'problems': [problem.to_json() for problem in self.problems],
         }
 
 
-def check(targets: Sequence[str], *, max_schema_bytes: int = MAX_SCHEMA_BYTES) -> CheckReport:
-    """Check every command in ``targets``, as the module's docstring describes.
+def check(
+    targets: Sequence[str], *, max_schema_bytes: int = MAX_SCHEMA_BYTES, max_chain_bytes: int = MAX_CHAIN_BYTES
+) -> CheckReport:
+    """Check every command in ``targets``, and every chain, as the module's docstring describes.
 
     Raises:
         ImportError: A target doesn't import.
@@ -128,10 +152,12 @@ def check(targets: Sequence[str], *, max_schema_bytes: int = MAX_SCHEMA_BYTES) -
     try:
         tree = Tree.collect(*targets)
     except DeclarationError as e:
-        return CheckReport(tuple(targets), 0, 0, 0, 0, {}, (Problem('tree', str(e)),))
-    checking = _Checking(tree, max_schema_bytes)
+        return CheckReport(tuple(targets), 0, 0, 0, 0, 0, {}, (Problem('tree', str(e)),))
+    checking = _Checking(tree, max_schema_bytes, max_chain_bytes)
     for found in tree.commands:
         checking.command(found)
+    for base, steps in tree.chains.items():
+        checking.chain(base, steps)
     if not tree.commands:
         checking.problems.append(Problem('tree', f'no commands in {", ".join(targets)}'))
     return CheckReport(
@@ -140,6 +166,7 @@ def check(targets: Sequence[str], *, max_schema_bytes: int = MAX_SCHEMA_BYTES) -
         round_trips=checking.round_trips,
         examples=checking.examples,
         schemas=checking.schemas,
+        chains=checking.chains,
         skipped=checking.skipped,
         problems=tuple(checking.problems),
     )
@@ -148,9 +175,9 @@ def check(targets: Sequence[str], *, max_schema_bytes: int = MAX_SCHEMA_BYTES) -
 class _Checking:
     """One check's tally, as it goes."""
 
-    def __init__(self, tree: Tree, max_schema_bytes: int) -> None:
-        self.tree, self.max_schema_bytes = tree, max_schema_bytes
-        self.round_trips = self.examples = self.schemas = 0
+    def __init__(self, tree: Tree, max_schema_bytes: int, max_chain_bytes: int) -> None:
+        self.tree, self.max_schema_bytes, self.max_chain_bytes = tree, max_schema_bytes, max_chain_bytes
+        self.round_trips = self.examples = self.schemas = self.chains = 0
         self.skipped: dict[str, tuple[str, ...]] = {}
         self.problems: list[Problem] = []
 
@@ -223,9 +250,95 @@ class _Checking:
         if back != instance:
             self.problems.append(Problem('schema', f'its example loads as {back!r}, not {instance!r}', name))
 
+    def chain(self, base: type, steps: Sequence[Declaration]) -> None:
+        name = f'{base.__module__}.{base.__qualname__}'
+        self.chains += 1
+        groups: dict[str, list[Declaration]] = {}
+        for step in steps:
+            groups.setdefault(head_text(step), []).append(step)
+        chains: list[list[Command]] = []
+        for group in groups.values():
+            made = [instances for instances, unmade in (_instances(step.cls) for step in group) if not unmade]
+            if made:
+                required, every = [found[0] for found in made], [found[-1] for found in made]
+                chains += [required] if every == required else [required, every]
+        for chain in chains:
+            self._chain_trip(name, chain)
+        try:
+            schema = chain_schema(self.tree, base)
+        except (TypeError, DeclarationError) as e:
+            self.problems.append(Problem('chain', f"its schema doesn't build: {e}", name))
+            return
+        size = len(json.dumps(schema, separators=(',', ':')))
+        if size > self.max_chain_bytes:
+            msg = (
+                f'its schema takes {size} bytes, over {self.max_chain_bytes}: a decoder holds a compact one more easily'
+            )
+            self.problems.append(Problem('chain', msg, name))
+        self.problems.extend(Problem('chain', msg, name) for msg in _chain_shape(schema))
+        for chain in chains:
+            self._chain_call(name, base, schema, chain)
+
+    def _chain_trip(self, name: str, chain: list[Command]) -> None:
+        """A chain rendered to its line, and read back to its steps."""
+        try:
+            line = self.tree.render(chain)
+        except RenderError as e:
+            self.problems.append(Problem('chain', f"{chain!r} doesn't render: {e}", name))
+            return
+        try:
+            back = [step.load() for step in self.tree.walk(line).steps]
+        except ReadError as e:
+            self.problems.append(Problem('chain', f"it doesn't read back: {e}", name, line))
+            return
+        if back != chain:
+            self.problems.append(Problem('chain', f'it reads back as {back!r}, not {chain!r}', name, line))
+
+    def _chain_call(self, name: str, base: type, schema: dict[str, Any], chain: list[Command]) -> None:
+        """A chain dumped as a tool call: only keys its schema names, each it requires, loaded back to its steps."""
+        data = dump_chain(chain)
+        faults = _unnamed(schema, data)
+        branches = {
+            branch['properties'][TAG]['const']: branch for branch in schema['properties']['steps']['items']['anyOf']
+        }
+        for at, item in enumerate(data['steps']):
+            faults += [f'steps[{at}]: {fault}' for fault in _unnamed(branches.get(item[TAG], {}), item)]
+        if faults:
+            self.problems.append(Problem('chain', f"its schema doesn't take its call: {'; '.join(faults)}", name))
+            return
+        try:
+            back = load_chain(self.tree, base, data)
+        except SearedError as e:
+            self.problems.append(Problem('chain', f"its call doesn't load: {e}", name))
+            return
+        if back != chain:
+            self.problems.append(Problem('chain', f'its call loads as {back!r}, not {chain!r}', name))
+
 
 def _named(found: Declaration) -> str:
     return f'{found.cls.__module__}.{found.cls.__qualname__}'
+
+
+def _unnamed(schema: Mapping[str, Any], data: Mapping[str, object]) -> list[str]:
+    """What keeps ``schema``'s object from taking ``data``: keys it doesn't name, and keys it requires but lacks."""
+    unnamed = sorted(set(data) - set(schema.get('properties', {})))
+    missing = sorted(set(schema.get('required', ())) - set(data))
+    return [f'{unnamed} not among its properties'] * bool(unnamed) + [f'{missing} required but not there'] * bool(
+        missing
+    )
+
+
+def _chain_shape(schema: dict[str, Any]) -> list[str]:
+    """What keeps a constrained decoder from holding a chain's ``schema``: each fault, said."""
+    faults = []
+    if schema.get('type') != 'object' or schema.get('unevaluatedProperties') is not False:
+        faults.append("it isn't a closed object: a decoder would give keys the chain doesn't take")
+    for branch in schema.get('properties', {}).get('steps', {}).get('items', {}).get('anyOf', ()):
+        tag = branch.get('properties', {}).get(TAG, {}).get('const')
+        if not isinstance(tag, str) or branch.get('unevaluatedProperties') is not False:
+            faults.append(f'step {tag!r} is not a closed object tagged by a const')
+    faults += [f'{at}: {fault}' for at, values in _enums(schema) if (fault := _enum_fault(values)) is not None]
+    return faults
 
 
 def _shape(schema: dict[str, Any], found: Declaration) -> list[str]:

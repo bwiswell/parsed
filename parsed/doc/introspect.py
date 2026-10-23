@@ -3,7 +3,8 @@
 :func:`introspect_command` reads a command class's declaration into a :class:`CommandDoc`, in the shape of
 ``zeared.doc``'s ``MessageDoc`` where the meaning matches, so a tool reads commands and messages alike: seared's
 ``SchemaDoc`` for the fields, then what only a command says. Its phrases; each slot once, with the field it fills and
-the kind its words read by; its flags; each field's kind; the constants; and the seared classes it takes fields from
+the kind its words read by; its flags; each field's kind; the constants (for a step, its chain and where it moves
+it); and the seared classes it takes fields from
 that aren't commands (a protocol's request class it inherits), beside its ``REPLY``, so a tool can tell a command from
 the contract it's built on.
 """
@@ -93,6 +94,8 @@ class CommandDoc:
         polymorphic: ``POLYMORPHIC`` as declared, or ``None``.
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
+        chain: For a step, its chain's base; ``None`` otherwise.
+        moves: For a step, where it takes its chain (its ``MOVES``): a field's name, ``True``, or ``False``.
         fields_from: The seared classes it takes fields from that aren't commands, nearest first: a protocol's
             request class it inherits.
     """
@@ -111,6 +114,8 @@ class CommandDoc:
     polymorphic: bool | None
     instead: type[Command] | None
     reply: type[Seared] | None
+    chain: type[Command] | None
+    moves: str | bool
     fields_from: tuple[type[Seared], ...]
 
 
@@ -172,6 +177,8 @@ def introspect_command(cls: type[Command]) -> CommandDoc:
         polymorphic=found.polymorphic,
         instead=found.instead,
         reply=found.reply,
+        chain=found.chain,
+        moves=found.moves,
         fields_from=_fields_from(cls),
     )
 

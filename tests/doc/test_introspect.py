@@ -80,6 +80,13 @@ class TestCommandDoc:
         assert introspect_command(farlandia.FleetsShow).reply is farlandia.FleetView
         assert introspect_command(farlandia.ShipsMakeAdd).polymorphic is None
 
+    def test_a_step_s_chain_and_where_it_moves_it(self):
+        jump = introspect_command(farlandia.FleetJump)
+        assert (jump.chain, jump.moves) == (farlandia.FleetCommand, 'system')
+        assert introspect_command(farlandia.FleetJumpNearest).moves is True
+        log = introspect_command(farlandia.Log)
+        assert (log.chain, log.moves) == (None, False)
+
     def test_its_examples(self):
         assert introspect_command(farlandia.FleetDock).examples == (
             'fleet <fleet> dock <station>',

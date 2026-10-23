@@ -4,12 +4,14 @@ import enum
 import importlib
 
 import _support_check.examples as examples
+import _support_farlandia as farlandia
 import pytest
 import seared
 
 import parsed
 from parsed.command import declaration
-from parsed.doc import check, json_schema
+from parsed.doc import chain_schema, check, json_schema
+from parsed.tree import Tree
 
 # The package names the function `check`, so the module is imported by its path.
 checking = importlib.import_module('parsed.doc.check')
@@ -27,6 +29,7 @@ class TestTheFixtures:
         assert (report.commands, report.schemas) == (17, 17)
         assert report.examples == 11
         assert report.round_trips > report.commands  # an instance with every field, where it isn't the other
+        assert report.chains == 1  # the fleet's orders
         assert report.skipped == {}
 
     def test_the_report_as_data(self):
@@ -35,7 +38,7 @@ class TestTheFixtures:
             'targets': ['_support_rio'],
             'ok': True,
             'commands': 1,
-            'checked': {'round-trips': 2, 'examples': 0, 'schemas': 1},
+            'checked': {'round-trips': 2, 'examples': 0, 'schemas': 1, 'chains': 0},
             'skipped': {},
             'problems': [],
         }
@@ -79,6 +82,20 @@ class TestSeededFaults:
         (problem,) = report.problems
         assert problem.check == 'schema'
         assert problem.message.startswith('it takes 668 bytes, over 100')
+
+    def test_a_chain_whose_steps_share_their_words(self):
+        report = check(['_support_check.chains'])
+        assert (report.commands, report.chains) == (2, 1)
+        (problem,) = report.problems  # each step's group round-trips: a ship's, and a boat's
+        assert (problem.check, problem.command) == ('chain', '_support_check.chains.Vessel')
+        assert problem.message.startswith(
+            "its schema doesn't build: 'ship {vessel} go {to}' and 'boat {vessel} go {to}' are both tagged 'go'"
+        )
+
+    def test_a_chain_s_schema_too_big(self):
+        (problem,) = check(['_support_farlandia'], max_chain_bytes=100).problems
+        assert problem.check == 'chain'
+        assert problem.message.startswith('its schema takes 2084 bytes, over 100')
 
     def test_a_target_that_doesn_t_import(self):
         with pytest.raises(ImportError):
@@ -168,4 +185,28 @@ class TestShape:
         del schema['properties']['colour']['enum']
         assert checking._shape(schema, paint) == [
             "colour is one of a field's choices, but its schema has no enum of them"
+        ]
+
+
+class TestChainShape:
+    @pytest.fixture
+    def schema(self):
+        return chain_schema(Tree.collect('_support_farlandia'), farlandia.FleetCommand)
+
+    def test_a_closed_object_of_closed_tagged_steps_holds(self, schema):
+        assert checking._chain_shape(schema) == []
+
+    def test_an_open_object(self, schema):
+        del schema['unevaluatedProperties']
+        assert checking._chain_shape(schema) == [
+            "it isn't a closed object: a decoder would give keys the chain doesn't take"
+        ]
+
+    def test_a_step_open_or_untagged(self, schema):
+        mine, dock, *_ = schema['properties']['steps']['items']['anyOf']
+        del mine['unevaluatedProperties']
+        dock['properties']['step'] = {'type': 'string'}
+        assert checking._chain_shape(schema) == [
+            "step 'mine' is not a closed object tagged by a const",
+            'step None is not a closed object tagged by a const',
         ]
