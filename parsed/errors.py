@@ -2,7 +2,8 @@
 
 Every error parsed raises is a :class:`ParsedError`. A line that doesn't read is one error, a :class:`ReadError`,
 whichever part refused it: the walk, a field's kind, or seared, whose ``ValidationError`` comes back as the word that
-gave the value. A wait whose bound passes is a :class:`TimedOutError`.
+gave the value. A wait whose bound passes is a :class:`TimedOutError`, and a command for a person at a terminal, run
+with none, a :class:`RefusedError`.
 """
 
 from __future__ import annotations
@@ -101,6 +102,34 @@ class TimedOutError(ParsedError, TimeoutError):
         self.message = message
         self.reply = reply
         self.waited = waited
+
+
+class RefusedError(ParsedError):
+    """A line refused before it runs: a command for a person at a terminal (``INTERACTIVE``), run with none.
+
+    Its message names the command, and what's said in its place where it declares that (``INSTEAD``):
+    ``ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead``.
+
+    Args:
+        message: The text for people.
+        line: The line refused.
+        instead: The phrase said in its place, after its mount's prefix (``'ships make {ship} add {part}'``);
+            ``None`` where it declares none.
+    """
+
+    def __init__(self, message: str, *, line: str = '', instead: str | None = None) -> None:
+        """Hold the message, the line and what's said in its place."""
+        super().__init__(message)
+        self.message = message
+        self.line = line
+        self.instead = instead
+
+    def to_json(self) -> dict[str, object]:
+        """The error as data: ``error`` (``refused``), ``message`` and ``line``, and ``instead`` where there's one."""
+        out: dict[str, object] = {'error': 'refused', 'message': self.message, 'line': self.line}
+        if self.instead is not None:
+            out['instead'] = self.instead
+        return out
 
 
 class RenderError(ParsedError, ValueError):

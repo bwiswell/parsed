@@ -28,6 +28,11 @@ handlers see what entering it gave. Each line's handler is called as ``handler(c
 
 A line that gives ``--help`` runs nothing: it's answered with its command's usage.
 
+**Whether a person is at a terminal** is the front end's to say: ``app.open(state, terminal=True)``. It's ``False``
+by default, so a program that runs lines in-process needn't say so. Without one, a line that says an ``INTERACTIVE``
+command is refused before its values are loaded or any hook runs, naming its ``INSTEAD`` (a ``refused`` error, exit
+3); a handler reads it as ``ctx.terminal``, to give text where it would draw.
+
 **Subjects** are the words a session tries before a bare line (``fleet prospector``, so ``mine`` reads as
 ``fleet prospector mine``): ``app.open(state, subjects=…)``, or ``session.use(…)``, from a handler too
 (``ctx.session``). The line is read as typed first; only where its first word begins no command is each subject tried,
@@ -67,7 +72,7 @@ from ._walk import Completion, Reading, Routes, goes, split
 from ._walk._complete import being_typed
 from ._walk._walker import _flag
 from .command import Command, declaration, is_chain_base
-from .errors import DeclarationError, ReadError, RenderError, TimedOutError
+from .errors import DeclarationError, ReadError, RefusedError, RenderError, TimedOutError
 from .kinds import spell_span
 from .reply import Ask, Result
 from .tree import Tree
@@ -293,6 +298,7 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Session[None]: ...
     @overload
     def open[S](
@@ -303,6 +309,7 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Session[S]: ...
     @overload
     def open[S](
@@ -313,6 +320,7 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Session[S]: ...
     @overload
     def open[S](
@@ -323,8 +331,9 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Session[S]: ...
-    def open(
+    def open(  # noqa: PLR0913 -- its state, and how its lines are said, answered, waited on, read and run
         self,
         state: object = None,
         *,
@@ -332,6 +341,7 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Session[Any]:
         """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
 
@@ -345,12 +355,17 @@ class App:
             interval: How often, in seconds, a wait reads again when the app says nothing has changed; ``None`` for
                 an app that calls ``session.changed()`` on every change, so a wait reads only then.
             subjects: The words tried before a bare line, in turn (``'fleet prospector'``); none by default.
+            terminal: Whether a person is at a terminal (``ctx.terminal``): ``False`` by default, so a line that
+                says an ``INTERACTIVE`` command is refused, naming its ``INSTEAD``.
 
         Raises:
             ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
                 command begins with (:meth:`Session.use`).
+            TypeError: ``terminal`` isn't ``True`` or ``False``.
         """
-        return Session(self, state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects)
+        return Session(
+            self, state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects, terminal=terminal
+        )
 
     def run(  # noqa: PLR0913 -- the line, its state, and how it's said, answered and waited on
         self,
@@ -362,6 +377,7 @@ class App:
         answer: Answer | None = None,
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> Result:
         """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
 
@@ -376,16 +392,20 @@ class App:
             answer: What answers a question otherwise, as :meth:`open` takes it.
             interval: How often a wait reads again, as :meth:`open` takes it.
             subjects: The words tried before a bare line, as :meth:`open` takes them.
+            terminal: Whether a person is at a terminal, as :meth:`open` takes it.
 
         Raises:
             RuntimeError: It's called inside a running event loop.
             ValueError: As :meth:`open` raises it.
+            TypeError: As :meth:`open` raises it.
         """
         if _looping():
             msg = 'app.run(line) runs an event loop of its own; inside one, open a session: async with app.open(state)'
             raise RuntimeError(msg)
 
-        opened = self.open(state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects)
+        opened = self.open(
+            state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects, terminal=terminal
+        )
 
         async def once() -> Result:
             async with opened as session:
@@ -647,6 +667,7 @@ class Session[S]:
         verbosity: How much handlers should say: ``0`` by default, more for more.
         answer: What answers a question a line asks, when ``--yes`` doesn't; ``None`` leaves it unanswered.
         interval: How often, in seconds, a wait reads again when nothing has changed; ``None``: only on a change.
+        terminal: Whether a person is at a terminal: without one, an ``INTERACTIVE`` command is refused.
     """
 
     def __init__(  # noqa: PLR0913 -- the app, its state, and how its lines are said, answered, waited on and read
@@ -658,22 +679,28 @@ class Session[S]:
         answer: Answer | None,
         interval: float | None,
         subjects: Sequence[str] = (),
+        terminal: bool = False,
     ) -> None:
         """Hold what to open; nothing is entered until the session opens.
 
         Raises:
             ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
                 command begins with.
+            TypeError: ``terminal`` isn't ``True`` or ``False``.
         """
         if interval is not None and (
             isinstance(interval, bool) or not isinstance(interval, int | float) or interval <= 0
         ):
             msg = f'interval={interval!r}: how often a wait reads again, a positive number of seconds, or None'
             raise ValueError(msg)
+        if not isinstance(terminal, bool):
+            msg = f'terminal={terminal!r}: whether a person is at a terminal, True or False'
+            raise TypeError(msg)
         self.app = app
         self.verbosity = verbosity
         self.answer = answer
         self.interval = interval
+        self.terminal = terminal
         self._given = state
         self._state: Any = None
         self._stack: AsyncExitStack | None = None
@@ -812,8 +839,9 @@ class Session[S]:
             yield Result(routed.reading.line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
             return
         try:
+            self._check_terminal(routed)
             steps = [step.load() for step in routed.reading.steps]
-        except ReadError as e:
+        except (RefusedError, ReadError) as e:
             yield _refused(line, routed.said, e)
             return
         try:
@@ -831,7 +859,8 @@ class Session[S]:
         The line goes to its mount and is loaded there (:meth:`App.walk`); its handler is the mount's, else the
         app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async. It returns its
         command's ``REPLY``, text or nothing, or asks first. A line that gives ``--help`` runs nothing: it gives the
-        command's usage.
+        command's usage. With no one at a terminal, a line that says an ``INTERACTIVE`` command is refused before its
+        values are loaded or any hook runs.
 
         A question is answered yes by ``--yes`` or ``yes``, else by the session's ``answer``; a yes runs what the
         handler asked to do, which may ask again. A question left unanswered, or answered no, is given back: the
@@ -840,6 +869,7 @@ class Session[S]:
         Raises:
             RuntimeError: The session isn't open.
             ReadError: The line doesn't read.
+            RefusedError: It says an ``INTERACTIVE`` command, and no one is at a terminal.
             LookupError: Its command has no handler.
             ImportError: Its handler's path doesn't import.
             TypeError: Its handler returned something besides its ``REPLY``, text, nothing or an ``Ask``.
@@ -851,6 +881,7 @@ class Session[S]:
         routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
+        self._check_terminal(routed)
         found: Seared | str | Ask | None = None
         steps = [step.load() for step in routed.reading.steps]
         async with contextlib.aclosing(self._handling(routed, steps, yes=yes)) as handling:
@@ -908,6 +939,14 @@ class Session[S]:
         from .context import Context  # here: the context's module imports this one
 
         return Context(self, routed.mount, routed.reading)
+
+    def _check_terminal(self, routed: Routed) -> None:
+        """Refuse a line that says a command for a person at a terminal, where none is: a chain's step among them."""
+        if self.terminal:
+            return
+        for step in routed.reading.steps:
+            if step.end.declaration.interactive:
+                raise _for_a_person(routed.mount, step, routed.reading.line)
 
     def _check_open(self) -> None:
         if self._stack is None:
@@ -1125,8 +1164,30 @@ def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | N
     return Result(line, said, done=done, met=met, waited=waited, reply=found, text=str(found))
 
 
-def _refused(line: str, said: str | None, error: ReadError) -> Result:
-    """A line that doesn't read, or a value its field refuses: the error's own data, and the line it read."""
+def _for_a_person(mount: Mount, step: Reading, line: str) -> RefusedError:
+    """The refusal of a command for a person at a terminal: its phrase, and what's said in its place, if anything.
+
+    What's said in its place (``INSTEAD``) is said as the mount the line went to says it, else the first mount that
+    holds it, else by its phrase alone.
+    """
+    phrase = step.end.bound.phrase.text
+    message = f'{_under(mount.tree, phrase)} is for a person at a terminal'
+    instead = step.end.declaration.instead
+    if instead is None:
+        return RefusedError(message, line=line)
+    held = mount if mount.holds(instead) else next((other for other in mount.app.mounts if other.holds(instead)), None)
+    tree = held.tree if held is not None else Tree((instead,))
+    said = _under(tree, cast('str', declaration(instead).phrase))
+    return RefusedError(f'{message}: say `{tree.usage_of(instead)}` instead', line=line, instead=said)
+
+
+def _under(tree: Tree, phrase: str) -> str:
+    """A phrase after its tree's prefix."""
+    return f'{tree.under} {phrase}' if tree.under else phrase
+
+
+def _refused(line: str, said: str | None, error: ReadError | RefusedError) -> Result:
+    """A line refused: one that doesn't read, a value its field refuses, or a command for a person at a terminal."""
     return Result(error.line or line, said, ok=False, text=str(error), error=error.to_json(), exception=error)
 
 

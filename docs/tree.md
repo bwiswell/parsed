@@ -38,7 +38,8 @@ holds under one.
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
 `tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all:
-`fleets merge <fleet> --into <into> [--quiet]`.
+`fleets merge <fleet> --into <into> [--quiet]`. `tree.usage_of(cls)` says one of its commands by its `PHRASE` alike
+(`fleet <fleet> dock [<station>]`), and raises a `KeyError` for a class that isn't one of them.
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:

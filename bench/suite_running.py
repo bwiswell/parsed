@@ -4,9 +4,9 @@
   called with a fresh context between the app's hooks, and what came of it put in its envelope.
 
 The app mounts the tree at the root, binds one handler to every command and adds a before and an after hook, so a
-line pays for the whole path; the handler and the hooks do nothing. A session is opened once, on an event loop the
-suite keeps, and the case runs a line for each command, :data:`~bench.tree.COMMANDS` lines; the docs quote it for
-every line and per line.
+line pays for the whole path; the handler and the hooks do nothing. A session is opened once, at a terminal so the
+tree's interactive commands run too, on an event loop the suite keeps, and the case runs a line for each command,
+:data:`~bench.tree.COMMANDS` lines; the docs quote it for every line and per line.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def cases() -> list[Case]:
     app.after(_nothing)
     said = lines(commands)
     loop = asyncio.new_event_loop()
-    session = loop.run_until_complete(app.open().__aenter__())
+    session = loop.run_until_complete(app.open(terminal=True).__aenter__())
 
     async def every() -> list[bool]:
         return [(await session.run(line)).ok for line in said]

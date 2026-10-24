@@ -68,6 +68,11 @@ class TestTheContext:
     def test_the_session_s_verbosity(self, session):
         assert _context(session, 'log').verbosity == 1
 
+    async def test_whether_a_person_is_at_a_terminal(self, app, session):
+        assert _context(session, 'log').terminal is False  # by default
+        async with app.open(terminal=True) as opened:
+            assert _context(opened, 'log').terminal is True
+
     def test_one_for_each_line(self, session):
         first, second = _context(session, 'log'), _context(session, 'log')
         assert first == second

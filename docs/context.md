@@ -25,6 +25,7 @@ async def mine(command: FleetMine, ctx: parsed.Context[Controls]) -> str:
 | `phrase` | the phrase that said the line, as its command declares it, without its mount's prefix: `'detachment {detachment} mine'`, so a handler tells a twin's wording from its command's |
 | `dry_run` | whether the line gave `--dry-run`: what the command would do, done by nothing |
 | `verbosity` | how much to say, as the session was opened with: `0` by default, more for more |
+| `terminal` | whether a person is at a terminal, as the session was opened with: `False` by default, so a viewer gives text where it would draw ([`app.md`](app.md#a-person-at-a-terminal)) |
 
 `state` is the session's while it's open. A context kept past its session's close refuses it with a
 `RuntimeError`, as the session does, since the state has been left by then.

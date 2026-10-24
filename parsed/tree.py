@@ -209,8 +209,22 @@ class Tree:
         Args:
             end: Where a walk ended: a reading's ``end``.
         """
-        fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
-        said = usage(end.bound, self.flags_of(end.declaration.cls).values(), fields)
+        return self._usage(end.declaration, end.bound)
+
+    def usage_of(self, cls: type) -> str:
+        """How one of the tree's commands is said by its ``PHRASE``, as :meth:`usage` writes it: ``log [<n>]``.
+
+        Raises:
+            KeyError: ``cls`` isn't one of the tree's commands.
+        """
+        if cls not in self._flags:
+            raise KeyError(cls)
+        found = declaration(cls)
+        return self._usage(found, found.phrases[0])
+
+    def _usage(self, found: Declaration, bound: Bound) -> str:
+        fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
+        said = usage(bound, self.flags_of(found.cls).values(), fields)
         return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:

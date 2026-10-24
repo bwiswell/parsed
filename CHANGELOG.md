@@ -7,6 +7,19 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.8 — unreleased
+
+**The command line and help.**
+
+### Added
+
+- **Whether a person is at a terminal:** `app.open(state, terminal=True)` says one is, and `app.run` takes it too.
+  It's `False` by default, so a program that runs lines in-process needn't say so. A handler reads it as
+  `ctx.terminal`, so a viewer gives text where it would draw. Without one, a line that says an `INTERACTIVE`
+  command, a chain's step among them, is refused before its values are loaded or any hook runs: a `refused` error,
+  exit 3, naming its `INSTEAD` (``say `ships make <ship> add <part>` instead``), and `parsed.RefusedError` from
+  `session.call`. `--help` is still answered. `tree.usage_of(cls)` says a command by its `PHRASE`.
+
 ## 0.1.7 — 2026-10-23
 
 **Chains and subjects.** A line says a chain of steps, joined by `then`, run as one order, each step's names

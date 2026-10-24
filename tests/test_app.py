@@ -19,7 +19,7 @@ import parsed
 from parsed._walk import Completion
 from parsed.app import App, Mount, Routed
 from parsed.doc import command_key, load_chain
-from parsed.errors import DeclarationError, ReadError, RenderError
+from parsed.errors import DeclarationError, ReadError, RefusedError, RenderError
 from parsed.tree import Tree
 
 if TYPE_CHECKING:
@@ -1583,3 +1583,135 @@ class TestSubjects:
 
     def test_kept_out_of_keys(self, game):
         assert command_key(game.read('mine', subjects=_PROSPECTOR)) == command_key(game.read('fleet f1 mine'))
+
+
+@parsed.parsed
+class Sketch(parsed.Command):
+    """Draw a sketch: the client's own, with nothing said in its place."""
+
+    PHRASE = 'sketch {n}'
+    INTERACTIVE = True
+
+    n: int = parsed.Int(required=True, ge=1)
+
+
+@parsed.parsed
+class Craft(parsed.Command):
+    """A craft's orders, chained."""
+
+    STEPS = True
+
+    craft: str = parsed.Str(required=True)
+
+
+@parsed.parsed
+class CraftGo(Craft):
+    """Send a craft on."""
+
+    PHRASE = 'craft {craft} go'
+
+
+@parsed.parsed
+class CraftView(Craft):
+    """Watch a craft: the client's own."""
+
+    PHRASE = 'craft {craft} view'
+    INTERACTIVE = True
+
+
+_FIT_REFUSED = 'ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+
+
+class TestATerminal:
+    @pytest.fixture
+    def fits(self, app) -> _Recorder:
+        found = _Recorder()
+        app.on(farlandia.ShipFit, found)
+        return found
+
+    async def _run(self, app: App, line: str, **given):
+        async with app.open(**given) as session:
+            return await session.run(line)
+
+    async def test_none_by_default_so_a_command_for_a_person_is_refused(self, app, fits):
+        found = await self._run(app, 'ship s1 fit')
+        assert (found.command, found.ok, found.done, found.code) == ('ship {ship} fit', False, False, 3)
+        assert found.text == _FIT_REFUSED
+        assert found.error == {
+            'error': 'refused',
+            'message': _FIT_REFUSED,
+            'line': 'ship s1 fit',
+            'instead': 'ships make {ship} add {part}',
+        }
+        assert isinstance(found.exception, RefusedError)
+        assert fits.calls == []
+
+    async def test_at_a_terminal_it_runs(self, app, fits):
+        found = await self._run(app, 'ship s1 fit', terminal=True)
+        assert (found.ok, found.done) == (True, True)
+        ((command, ctx),) = fits.calls
+        assert command == farlandia.ShipFit(ship='s1')
+        assert ctx.terminal is True
+
+    async def test_help_still_answers(self, app, fits):
+        found = await self._run(app, 'ship s1 fit --help')
+        assert (found.ok, found.text) == (True, 'ship <ship> fit')
+
+    async def test_a_dry_run_is_refused_too(self, app, fits):
+        assert (await self._run(app, 'ship s1 fit --dry-run')).code == 3
+        assert fits.calls == []
+
+    async def test_before_its_values_are_loaded_or_any_hook_runs(self):
+        log = _Log()
+        sketches = App('sketches')
+        sketches.mount(Tree([Sketch]))
+        sketches.on(Sketch, log.handler)
+        sketches.before(log.hook('before'))
+        sketches.on_error(log.hook('on error'))
+        found = await self._run(sketches, 'sketch 0')
+        assert (found.code, found.text) == (3, 'sketch {n} is for a person at a terminal')  # nothing in its place
+        assert 'instead' not in found.error
+        assert log.lines == []
+        assert (await self._run(sketches, 'sketch 0', terminal=True)).code == 4  # at one, its value is refused
+
+    async def test_call_raises_it(self, app, fits):
+        async with app.open() as session:
+            with pytest.raises(RefusedError, match=r'ship \{ship\} fit is for a person at a terminal: say'):
+                await session.call('ship s1 fit')
+        assert fits.calls == []
+
+    def test_one_line_with_or_without(self, app, fits):
+        assert app.run('ship s1 fit').code == 3
+        assert app.run('ship s1 fit', terminal=True).ok
+
+    async def test_what_s_said_in_its_place_as_the_mount_that_holds_it_says_it(self):
+        split = App('split')
+        split.mount(Tree([farlandia.ShipFit]))
+        split.mount(Tree([farlandia.ShipsMakeAdd]), under='farm')
+        found = await self._run(split, 'ship s1 fit')
+        assert found.text.endswith('say `farm ships make <ship> add <part>` instead')
+        assert found.error['instead'] == 'farm ships make {ship} add {part}'
+
+    async def test_what_s_said_in_its_place_by_its_phrase_where_no_mount_holds_it(self):
+        alone = App('alone')
+        alone.mount(Tree([farlandia.ShipFit]), under='game')
+        found = await self._run(alone, 'game ship s1 fit')
+        assert found.text == (
+            'game ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+        )
+        assert found.error['instead'] == 'ships make {ship} add {part}'
+
+    async def test_a_chain_with_a_step_for_a_person(self):
+        crafts = App('crafts')
+        crafts.mount(Tree([CraftGo, CraftView]))
+        crafts.on_chain(Craft, lambda steps, ctx: ' then '.join(type(step).__name__ for step in steps))
+        found = await self._run(crafts, 'craft c1 go then view')
+        assert (found.code, found.text) == (3, 'craft {craft} view is for a person at a terminal')
+        assert found.error['line'] == 'craft c1 go then view'
+        assert (await self._run(crafts, 'craft c1 go then view', terminal=True)).text == 'CraftGo then CraftView'
+        assert (await self._run(crafts, 'craft c1 go then go')).ok
+
+    @pytest.mark.parametrize('terminal', [1, 'yes', None])
+    def test_true_or_false(self, app, terminal):
+        with pytest.raises(TypeError, match=r'terminal=.*: whether a person is at a terminal, True or False'):
+            app.open(terminal=terminal)

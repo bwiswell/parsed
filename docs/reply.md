@@ -29,6 +29,7 @@ app's state (a width, a mirror) returns the text itself.
 |---|---|---|
 | none | it went well; for `--help`, or a question it stopped at, too | `0` |
 | `usage` | the line doesn't read: the `ReadError`'s own data, with its line, column, word, hint and suggestions | `2` |
+| `refused` | a command for a person at a terminal, run with none ([`app.md`](app.md#a-person-at-a-terminal)): the `RefusedError`'s own data, with its line, and `instead` (what's said in its place) where the command declares one | `3` |
 | `validation` | a value its field refuses: the `ReadError`'s own data, with the field | `4` |
 | `timeout` | a wait whose bound passed before its reply met every condition: `{'error': 'timeout', 'message': 'fleets show {fleet}: docked=true not met within 30s'}`, its reply the last read | `7` |
 | `handler` | its handler raised, has no binding, or returned something besides its `REPLY`, text or nothing (a waited-on one, besides its `REPLY`): `{'error': 'handler', 'message': "KeyError: 'nope'"}` | `1` |

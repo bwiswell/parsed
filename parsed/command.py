@@ -11,7 +11,7 @@ Constant           Default                      What it says
 ``EXTRA_PHRASES``  ``()``                       other phrases that say it too
 ``EFFECT``         ``None``                     what running it does (:class:`~parsed.effect.Effect`)
 ``ASKS``           ``False``                    whether it may ask before it acts
-``INTERACTIVE``    ``False``                    whether it's only for a person at the client
+``INTERACTIVE``    ``False``                    whether it's only for a person at a terminal
 ``POLYMORPHIC``    ``None``                     whether a phrase says a slot by an alias (checked when declared)
 ``INSTEAD``        ``None``                     the command an agent says in place of an interactive one
 ``REPLY``          ``None``                     the seared class its handler returns
@@ -87,7 +87,7 @@ class Declaration:
         extra_phrases: Its ``EXTRA_PHRASES``.
         effect: Its ``EFFECT``, an effect name normalised to its member; ``None`` when it declares none.
         asks: Whether it may ask before it acts.
-        interactive: Whether it's only for a person at the client.
+        interactive: Whether it's only for a person at a terminal.
         polymorphic: ``POLYMORPHIC`` as declared: ``True``, ``False``, or ``None`` when it declares neither.
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.
