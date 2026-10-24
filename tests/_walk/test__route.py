@@ -115,6 +115,8 @@ class TestRouting:
             ('rio gateway status --config c.toml', 'gateway'),
             ('relay --yes run', 'relay'),  # parsed's own flags may stand among its words
             ('rio --json gateway run', 'gateway'),
+            ('--yes relay run', 'relay'),  # first among them too
+            ('-h relay run', 'relay'),
         ],
     )
     def test_by_its_first_words(self, routes, line, label):
@@ -124,7 +126,7 @@ class TestRouting:
         ('line', 'says', 'column', 'word', 'suggestions'),
         [
             ('', 'no command: the line has no words', 0, None, ['fleet', 'detachment', 'log']),
-            ('--yes relay run', '--yes comes before a command: a flag follows the first word', 0, '--yes', []),
+            ('--into c relay run', '--into comes before a command: a flag follows the first word', 0, '--into', []),
             ('rela run', "no command 'rela'; did you mean relay?", 0, 'rela', ['relay']),
             ('relay', 'relay: then what? run | validate-config | status', 5, None, ['run', 'validate-config']),
             ('rio', 'rio: then what? gateway', 3, None, ['gateway']),
@@ -193,3 +195,17 @@ class TestHowFarWordsGo:
         assert routes.reach(split('rio')) is True  # along a prefix, short of a mount
         assert routes.reach(split('mine')) is False
         assert routes.reach(split('rio zzz')) is False
+
+
+class TestBeneath:
+    # For help short of a command: every mount the words may still go to.
+    def test_the_one_they_reach(self, routes, farm, relay):
+        assert routes.beneath(split('fleet f1')) == [farm]
+        assert routes.beneath(split('relay')) == [relay]  # along its prefix, the mount beneath it
+
+    def test_each_beneath_where_they_stop(self, routes, farm, relay, gateway):
+        assert routes.beneath(split('rio')) == [gateway]
+        assert routes.beneath([]) == [farm, relay, gateway]  # every mount, once, in the order they were mounted
+
+    def test_none_where_a_word_goes_nowhere(self, routes):
+        assert routes.beneath(split('rio zzz')) == []

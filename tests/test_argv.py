@@ -97,7 +97,8 @@ class TestReading:
         said = read(['-c', 'r.toml', '--workers', '4', '--no-color', 'relay', 'run', '--config', 'own.toml'], options)
         assert said.options == Root(config=Path('r.toml'), workers=4, color=False)
         assert said.line == 'relay run --config own.toml'  # after the first word, the line's
-        assert (said.help, said.version) == (False, False)
+        assert (said.own, said.version) == (frozenset(), False)
+        assert said.run == said.line
 
     def test_none_given_the_defaults(self, options):
         assert read(['status'], options).options == Root()
@@ -109,9 +110,14 @@ class TestReading:
     def test_two_dashes_end_them(self, options):
         assert read(['-q', '--', '--weird', 'line'], options).line == '--weird line'
 
-    def test_help_and_version(self, options):
-        assert read(['-h'], options).help
-        assert read(['--help', 'status'], options).help
+    def test_parsed_s_own_are_the_line_s_first(self, options):
+        said = read(['--json', '-q', '--dry-run', '--yes', 'relay', 'run', '--config', 'own.toml'], options)
+        assert (said.own, said.options) == ({'json', 'dry-run', 'yes'}, Root(quiet=True))
+        assert said.run == '--json --yes --dry-run relay run --config own.toml'  # as a line may say them, in order
+        assert read(['-h'], options).run == '--help'
+        assert read(['--help', 'status'], options).run == '--help status'
+
+    def test_version(self, options):
         assert read(['--version'], options).version
         with pytest.raises(ReadError, match=r'farlandia takes no --version'):
             read(['--version'], options_of('farlandia', None, None))  # with no version, none
@@ -125,6 +131,8 @@ class TestReading:
             (['-c', '-q', 'run'], r'-c needs a value `-c <config>`', 'usage'),
             (['--quiet=yes', 'run'], r'--quiet takes nothing after it', 'usage'),
             (['--help=yes'], r'--help takes nothing after it', 'usage'),
+            (['--yes', '--yes', 'run'], r'--yes is given twice', 'usage'),
+            (['--jsn', 'run'], r'relayctl takes no --jsn; did you mean --json\?', 'usage'),
             (['-q', '--quiet', 'run'], r'--quiet is given twice', 'usage'),
             (['--workers', 'many', 'run'], r"--workers: 'many' is not a whole number", 'usage'),
             (['--workers', '0', 'run'], r'--workers: must be >= 1', 'validation'),

@@ -658,6 +658,10 @@ class TestFlags:
     def test_a_quoted_flag_is_a_word(self, tree):
         assert tree.read('say "--loud" now').message == '--loud now'
 
+    def test_parsed_s_own_first_too(self, tree):
+        assert tree.walk('--yes --json log').own == {'yes', 'json'}
+        assert tree.walk('-h fleet f1 mine').own == {'help'}
+
     def test_parsed_s_own_on_any_command(self, tree):
         reading = tree.walk('fleet f1 buy ship hauler --yes --json')
         assert reading.own == {'yes', 'json'}
@@ -755,7 +759,7 @@ class TestRefusals:
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
             ('log 40 50', r"log 40: '50' is left over"),
             ('fleet f1 dock nearest now', r"fleet f1 dock nearest: 'now' is left over"),
-            ('--yes log', r'--yes comes before a command: a flag follows the first word'),
+            ('--into f2 log', r'--into comes before a command: a flag follows the first word'),
             ('say "hello', r'the quote at column 5 is never closed'),
             ('log --n 3', r'no command takes --n'),
             ('log --into f2', r'log takes no --into `log \[<n>\]`'),
@@ -793,7 +797,7 @@ class TestRefusalsAsData:
         [
             ('', 0, None),
             ('say "hello', 4, None),
-            ('--yes log', 0, '--yes'),
+            ('--into f2 log', 0, '--into'),
             ('log --fro 3', 4, '--fro'),
             ('fleets merge f1 --into f2 --quiet=no', 26, '--quiet=no'),
             ('fleet f1 mien', 9, 'mien'),

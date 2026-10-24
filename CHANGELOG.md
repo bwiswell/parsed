@@ -31,6 +31,13 @@ lines as it lands, and the entry is dated when that version is released.
 - **Short flags:** `SHORTS = {'config': 'c'}` on a command, merged along the MRO as `KINDS` is, says `--config` as
   `-c`. None is automatic, and `-h` is `--help`'s on every command. A short says one flag throughout a tree
   (`tree.shorts`), refused at build otherwise, and only on the commands that declare it; any other `-x` is a word.
+- **parsed's own flags at any depth:** `--help` (or `-h`), `--json`, `--yes` and `--dry-run` may stand anywhere on a
+  line, before its first word too (`--yes fleet f1 buy ship hauler`), and among a command line's root options, where
+  they're the line's. A line that gives `--help` short of a command is answered with what it may still say: the
+  usage of each command beneath where its words go, one a line (`relay --help`, `fleet f1 jump --help`, every
+  command for a bare `--help`), exit 0. `prog --help` writes the program's usage above them.
+- **`--json` on a command line** writes each result's envelope as a line of JSON on stdout, a refusal's too, so a
+  tool reads one stream.
 
 ## 0.1.7 — 2026-10-23
 

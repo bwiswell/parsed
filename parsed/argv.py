@@ -6,7 +6,8 @@
   options=Options)``), a seared class whose fields are each optional, read once and given to handlers as
   ``ctx.options``. Each is read as a command's flag is: its field's wire name, ``_`` written ``-``, a ``Bool`` a switch
   (``--no-…`` when it defaults to ``True``), a short form where its ``SHORTS`` gives one. ``--version`` (with
-  ``App(version=…)``) and ``-h`` or ``--help`` are parsed's there; ``--`` ends them.
+  ``App(version=…)``) is parsed's there, and so are its own flags (``-h`` or ``--help``, ``--json``, ``--yes``,
+  ``--dry-run``), which are the line's: they stand first on it. ``--`` ends them.
 - **After the first word, every flag is the line's,** never the program's: ``prog relay run --config c.toml`` gives
   the line its ``--config``.
 - **The arguments are the line's words,** each as the shell gave it, one with a space quoted (``fleet f1 dock "Vesta
@@ -23,7 +24,7 @@ from seared import ValidationError
 from seared.doc import is_seared_class
 
 from ._walk._hints import close
-from ._walk._terms import HELP, RESERVED, Arity
+from ._walk._terms import RESERVED, Arity
 from ._walk._walker import _flag, _given, _is_short, _text
 from ._walk._words import Token
 from .command import _kinds, _shorts
@@ -82,15 +83,21 @@ class Said:
 
     Attributes:
         options: The root options, loaded; ``None`` for an app with no options class.
-        help: Whether ``-h`` or ``--help`` stood among them, asking for the program's usage.
-        version: Whether ``--version`` did, asking for its version.
+        own: parsed's own flags given among them, by name (``help``, ``json``, ``yes``, ``dry-run``): the line's.
+        version: Whether ``--version`` stood among them, asking for the program's version.
         line: The line the words after them say.
     """
 
     options: Seared | None
-    help: bool
+    own: frozenset[str]
     version: bool
     line: str
+
+    @property
+    def run(self) -> str:
+        """The line to run: parsed's own flags given before the first word, then the line, as a line may say them."""
+        own = [f'--{name}' for name in RESERVED if name in self.own]
+        return ' '.join([*own, self.line] if self.line else own)
 
 
 def options_of(prog: str, cls: type | None, version: str | None) -> Options:
@@ -173,14 +180,12 @@ def read(args: Sequence[str], options: Options) -> Said:
         at += 1
         found = _flag(token, options.shorts)
         name, value = found if found is not None else (token.raw[1:], None)
-        if name in {HELP, VERSION} and (name == HELP or options.version is not None):
-            if value is not None:
-                raise _refused(shown, f'{_given(token, name)} takes nothing after it', token)
-            own.add(name)
+        if found is not None and (name in RESERVED or (name == VERSION and options.version is not None)):
+            _own(token, name, value, own, shown)
             continue
         flag = options.flags.get(name) if found is not None else None
         if flag is None:
-            near = [f'--{each}' for each in close(name, [*options.flags, HELP])]
+            near = [f'--{each}' for each in close(name, [*options.flags, *RESERVED])]
             raise _refused(shown, f'{options.prog} takes no {token.raw.partition("=")[0]}', token, near=near)
         if flag.arity is Arity.VALUE and value is None:
             if at == len(tokens) or _flag(tokens[at], options.shorts) is not None:
@@ -192,7 +197,16 @@ def read(args: Sequence[str], options: Options) -> Said:
             raise _refused(shown, f'{_given(token, name)} takes nothing after it', token)
         given.setdefault(name, []).append(value)
     loaded = _load(options, given, tokens, shown) if options.cls is not None else None
-    return Said(options=loaded, help=HELP in own, version=VERSION in own, line=line_of(args[at:]))
+    return Said(options=loaded, own=frozenset(own - {VERSION}), version=VERSION in own, line=line_of(args[at:]))
+
+
+def _own(token: Token, name: str, value: Token | None, own: set[str], shown: str) -> None:
+    """One of parsed's own, or ``--version``, given before the first word: a switch, given once."""
+    if value is not None:
+        raise _refused(shown, f'{_given(token, name)} takes nothing after it', token)
+    if name in own:
+        raise _refused(shown, f'{_given(token, name)} is given twice', token)
+    own.add(name)
 
 
 def line_of(args: Sequence[str]) -> str:

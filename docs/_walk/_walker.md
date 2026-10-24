@@ -5,7 +5,8 @@ the words walked from the root. `Tree.walk(line)` calls it.
 
 ## The flags first
 
-A word that begins with `--`, outside quotes, is a flag, anywhere after the line's first word:
+A word that begins with `--`, outside quotes, is a flag, anywhere after the line's first word, and parsed's own
+anywhere at all:
 
 - **its name is lowercased,** and `--name=value` gives its value in the same word: `--for=90`,
   `--label="north dock"`;
@@ -82,7 +83,7 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 |---|---|---|
 | has no words | `no command: the line has no words` | the first words |
 | leaves a quote open | ``the quote at column 5 is never closed: "hello `say "hello"` `` | |
-| begins with a flag | `--yes comes before a command: a flag follows the first word` | |
+| begins with a flag, not one of parsed's own | `--into comes before a command: a flag follows the first word` | |
 | gives a flag no command takes | `no command takes --fro; did you mean --for?` | flags close to it |
 | gives a value to a switch | `--quiet takes nothing after it` | |
 | ends at a flag that takes a value, or gives it a flag | ``--for needs a value `--for <for>` `` | |
