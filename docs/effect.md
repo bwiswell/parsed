@@ -1,7 +1,8 @@
 # `effect.py`: what running a command does
 
-A command declares its effect as `EFFECT`, a `parsed.Effect` or its name. It's optional, never inferred, and
-inherited, so a base can declare it for every command beneath it.
+A command declares its effect as `EFFECT`, a `parsed.Effect` or its name (`parsed.effect.EffectName`, the type
+`Literal['read', 'write', 'action']`). It's optional, never inferred, and inherited, so a base can declare it for
+every command beneath it.
 
 ```python
 @parsed.parsed

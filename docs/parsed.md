@@ -15,6 +15,12 @@ so a module that declares commands needs no other import.
 | Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RefusedError`, `RenderError`, `TimedOutError` ([`errors.md`](errors.md)) |
 | Version | `__version__` |
 
+**Modules that give no root names**, each imported by its own name: `parsed.help` ([`help.md`](help.md)), a
+command's help and a listing; `parsed.wait` ([`wait.md`](wait.md)), a read that waits on its reply; `parsed.argv`
+([`argv.md`](argv.md)), a program's arguments read; and `parsed.doc` ([`doc/index.md`](doc/index.md)), commands as
+data, which `import parsed` doesn't import. `parsed._walk` and `parsed._phrase` are private
+([`_walk/index.md`](_walk/index.md), [`_phrase/index.md`](_phrase/index.md)).
+
 **seared's:**
 
 | Group | Names |

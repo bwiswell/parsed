@@ -1,8 +1,8 @@
 # `doc/chains.py`: a chain as one tool call
 
 A chain's steps ([`command.md`](../command.md#chains)) are one order, so a tool calls them as one: the chain's
-shared fields once, and `steps`, each step tagged by its phrase's words after the shared part, never by a class
-name:
+shared fields once, and `steps`, each step tagged under `step` (`parsed.doc.chains.TAG`) by its phrase's words after
+the shared part, never by a class name:
 
 ```json
 {"fleet": "f1", "steps": [{"step": "jump", "system": "sol"}, {"step": "move", "to": "sol-belt"}, {"step": "mine"}]}

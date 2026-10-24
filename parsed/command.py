@@ -412,7 +412,7 @@ def _reply(cls: type[Command], name: str) -> type[Seared] | None:
     return reply
 
 
-def _bind(  # noqa: PLR0913 — the class, and what it declares about its phrases
+def _bind(  # noqa: PLR0913 -- the class, and what it declares about its phrases
     cls: type[Command],
     name: str,
     *,

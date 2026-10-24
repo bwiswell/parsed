@@ -20,7 +20,11 @@ parsed's own surface:
 - ``reply.py``: :class:`Result`, what running a line comes to, and its exit code; :class:`Ask`, a handler's question,
   asked before it acts.
 - ``tree.py``: :class:`Tree`, every command's phrases compiled into one trie, and the lines it reads.
+- ``help.py``, ``wait.py``: a command's help and a listing; a read that waits on its reply. They give no root names.
+- ``doc/``: commands as data, for the tools that read them; ``import parsed`` doesn't import it.
 - ``__main__.py``: ``python -m parsed check``, a package's commands checked in its CI (:mod:`parsed.doc.check`).
+
+``_walk/`` and ``_phrase/`` are private.
 """
 
 from seared import (

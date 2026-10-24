@@ -1032,12 +1032,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError as e:
-            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
-            said = self.app._said(line, self._subjects)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001 -- the app's
+            said = self.app._said(line, self._subjects)  # noqa: SLF001 -- the app's
             yield _refused(line, None, e) if listed is None else Result(said, text=listed)
             return
         if 'help' in routed.reading.own:
-            yield Result(routed.reading.line, routed.said, text=self.app._help(routed))  # noqa: SLF001
+            yield Result(routed.reading.line, routed.said, text=self.app._help(routed))  # noqa: SLF001 -- the app's
             return
         try:
             self._check_terminal(routed)
@@ -1082,12 +1082,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError:
-            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001 -- the app's
             if listed is None:
                 raise
             return listed
         if 'help' in routed.reading.own:
-            return self.app._help(routed)  # noqa: SLF001
+            return self.app._help(routed)  # noqa: SLF001 -- the app's
         self._check_terminal(routed)
         found: Seared | str | Ask | None = None
         steps = [step.load() for step in routed.reading.steps]

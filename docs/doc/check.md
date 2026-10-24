@@ -80,4 +80,6 @@ own), the `line` at fault where there's one, and a `message`. `chains` counts th
 
 **From Python,** `parsed.doc.check(targets, max_schema_bytes=2048, max_chain_bytes=8192)` gives the same as a
 `CheckReport`: `ok`, the counts, `skipped`, `problems` and `to_json()`. It raises `ImportError` for a target that
-doesn't import. Each problem is a `Problem`: `check`, `message`, `command` and `line`.
+doesn't import. Each problem is a `Problem`: `check`, `message`, `command` and `line`. The defaults are the module's
+`MAX_SCHEMA_BYTES` and `MAX_CHAIN_BYTES` (`from parsed.doc.check import MAX_SCHEMA_BYTES`: the package's `check` is
+the function).

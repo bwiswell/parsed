@@ -9,6 +9,8 @@
 
 import json
 import tomllib
+
+# At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`).
 from pathlib import Path  # noqa: TC003
 from typing import ClassVar
 

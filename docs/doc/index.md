@@ -13,7 +13,8 @@ shape of `zeared.doc` wherever the meaning matches, so a tool reads a command as
 - [`check.py`](check.md): `check(targets)`, and `python -m parsed check`, a package's commands checked in its CI;
 - [`render.py`](render.md): `render_command(cls)`, a command's reference page in Markdown;
 - [`generate.py`](generate.md): `document(cls)` and `build_docs(target)`, a package's reference pages over seared's
-  pipeline, and `python -m parsed.doc`, which writes or checks them.
+  pipeline, and `python -m parsed.doc`, which writes or checks them: `__main__.py` is that command, and
+  [`generate.md`](generate.md) its page, as `parsed`'s own `__main__.py` is [`check.md`](check.md)'s.
 
 ```python
 import parsed.doc

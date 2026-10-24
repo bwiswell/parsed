@@ -322,7 +322,7 @@ def dump_chain(steps: Sequence[Command]) -> dict[str, Any]:
     return out
 
 
-def head_text(found: Declaration) -> str:
+def _head_text(found: Declaration) -> str:
     """The shared part a step's ``PHRASE`` says, as it writes it: ``fleet {fleet}``."""
     bound = found.phrases[0]
     parts = bound.phrase.parts[: head_of(bound, _shared(found.chain or found.cls))]

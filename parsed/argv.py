@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from .kinds import Kind
 
 #: The flag that asks for the program's version, with ``App(version=…)``.
-VERSION = 'version'
+_VERSION = 'version'
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +74,7 @@ class Options:
         fields = {spec.attr: spec.field for spec in self.cls.__seared_fields__} if self.cls is not None else {}
         said = [self.prog, *(_usage(flag, fields[flag.field]) for flag in self.flags.values())]
         if self.version is not None:
-            said.append(f'[--{VERSION}]')
+            said.append(f'[--{_VERSION}]')
         return ' '.join([*said, '<command> …'])
 
     def help(self) -> str:
@@ -86,7 +86,7 @@ class Options:
             for flag in self.flags.values()
         ]
         if self.version is not None:
-            said.append((f'--{VERSION}', "the program's version"))
+            said.append((f'--{_VERSION}', "the program's version"))
         return '\n\n'.join([self.usage(), '\n'.join(rows(said))]) if said else self.usage()
 
 
@@ -145,7 +145,7 @@ def options_of(prog: str, cls: type | None, version: str | None) -> Options:
         if not _FLAG.fullmatch(flag):
             msg = f'{name}.{spec.attr}: its flag would be --{flag}; a flag is lowercase words, so give it a data_key'
             raise DeclarationError(msg)
-        if flag in (*RESERVED, VERSION):
+        if flag in (*RESERVED, _VERSION):
             msg = f"{name}.{spec.attr}: --{flag} is parsed's, before any command; give the field another name"
             raise DeclarationError(msg)
         said = flag if switch else label(kinds[spec.attr], spec.field, flag)
@@ -195,7 +195,7 @@ def read(args: Sequence[str], options: Options) -> Said:
         at += 1
         found = _flag(token, options.shorts)
         name, value = found if found is not None else (token.raw[1:], None)
-        if found is not None and (name in RESERVED or (name == VERSION and options.version is not None)):
+        if found is not None and (name in RESERVED or (name == _VERSION and options.version is not None)):
             _own(token, name, value, own, shown)
             continue
         flag = options.flags.get(name) if found is not None else None
@@ -212,7 +212,7 @@ def read(args: Sequence[str], options: Options) -> Said:
             raise _refused(shown, f'{_given(token, name)} takes nothing after it', token)
         given.setdefault(name, []).append(value)
     loaded = _load(options, given, tokens, shown) if options.cls is not None else None
-    return Said(options=loaded, own=frozenset(own - {VERSION}), version=VERSION in own, line=line_of(args[at:]))
+    return Said(options=loaded, own=frozenset(own - {_VERSION}), version=_VERSION in own, line=line_of(args[at:]))
 
 
 def _own(token: Token, name: str, value: Token | None, own: set[str], shown: str) -> None:
