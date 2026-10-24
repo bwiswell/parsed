@@ -11,8 +11,11 @@
 - **After the first word, every flag is the line's,** never the program's: ``prog relay run --config c.toml`` gives
   the line its ``--config``.
 - **The arguments are the line's words,** each as the shell gave it: one with a space quoted (``fleet f1 dock "Vesta
-  Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``. A
-  single argument is the whole line, so a caller quotes once: ``prog "look log --n 40"``.
+  Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``,
+  and one given as ``--name=value`` the flag, whatever its value holds (``--args='{"a": 1}'``). A single argument is
+  the whole line, so a caller quotes once: ``prog "look log --n 40"``.
+- **A line back to its arguments:** ``args_of(line)`` gives each word as given, the inverse of ``line_of``, for a
+  handler that runs a line passed on as a process.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from seared.doc import is_seared_class
 from ._walk._hints import close, label
 from ._walk._terms import RESERVED, Arity
 from ._walk._walker import _flag, _given, _is_short, _text
-from ._walk._words import Token, word
+from ._walk._words import Token, split, word
 from .command import _kinds, _shorts
 from .errors import DeclarationError, ReadError
 from .help import rows
@@ -229,11 +232,34 @@ def line_of(args: Sequence[str]) -> str:
     r"""The line a program's arguments say: a single one as it is; several each a word, as given.
 
     Each of several is written so the line reads it back as given (:func:`parsed._walk._words.word`): quoted where it
-    holds a space or is empty, each double quote in it written ``\"``.
+    holds a space or is empty, each double quote in it written ``\"``. One given as ``--name=value`` is the flag
+    whatever its value holds: ``--name=``, then the value as a word (``--args="{\"a\": 1}"``).
     """
     if len(args) == 1:
         return args[0]
-    return ' '.join(word(arg) for arg in args)
+    return ' '.join(_word(arg) for arg in args)
+
+
+def _word(arg: str) -> str:
+    """An argument as a line's word: one shaped ``--name=value`` as the flag, its value a word of its own."""
+    head, eq, value = arg.partition('=')
+    if eq and head.startswith('--') and len(head) > len('--') and not any(ch.isspace() or ch == '"' for ch in head):
+        return f'{head}={word(value)}'  # the walk reads `--args="a b"` as the flag, its value `a b`
+    return word(arg)
+
+
+def args_of(line: str) -> list[str]:
+    """The arguments a line says: each of its words as given, its quotes and escapes taken off.
+
+    The inverse of :func:`line_of` for several arguments: ``args_of(line_of(args)) == args``. A single argument is
+    the whole line, so it comes back as the line's words. ``then``, ``--`` and flags are words like any other, as no
+    tree reads the line. A line passed on (a ``Line`` slot's) is a line too, so its handler gives a process the
+    arguments it was given: ``args_of(command.line)``.
+
+    Raises:
+        ReadError: A quote is left open.
+    """
+    return [token.text for token in split(line)]
 
 
 def _tokens(args: Sequence[str]) -> list[Token]:

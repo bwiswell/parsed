@@ -240,6 +240,8 @@ class See(Verb):
   with none reads as ever.
 - **Written back,** it's said as it is, after the command's flags ([`_walk/_render.md`](_walk/_render.md));
   completion offers nothing within it, since it's another app's.
+- **Run as a process,** its words are the arguments it was given: `parsed.argv.args_of(command.line)`
+  ([`argv.md`](argv.md)).
 
 ## The default kinds
 

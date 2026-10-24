@@ -13,6 +13,7 @@ import re
 import _support_apps as apps
 import pytest
 
+from parsed.argv import args_of
 from parsed.doc import build_docs, check
 from parsed.doc.generate import main as doc_main
 
@@ -186,6 +187,13 @@ class TestAnAgentsTooling:
         _, said = self._read(tooled, capsys, 'query', 'Prices', 'station=s1', '--request', '{"good": "iron"}')
         assert (said['request'], said['slots']) == ('{"good": "iron"}', ['station=s1'])
 
+    def test_a_flag_given_with_its_value_as_the_shell_gives_it(self, tooled, capsys):
+        # `tooled call t --args='{"a": 1}'`: the shell gives one argument, the flag and its value.
+        _, said = self._read(tooled, capsys, 'call', 'dock', '--args={"a": 1}')
+        assert json.loads(said['args']) == {'a': 1}
+        _, said = self._read(tooled, capsys, 'query', 'Prices', '--param=k=v w', '--select=a b')
+        assert (said['param'], said['select'], said['slots']) == (['k=v w'], 'a b', [])
+
     def test_a_condition_on_a_string_that_reads_as_a_number(self, tooled, capsys):
         # `--until 'name="40"'`: the string "40", where `name=40` would be the number.
         _, said = self._read(tooled, capsys, 'wait', 'FleetState', '--until', 'name="40"')
@@ -200,6 +208,12 @@ class TestAnAgentsTooling:
         assert (said['line'], said['pretty']) == ('fleet f1 dock "Vesta Ring"', True)
         _, said = self._read(tooled, capsys, 'session', 'run', '--', 'fleet', 'f1', '--x')
         assert said['command'] == 'fleet f1 --x'
+
+    def test_a_line_passed_on_back_to_its_arguments(self, tooled, capsys):
+        # `tooled session run -- COMMAND` runs its command as a process: the arguments it was given.
+        command = ['farlandia', 'do', 'fleet f1 dock "Vesta Ring"', '--until', 'name="40"', '--', '-x', '']
+        _, said = self._read(tooled, capsys, 'session', 'run', '--', *command)
+        assert args_of(said['command']) == command
 
     def test_a_line_passed_on_keeps_its_json(self, tooled, capsys):
         code, out, _ = _main(tooled, capsys, 'see', 'fleet', 'f1', '--json')

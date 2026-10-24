@@ -68,8 +68,20 @@ hold.
 | `look log --n 40` (one argument) | `look log --n 40`: a single argument is the whole line, so a caller quotes once |
 | `say` `""` | `say ""`: an empty word |
 | `call` `t` `--args` `{"station": "s1"}` | `call t --args "{\"station\": \"s1\"}"`: a double quote escaped ([`_walk/_words.md`](_walk/_words.md)), so the field holds the argument as given |
+| `call` `t` `--args={"a": 1}` | `call t --args="{\"a\": 1}"`: one given as `--name=value` is the flag, whatever its value holds, the value written as a word |
+| `say` `--` `--x=a b` | `say -- --x="a b"`: after `--`, the word `--x=a b`, as any value beginning with a dash is said |
 
-At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`.
+At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`,
+or `servicectl call t --args='{"station": "s1"}'`. An argument shaped `--name=value` is a flag wherever it stands
+before `--`, as one with no space in its value always was: `say '--x=a b'` is refused (`no command takes --x`), and
+`say -- '--x=a b'` says it.
+
+**A line back to its arguments:** `args_of(line)` gives each of a line's words as given, its quotes and escapes
+taken off, so `args_of(line_of(args)) == args` for several arguments; a single one is the whole line, and comes back
+as its words. `then`, `--` and flags are words like any other, as no tree reads the line. It's for a handler that
+runs a line passed on ([`kinds.md`](kinds.md#line)) as a process: `session run -- prog do "fleet f1"` gives its
+command, and `args_of(command.line)` is `['prog', 'do', 'fleet f1']`. A quote left open is refused with a
+`ReadError`.
 
 ## In this module
 
@@ -81,3 +93,4 @@ At a shell, single quotes give the program such an argument whole: `servicectl c
   among them (`own`), whether `--version` stood there, the `line` the words after them say, and `run`, that line
   with the own flags first.
 - `line_of(args)` is the line the arguments after the root options say.
+- `args_of(line)` is the arguments a line says, `line_of`'s inverse.
