@@ -247,6 +247,7 @@ class FleetRetreat(FleetCommand):
 
     PHRASE = 'fleet {fleet} retreat {share}'
     STEPS = False
+    EXAMPLES = ('fleet <fleet> retreat <share>%', 'fleet prospector retreat off')
     KINDS: ClassVar[dict[str, parsed.Kind]] = {'share': parsed.kinds.Number(suffix='%', words={'off': None})}
 
     share: float | None = parsed.Float(

@@ -15,7 +15,7 @@ tree.read('fleet Prospector dock vesta', names={'fleet': fleets, 'station': stat
 | Method | Gives |
 |---|---|
 | `lookup(word, scope)` | the key `word` names, or `None` when it names nothing; or it [says why](#saying-why) |
-| `suggest(word, scope)` | the names close to `word`, the closest first, for a did-you-mean |
+| `suggest(word, scope)` | the names close to `word`, the closest first, for a did-you-mean; one that's the word itself, case aside, is left out |
 | `options(scope)` | every name it may be, for completion |
 
 How a word matches (case, keys as well as names, spaces) is the resolver's to say. parsed passes the word as the
