@@ -13,7 +13,8 @@ the words that may come next. parsed's own flags (``--yes``, ``--json``, …) ma
 and a field's flag ends them, since only a mount's tree knows whether it takes a value.
 
 **For a session's subjects** (:mod:`parsed.app`), :meth:`Routes.begins` says whether a word begins a line, and
-:meth:`Routes.reach` how far words go: to a mount, part of the way along a prefix, or nowhere.
+:meth:`Routes.reach` how far words go: to a mount, part of the way along a prefix, or nowhere. **For help** short of
+a command, :meth:`Routes.beneath` gives every mount the words may still go to.
 """
 
 from __future__ import annotations
@@ -115,7 +116,8 @@ class Routes[M: Mounted]:
             ReadError: Its words reach no mount: no command, or the words that may come next.
         """
         tokens = split(line)
-        if tokens and _flag(tokens[0]) is not None:
+        first = _flag(tokens[0]) if tokens else None
+        if first is not None and first[0] not in RESERVED:
             msg = f'{tokens[0].raw} comes before a command: a flag follows the first word'
             raise _refused(line, msg, word=tokens[0])
         stop, said = self.root, []
@@ -154,6 +156,21 @@ class Routes[M: Mounted]:
                 return following.held
             stop = following
         return True
+
+    def beneath(self, tokens: Sequence[Token]) -> list[M]:
+        """Every mount ``tokens``, words without flags, may still go to, in the order they were mounted.
+
+        The one they reach; each beneath where they stop along a prefix; none where a word goes nowhere.
+        """
+        stop = self.root
+        for token in tokens:
+            following = None if token.quoted else stop.words.get(token.text.lower())
+            if following is None:
+                return []
+            if following.held is not None:
+                return [following.held]
+            stop = following
+        return list(dict.fromkeys(_held(stop)))
 
     def complete(self, text: str) -> M | Completion:
         """The mount whose tree completes ``text``, a line up to the cursor; short of one, what may follow there.

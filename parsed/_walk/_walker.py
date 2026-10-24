@@ -1,6 +1,7 @@
 """Reading a line by a tree: its flags split off, its words walked from the root, each field's words kept.
 
-**The flags first.** A word that begins with ``--`` outside quotes is a flag, anywhere after the line's first word:
+**The flags first.** A word that begins with ``--`` outside quotes is a flag, anywhere after the line's first word,
+and parsed's own anywhere at all:
 
 - **its name is lowercased,** and ``--name=value`` gives its value in the same word (``--label="north dock"``);
 - **a short flag** (``-c``) is one letter after ``-``, where a command's ``SHORTS`` gives it one: it says its flag,
@@ -222,7 +223,8 @@ class _Walker:
 
     def walk(self) -> Reading:
         tokens = split(self.line)
-        if tokens and _flag(tokens[0], self.tree.shorts) is not None:
+        first = _flag(tokens[0], self.tree.shorts) if tokens else None
+        if first is not None and first[0] not in RESERVED:
             msg = f'{tokens[0].raw} comes before a command: a flag follows the first word'
             raise self.refuse(msg, word=tokens[0])
         pieces, joins = _pieces(self.tree, tokens) if self.tree.chains else ([tokens], [])

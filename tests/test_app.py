@@ -1831,7 +1831,55 @@ class TestMain:
     def test_version_and_help(self, relay, capsys):
         assert self._main(relay, capsys, '--version', 'status') == (0, 'relayctl 1.2.3\n', '')
         code, out, _ = self._main(relay, capsys, '-h')
-        assert (code, out) == (0, 'relayctl [--config <config>] [--n <n>] [--version] <command> …\n')
+        assert (code, out.splitlines()) == (
+            0,
+            [
+                'relayctl [--config <config>] [--n <n>] [--version] <command> …',  # the program's, above what it says
+                'run [--config <config>]',
+                'validate-config [--config <config>]',
+                'status [--config <config>]',
+                'look log [--n <n>]',
+            ],
+        )
+        assert self._main(relay, capsys, '--help', 'look') == (0, 'look log [--n <n>]\n', '')
+
+    def test_parsed_s_own_before_the_first_word_are_the_line_s(self, relay, capsys):
+        relay.on(service.ValidateConfig, lambda command, ctx: f'dry run: {ctx.dry_run}')
+        assert self._main(relay, capsys, '--dry-run', 'validate-config') == (0, 'dry run: True\n', '')
+        assert self._main(relay, capsys, '-c', 'r.toml', '--yes', '--yes', 'run') == (2, '', '--yes is given twice\n')
+
+    @pytest.mark.parametrize('args', [('--json', 'status'), ('status', '--json'), ('status --json',)])
+    def test_json_writes_the_envelope_anywhere_it_s_given(self, relay, capsys, args):
+        code, out, err = self._main(relay, capsys, *args)
+        assert (code, err) == (0, '')
+        assert json.loads(out) == {
+            'command': 'status',
+            'line': ' '.join(args) if len(args) > 1 else args[0],
+            'ok': True,
+            'done': True,
+            'asks': None,
+            'met': None,
+            'waited': None,
+            'reply': None,
+            'text': 'up',
+            'error': None,
+        }
+
+    def test_json_a_refusal_s_envelope_on_stdout(self, relay, capsys):
+        code, out, err = self._main(relay, capsys, '--json', 'rn')
+        assert (code, err, json.loads(out)['error']['error']) == (2, '', 'usage')
+        code, out, _ = self._main(relay, capsys, '--json', '--confg', 'r.toml', 'run')  # refused before the line
+        assert (code, json.loads(out)['text']) == (2, 'relayctl takes no --confg; did you mean --config?')
+
+    def test_json_help_s_envelope_alone(self, relay, capsys):
+        code, out, _ = self._main(relay, capsys, '--json', '--help', 'look')
+        assert (code, json.loads(out)['text']) == (0, 'look log [--n <n>]')
+
+    def test_json_a_watch_s_a_line_each(self, app, capsys):
+        app.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet='f1', docked=ctx.state.flipped))
+        code = app.main(['--json', 'fleets', 'show', 'f1', '--watch', '--count', '2'], _Flipping(), interval=0.01)
+        found = [json.loads(line)['reply'] for line in capsys.readouterr().out.splitlines()]
+        assert (code, found) == (0, [{'fleet': 'f1', 'docked': False}, {'fleet': 'f1', 'docked': True}])
 
     @pytest.mark.parametrize(
         ('args', 'code', 'says'),
@@ -1896,3 +1944,66 @@ class TestMain:
     async def test_not_inside_a_running_loop(self, relay):
         with pytest.raises(RuntimeError, match=r'app\.main\(\) runs an event loop of its own'):
             relay.main(['status'])
+
+
+class TestHelpAtAnyDepth:
+    async def _run(self, app: App, line: str, **given):
+        async with app.open(**given) as session:
+            return await session.run(line)
+
+    @pytest.mark.parametrize(
+        ('line', 'usages'),
+        [
+            (
+                'relay --help',
+                [
+                    'relay run [--config <config>]',
+                    'relay validate-config [--config <config>]',
+                    'relay status [--config <config>]',
+                ],
+            ),
+            ('fleet f1 jump --help', ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']),
+            ('-h fleet f1 jump', ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']),
+            ('fleet f1 mine --for soon --help', ['fleet <fleet> mine [--for <for>]']),  # its value isn't read
+        ],
+    )
+    async def test_short_of_a_command_what_it_may_still_say(self, app, line, usages):
+        found = await self._run(app, line)
+        assert (found.ok, found.done, found.command, found.code) == (True, False, None, 0)
+        assert found.text.splitlines() == usages
+
+    async def test_with_no_words_every_command(self, app):
+        found = (await self._run(app, '--help')).text.splitlines()
+        assert found[0] == 'fleet <fleet> mine [--for <for>]'  # each mount's in turn, its commands in their order
+        assert 'detachment <detachment> mine [--for <for>]' in found
+        assert found[-3:] == [
+            'gateway run [--config <config>]',
+            'gateway validate-config [--config <config>]',
+            'gateway status [--config <config>]',
+        ]
+
+    async def test_a_command_s_own_where_it_says_one(self, app):
+        found = await self._run(app, 'relay run --help')
+        assert (found.command, found.text) == ('relay run', 'relay run [--config <config>]')
+
+    @pytest.mark.parametrize('line', ['rela --help', 'fleet f1 progrms --help', 'relay'])
+    async def test_a_word_that_goes_nowhere_still_refused(self, app, line):
+        assert (await self._run(app, line)).code == 2
+
+    async def test_call_gives_it_too(self, app):
+        async with app.open() as session:
+            assert (await session.call('relay --help')).startswith('relay run [--config <config>]')
+            with pytest.raises(ReadError, match=r"no command 'rela'"):
+                await session.call('rela --help')
+
+    async def test_under_a_subject(self, app):
+        found = await self._run(app, 'jump --help', subjects=('fleet prospector',))
+        assert (found.line, found.text) == (
+            'fleet prospector jump --help',
+            'fleet <fleet> jump nearest <ore>\nfleet <fleet> jump <system>',
+        )
+
+    async def test_own_flags_first_take_a_subject_too(self, app):
+        app.on(farlandia.FleetMine, lambda command, ctx: f'{command.fleet} mines, yes: {"yes" in ctx.reading.own}')
+        found = await self._run(app, '--yes mine', subjects=('fleet prospector',))
+        assert (found.line, found.text) == ('fleet prospector --yes mine', 'f1 mines, yes: True')

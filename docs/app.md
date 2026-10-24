@@ -187,8 +187,17 @@ line of a stream. Any other line gives its one result there, and `session.run` g
 (`controls.on_change = session.changed`). Every wait on the session reads again at once; a change while a read is
 under way isn't missed.
 
-**A line that gives `--help` runs nothing.** It's answered with its command's usage
-([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
+**A line that gives `--help` runs nothing,** at any depth. It's answered as `run`'s text and `call`'s result:
+
+- **where it says a command,** with the command's usage ([`tree.usage`](tree.md#reading-a-line)), its values not
+  loaded;
+- **short of one,** with what it may still say: the usage of every command beneath where its words go, one a line,
+  in the order they're mounted and declared. That's every command for a bare `--help`, a mount's for its prefix
+  (`relay --help`), and a phrase's for its words so far (`fleet f1 jump --help`). The result has no `command`, and
+  exits 0. A word that goes nowhere (`rela --help`) is still refused.
+
+parsed's own flags (`--help` or `-h`, `--json`, `--yes`, `--dry-run`) may stand anywhere on a line, the first word's
+place among them: `--yes fleet f1 buy ship hauler`.
 
 **`app.run(line, state=None, …)`** runs one line in a session of its own, opened around it and closed after, and
 gives its `Result`: for a program that runs one line and exits. It takes `yes=False`, as `run` does, and the rest as
@@ -246,14 +255,16 @@ def main() -> None:
   the first word, every flag is the line's, and a single argument is the whole line:
   `relayctl "run --config own.toml"`.
 - **Root options** are the fields of `App(prog, options=Options)`, a seared class whose fields are each optional:
-  read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, and `-h` or
-  `--help` before the first word writes the program's usage; each exits 0.
+  read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, which exits 0.
+- **parsed's own flags** given among the root options are the line's, put first on it: `relayctl --json status`
+  runs `--json status`. A bare `--help` writes the program's usage above every command's.
 - **A person is at a terminal** when stdin and stdout both are one. There, a line's `INTERACTIVE` command runs and
   a question a line asks is put to them (`parsed.reply.terminal`); elsewhere, under a pipe or a tool, the command is
   refused and the question left unanswered.
 - **What it writes:** each result's text as it comes, a watch's at each change: to stdout when it went well, else to
-  stderr. Its exit code is the last result's ([`reply.md`](reply.md#errors-and-exit-codes)), or 130 when it's
-  interrupted (Ctrl-C).
+  stderr. With `--json` anywhere on the line, or before it, each result's envelope instead
+  ([`reply.md`](reply.md#as-json)), a line of JSON on stdout, a refusal's too, so a tool reads one stream. Its exit
+  code is the last result's ([`reply.md`](reply.md#errors-and-exit-codes)), or 130 when it's interrupted (Ctrl-C).
 
 It runs an event loop of its own, as `app.run` does, so it's refused inside one with a `RuntimeError`.
 

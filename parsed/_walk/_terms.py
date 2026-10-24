@@ -11,6 +11,9 @@ RESERVED = ('help', 'json', 'yes', 'dry-run')
 HELP = 'help'
 HELP_SHORT = 'h'
 
+#: The flag that asks for what came of a line as its envelope, a line of JSON.
+JSON = 'json'
+
 #: The word that joins a chain's steps on a line.
 THEN = 'then'
 

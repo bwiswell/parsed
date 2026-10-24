@@ -26,7 +26,8 @@ handlers see what entering it gave. Each line's handler is called as ``handler(c
 - ``await session.call(line)`` gives what the handler returned, and lets every error through.
 - ``app.run(line, state)`` runs one line in a session of its own, for a program that runs one and exits.
 
-A line that gives ``--help`` runs nothing: it's answered with its command's usage.
+A line that gives ``--help`` runs nothing: it's answered with its command's usage, or, short of a command, with what
+it may still say, each command's usage beneath where its words go. parsed's own flags may stand anywhere on a line.
 
 **Whether a person is at a terminal** is the front end's to say: ``app.open(state, terminal=True)``. It's ``False``
 by default, so a program that runs lines in-process needn't say so. Without one, a line that says an ``INTERACTIVE``
@@ -61,6 +62,7 @@ import asyncio
 import contextlib
 import importlib
 import inspect
+import json
 import re
 import sys
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, AsyncExitStack
@@ -69,8 +71,9 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, NamedTuple, cast, overload
 
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
-from ._walk import Completion, Reading, Routes, goes, split
+from ._walk import RESERVED, Completion, Reading, Routes, beneath, goes, split
 from ._walk._complete import being_typed
+from ._walk._terms import HELP, JSON
 from ._walk._walker import _flag
 from .argv import options_of
 from .argv import read as read_args
@@ -463,10 +466,12 @@ class App:
     ) -> int:
         """Run a program's arguments as its command line, and give its exit code: ``sys.exit(app.main())``.
 
-        The arguments are the root options, then a line (:mod:`parsed.argv`). A person is at a terminal when stdin
-        and stdout both are one, and there a question a line asks is put to them (``parsed.reply.terminal``). Each
-        result's text is written as it comes (a watch's, each change): to stdout when it went well, else to stderr.
-        ``-h`` or ``--help`` before the first word writes the program's usage, and ``--version`` its version.
+        The arguments are the root options, then a line (:mod:`parsed.argv`); parsed's own flags given among the
+        root options are the line's. A person is at a terminal when stdin and stdout both are one, and there a
+        question a line asks is put to them (``parsed.reply.terminal``). Each result's text is written as it comes (a
+        watch's, each change): to stdout when it went well, else to stderr. With ``--json``, each result's envelope
+        is a line of JSON on stdout instead (:meth:`Result.to_json`). ``--help`` with no words writes the program's
+        usage above what it may say, and ``--version`` its version.
 
         Args:
             argv: The arguments, after the program's name: ``sys.argv[1:]`` by default.
@@ -481,14 +486,18 @@ class App:
         if _looping():
             msg = 'app.main() runs an event loop of its own; inside one, open a session: async with app.open(state)'
             raise RuntimeError(msg)
+        args = sys.argv[1:] if argv is None else list(argv)
         try:
-            said = read_args(sys.argv[1:] if argv is None else argv, self._options)
+            said = read_args(args, self._options)
         except ReadError as e:
-            _write(str(e), ok=False)
+            _report(_refused(' '.join(args), None, e), as_json=_asks_json(args))
             return CODES[e.kind]
-        if said.help or said.version:
-            _write(self._options.usage() if said.help else f'{self.prog} {self.version}', ok=True)
+        if said.version:
+            _write(f'{self.prog} {self.version}', ok=True)
             return 0
+        as_json = JSON in said.own or JSON in _own_given(said.line)
+        if HELP in said.own and not said.line.strip() and not as_json:
+            _write(self._options.usage(), ok=True)  # the program's, above what it may say
         terminal = _at_terminal()
         opened = self.open(
             state,
@@ -502,10 +511,9 @@ class App:
 
         async def each() -> int:
             code = 0
-            async with opened as session, contextlib.aclosing(session.watch(said.line)) as results:
+            async with opened as session, contextlib.aclosing(session.watch(said.run)) as results:
                 async for result in results:
-                    if result.text is not None:
-                        _write(result.text, ok=result.ok)
+                    _report(result, as_json=as_json)
                     code = result.code
             return code
 
@@ -579,6 +587,32 @@ class App:
         """
         return self._subject(line, self._subjects(subjects))
 
+    def _listing(self, line: str, subjects: tuple[str, ...]) -> str | None:
+        """What a line that asks for help may still say, where it stops short of a command: each command's usage.
+
+        One a line, in the order the commands are mounted and declared. ``None`` for a line that doesn't ask, or
+        whose words go nowhere.
+        """
+        said = self._said(line, subjects)
+        try:
+            tokens = split(said)
+        except ReadError:
+            return None
+        flags = _before_dashes(tokens)
+        if not any(_flag(token) == (HELP, None) for token in flags):
+            return None
+        routing: list[Token] = []  # the words a mount is found by: up to a field's flag, as the routes read them
+        for token in flags:
+            if _flag(token) is not None and not _is_own(token):
+                break
+            if not _is_own(token):
+                routing.append(token)
+        usages: list[str] = []
+        for mount in self._routes.beneath(routing):
+            ends = beneath(mount.tree, tokens)
+            usages += [] if ends is None else [mount.tree.usage(end) for end in ends]
+        return '\n'.join(dict.fromkeys(usages)) or None
+
     def _said(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str:
         """The line to read: ``line``, after the subject it reads under, if one."""
         subject = self._subject(line, subjects, partial=partial)
@@ -587,7 +621,8 @@ class App:
     def _subject(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str | None:
         """The first subject whose words go on into ``line``'s first word, where that word begins no command.
 
-        A line whose words don't split is read as typed, to be refused.
+        parsed's own flags before the first word are passed over. A line whose words don't split is read as typed, to
+        be refused.
         """
         if not subjects:
             return None
@@ -595,9 +630,10 @@ class App:
             tokens = being_typed(line)[0] if partial else split(line)
         except ReadError:
             return None
-        if not tokens or _flag(tokens[0]) is not None or self._routes.begins(tokens[0]):
+        first = next((token for token in tokens if not _is_own(token)), None)
+        if first is None or _flag(first) is not None or self._routes.begins(first):
             return None
-        return next((subject for subject in subjects if self._goes([*split(subject), tokens[0]])), None)
+        return next((subject for subject in subjects if self._goes([*split(subject), first])), None)
 
     def _goes(self, tokens: list[Token]) -> bool:
         """Whether words go on in the app: along a mount's prefix, or into a mount whose tree takes them."""
@@ -946,7 +982,9 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError as e:
-            yield _refused(line, None, e)
+            listed = self.app._listing(line, self._subjects)  # noqa: SLF001
+            said = self.app._said(line, self._subjects)  # noqa: SLF001
+            yield _refused(line, None, e) if listed is None else Result(said, text=listed)
             return
         if 'help' in routed.reading.own:
             yield Result(routed.reading.line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
@@ -972,8 +1010,8 @@ class Session[S]:
         The line goes to its mount and is loaded there (:meth:`App.walk`); its handler is the mount's, else the
         app's (:meth:`Mount.handler`), called as ``handler(command, ctx)`` and awaited if it's async. It returns its
         command's ``REPLY``, text or nothing, or asks first. A line that gives ``--help`` runs nothing: it gives the
-        command's usage. With no one at a terminal, a line that says an ``INTERACTIVE`` command is refused before its
-        values are loaded or any hook runs.
+        command's usage, or short of a command, the usage of each it may still say. With no one at a terminal, a line
+        that says an ``INTERACTIVE`` command is refused before its values are loaded or any hook runs.
 
         A question is answered yes by ``--yes`` or ``yes``, else by the session's ``answer``; a yes runs what the
         handler asked to do, which may ask again. A question left unanswered, or answered no, is given back: the
@@ -991,7 +1029,13 @@ class Session[S]:
             Exception: Whatever its handler raises, or its answer.
         """
         self._check_open()
-        routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
+        try:
+            routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
+        except ReadError:
+            listed = self.app._listing(line, self._subjects)  # noqa: SLF001
+            if listed is None:
+                raise
+            return listed
         if 'help' in routed.reading.own:
             return routed.mount.tree.usage(routed.reading.end)
         self._check_terminal(routed)
@@ -1353,6 +1397,41 @@ async def _awaited(found: object) -> object:
 
 #: The exit code of a program stopped by an interrupt (Ctrl-C), as a shell gives it: 128 and ``SIGINT``.
 _INTERRUPTED = 130
+
+
+def _before_dashes(tokens: list[Token]) -> list[Token]:
+    """A line's words up to ``--``, after which none is a flag."""
+    ends = next((at for at, token in enumerate(tokens) if token.raw == '--'), len(tokens))
+    return tokens[:ends]
+
+
+def _is_own(token: Token) -> bool:
+    """Whether ``token`` is one of parsed's own flags: ``--help`` (``-h``), ``--json``, ``--yes`` or ``--dry-run``."""
+    found = _flag(token)
+    return found is not None and found[0] in RESERVED
+
+
+def _own_given(line: str) -> frozenset[str]:
+    """The flags of parsed's own a line gives, by name; none for a line whose words don't split."""
+    try:
+        tokens = split(line)
+    except ReadError:
+        return frozenset()
+    return frozenset(cast('tuple[str, None]', _flag(token))[0] for token in _before_dashes(tokens) if _is_own(token))
+
+
+def _asks_json(args: Sequence[str]) -> bool:
+    """Whether a program's arguments give ``--json``, before any ``--``: for a refusal before the line is read."""
+    ends = args.index('--') if '--' in args else len(args)
+    return f'--{JSON}' in args[:ends]
+
+
+def _report(result: Result, *, as_json: bool) -> None:
+    """Write what came of a line: its envelope as a line of JSON on stdout, or its text, for people."""
+    if as_json:
+        _write(json.dumps(result.to_json()), ok=True)
+    elif result.text is not None:
+        _write(result.text, ok=result.ok)
 
 
 def _write(text: str, *, ok: bool) -> None:

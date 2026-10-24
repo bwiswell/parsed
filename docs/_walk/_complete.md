@@ -41,6 +41,11 @@ offered. A candidate with a space in it comes back quoted, so it replaces the wo
 words don't read as far as they go is offered nothing. Flags are offered by their names, never their short forms,
 though a short already typed (`-c relay.toml`) takes its value as its flag would.
 
+`beneath(tree, tokens)` gives the commands a line's words may still say, every one beneath where they go, in the
+tree's order (each phrase's end, an optional slot's twice): its flags split off by the tree's arities, its words
+read loosely as completion reads them; `None` where a word goes nowhere. Help short of a command lists them
+([`app.md`](../app.md#sessions)).
+
 `goes(tree, tokens)` says whether words without flags go along a tree as far as they're given, read loosely as
 completion reads them: each a literal word or a slot's. A session's subjects are checked by it
 ([`app.md`](../app.md#subjects)).
