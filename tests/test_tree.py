@@ -290,6 +290,14 @@ class TestReading:
         )
         assert fixtures.usage(fixtures.walk('fleet f1 dock nearest').end) == 'fleet <fleet> dock nearest'
 
+    def test_usage_of_a_command_says_it_by_its_phrase(self, fixtures):
+        assert fixtures.usage_of(farlandia.FleetDock) == 'fleet <fleet> dock [<station>]'  # not its extra phrase
+        assert fixtures.usage_of(farlandia.Log) == 'log [<n>]'
+
+    def test_usage_of_another_tree_s_command(self):
+        with pytest.raises(KeyError):
+            Tree([farlandia.Log]).usage_of(farlandia.FleetMine)
+
     def test_exported(self):
         assert parsed.Tree is Tree
 
@@ -374,6 +382,7 @@ class TestUnder:
 
     def test_its_usage_says_it(self, farm):
         assert farm.usage(farm.walk('farm log').end) == 'farm log [<n>]'
+        assert farm.usage_of(farlandia.Log) == 'farm log [<n>]'
 
     def test_a_line_written_back_begins_with_it(self, farm):
         assert farm.render(farlandia.FleetDock(fleet='f1', station='nearest')) == 'farm fleet f1 dock "nearest"'

@@ -17,13 +17,14 @@ class TestTheResult:
         assert (found.ok, found.code, found.error) == (True, 0, None)
 
     @pytest.mark.parametrize(
-        ('kind', 'code'), [('usage', 2), ('validation', 4), ('timeout', 7), ('handler', 1), ('other', 1)]
+        ('kind', 'code'),
+        [('usage', 2), ('refused', 3), ('validation', 4), ('timeout', 7), ('handler', 1), ('other', 1)],
     )
     def test_its_exit_code_by_its_error(self, kind, code):
         assert Result('x', ok=False, error={'error': kind, 'message': 'wrong'}).code == code
 
     def test_the_codes_are_tooled_s(self):
-        assert dict(CODES) == {'usage': 2, 'validation': 4, 'timeout': 7, 'handler': 1}
+        assert dict(CODES) == {'usage': 2, 'refused': 3, 'validation': 4, 'timeout': 7, 'handler': 1}
 
     def test_its_exception_kept_but_not_compared(self):
         error = KeyError('nope')

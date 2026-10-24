@@ -100,9 +100,9 @@ So writing a command back costs <!-- bench:render-us -->~8 µs<!-- /bench:render
 
 ### Running
 
-A line of each command run in an open session: routed to its mount, read and loaded, its handler called with a fresh
-context between a before and an after hook, and what came of it put in its envelope. The handler and the hooks do
-nothing, so this is parsed's own part of running a line:
+A line of each command run in an open session, at a terminal so its interactive commands run too: routed to its
+mount, read and loaded, its handler called with a fresh context between a before and an after hook, and what came of
+it put in its envelope. The handler and the hooks do nothing, so this is parsed's own part of running a line:
 
 <!-- bench:running -->
 | Case  | What it times                                                                              | Every line | Per line |

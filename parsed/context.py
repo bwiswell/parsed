@@ -10,7 +10,8 @@ A handler is ``handler(command, ctx)``, and ``ctx`` is a :class:`Context`, made 
 - **The line's:** ``ctx.line``, ``ctx.reading`` (each field's words, and parsed's own flags), ``ctx.phrase``, the
   phrase that said it (so a handler tells a twin's wording from its command's), and ``ctx.dry_run``, whether
   ``--dry-run`` was given.
-- **The session's:** ``ctx.verbosity``, how much to say: ``0`` by default, more for more.
+- **The session's:** ``ctx.verbosity``, how much to say: ``0`` by default, more for more; and ``ctx.terminal``,
+  whether a person is at a terminal, so a viewer gives text where it would draw.
 """
 
 from __future__ import annotations
@@ -81,3 +82,8 @@ class Context[S]:
     def verbosity(self) -> int:
         """How much to say: ``0`` by default, more for more, as the session was opened with."""
         return self.session.verbosity
+
+    @property
+    def terminal(self) -> bool:
+        """Whether a person is at a terminal, as the session was opened with: ``False`` by default."""
+        return self.session.terminal

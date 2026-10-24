@@ -90,7 +90,7 @@ class CommandDoc:
         kinds: Each field's kind, by attribute name.
         effect: Its ``EFFECT``, or ``None`` when it declares none; never inferred.
         asks: Whether it may ask before it acts.
-        interactive: Whether it's only for a person at the client.
+        interactive: Whether it's only for a person at a terminal.
         polymorphic: ``POLYMORPHIC`` as declared, or ``None``.
         instead: The command an agent says in its place, or ``None``.
         reply: The seared class its handler returns, or ``None``.

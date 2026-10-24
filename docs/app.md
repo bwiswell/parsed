@@ -129,13 +129,14 @@ then the app's. Each scope's run in the order they were added, and `app.hooks(Cl
 async, and is awaited. Every hook of a line is given the context its handler is (the same object), so a hook sees a
 dry run as the handler does.
 
-No hook runs for a line that doesn't read, a line that gives `--help`, or a command with no handler: none of them
-reaches a handler. Hooks are the app's; a mount's own come later.
+No hook runs for a line that doesn't read, a line that gives `--help`, a command for a person at a terminal run
+with none, or a command with no handler: none of them reaches a handler. Hooks are the app's; a mount's own come
+later.
 
 ## Sessions
 
-`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=())` gives a `Session`, used once, as
-`async with app.open(state) as session`:
+`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=(), terminal=False)` gives a `Session`, used
+once, as `async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
   async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
@@ -147,6 +148,9 @@ reaches a handler. Hooks are the app's; a mount's own come later.
 - **`interval`** is how often, in seconds, a wait reads again when nothing says the state moved: a second by
   default; `None` for an app that calls `session.changed()` on every change, so a wait reads only then.
 - **`subjects`** are the words tried before a bare line, in turn ([subjects](#subjects)): none by default.
+- **`terminal`** is whether a person is at a terminal (`ctx.terminal`): `False` by default, and anything but
+  `True` or `False` is a `TypeError`. Without one, a command for a person is refused
+  ([a person at a terminal](#a-person-at-a-terminal)).
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -154,8 +158,9 @@ of it as a [`Result`](reply.md), the envelope every parsed app answers with: its
 well, whether it was done, and any error, with its exit code. Nothing the line or its handler does is raised.
 
 `await session.call(line)` runs it the same way and gives what the handler returned, letting every error through: a
-`ReadError` for a line that doesn't read, a `LookupError` for a command with no handler, a `TypeError` for a
-handler that returned something besides its `REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
+`ReadError` for a line that doesn't read, a `RefusedError` for a command for a person at a terminal run with none,
+a `LookupError` for a command with no handler, a `TypeError` for a handler that returned something besides its
+`REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
 
 **A handler asks first** by returning `parsed.Ask(question, then)`, having done nothing yet
 ([`reply.md`](reply.md#asking-first)). Each question is answered yes by `--yes` on the line, or `yes=True` given to
@@ -181,15 +186,42 @@ under way isn't missed.
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
 
-**`app.run(line, state=None, verbosity=0, yes=False, answer=None, interval=1.0, subjects=())`** runs one line in a
-session of its own, opened around it and closed after, and gives its `Result`: for a program that runs one line and
-exits. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
+**`app.run(line, state=None, verbosity=0, yes=False, answer=None, interval=1.0, subjects=(), terminal=False)`**
+runs one line in a session of its own, opened around it and closed after, and gives its `Result`: for a program that
+runs one line and exits. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there,
+open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
 line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
 is opening a session twice. An error the session's body raises goes on past it, whatever the state makes of it.
 `session.subjects` are its subjects, and `session.complete(text)` what may come next on a line being typed, with
 them; neither needs it open.
+
+## A person at a terminal
+
+Whether a person is at a terminal is the front end's to say, as the session opens: `app.open(state, terminal=True)`,
+or `app.run(line, terminal=True)`. It's `False` by default, so a program that runs lines in-process, as an agent's
+tooling does, needn't say so. `session.terminal` holds it.
+
+- **A handler reads it** as `ctx.terminal`, so a viewer gives text where it would draw.
+- **Without one, a command for a person is refused** (`INTERACTIVE = True`: [`command.md`](command.md)). It's
+  refused once the line reads, before its values are loaded or any hook runs, so nothing is done and no value is
+  checked for a command that can't run.
+  - `run` gives a `refused` error, exit 3 ([`reply.md`](reply.md#errors-and-exit-codes)), naming what's said in its
+    place where the command declares that (`INSTEAD`); `call` raises `parsed.RefusedError`.
+  - `--help` is still answered. A dry run is refused too, since its handler would run.
+  - A chain is refused where any of its steps is for a person.
+
+```
+ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead
+```
+
+What's said in its place is said as the mount the line went to says it, else as the first mount that holds it does,
+else by its phrase alone. The error's `instead` is that phrase after its mount's prefix,
+`'ships make {ship} add {part}'`, as a result's `command` is.
+
+Nothing is inferred from it: a terminal doesn't make `parsed.reply.terminal` the session's `answer`. A front end at
+one gives both.
 
 ## Subjects
 
