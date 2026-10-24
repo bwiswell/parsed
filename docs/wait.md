@@ -78,8 +78,8 @@ it, so a wait pays the app's opening once.
 | past the bound | the last reply, `met` false, a `timeout` error, exit `7` | raises `TimedOutError`, its `reply` the last |
 
 Either way, the result's `waited` says how long it waited, in seconds ([`reply.md`](reply.md)). The error names the
-command and every condition: `fleets show {fleet}: docked=true not met within 30s`. A timeout is the line's
-failure, so the on-error hooks see it, and the after hooks don't run.
+command as the line says it, and every condition: `fleets show f1: docked=true not met within 30s`. A timeout is
+the line's failure, so the on-error hooks see it, and the after hooks don't run.
 
 ## Watching
 

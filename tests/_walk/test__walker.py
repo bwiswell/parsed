@@ -126,10 +126,10 @@ class TestWordForms:
     @pytest.mark.parametrize(
         ('line', 'says'),
         [
-            ('log many', r"log \{n\}: 'many' is not a whole number"),
+            ('log many', r"log <n>: 'many' is not a whole number"),
             ('fleet f1 mine --for soon', r"--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m"),
             ('fleet f1 mine --for 90', r"--for: '90' is not a span of time"),
-            ('fleets start maybe', r"fleets start \{on\}: 'maybe' is not true or false"),
+            ('fleets start maybe', r"fleets start <on>: 'maybe' is not true or false"),
             ('handheld connect dock r7 --host h --port 1,00', r"--port: '1,00' is not a whole number"),
         ],
     )
@@ -140,13 +140,13 @@ class TestWordForms:
     def test_a_kind_s_bounds_are_seared_s_to_check(self, tree):
         reading = tree.walk('log 0')
         assert reading.data() == {'n': 0}
-        with pytest.raises(ReadError, match=r'log \{n\}: must be >= 1, got 0'):
+        with pytest.raises(ReadError, match=r'log <n>: must be >= 1, got 0'):
             reading.load()
 
     def test_load_refuses_a_key_the_command_doesn_t_know(self, tree, monkeypatch):
         reading = tree.walk('log 40')
         monkeypatch.setattr(type(reading), 'data', lambda _: {'n': 40, 'lines': 3})
-        with pytest.raises(ReadError, match=r'log \{n\}: unknown key') as caught:
+        with pytest.raises(ReadError, match=r'log 40: unknown key') as caught:  # no word gave it: the line as read
             reading.load()
         assert (caught.value.kind, caught.value.field) == ('validation', None)
 
@@ -212,7 +212,7 @@ class TestNames:
 
     def test_a_renamed_slot_reads_by_its_own_category(self, tree):
         assert tree.read('detachment Scouts mine', names=farlandia.NAMES) == farlandia.FleetMine(fleet='d2')
-        with pytest.raises(ReadError, match=r"detachment \{detachment\} mine: no detachment 'Prospector'"):
+        with pytest.raises(ReadError, match=r"detachment <detachment>: no detachment 'Prospector'"):
             tree.read('detachment Prospector mine', names=farlandia.NAMES)
 
     def test_each_of_a_list_s_names(self, tree):
@@ -238,7 +238,7 @@ class TestNames:
     def test_a_list_s_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleet f1 sell iron gold', names=farlandia.NAMES)
         assert (found.word, found.column, found.field) == ('gold', 19, 'goods')
-        assert found.message.startswith("fleet {fleet} sell {goods}: no good 'gold'")
+        assert found.message.startswith("fleet f1 sell <goods> …: no good 'gold'")
 
 
 class TestLiteralWords:
@@ -249,11 +249,11 @@ class TestLiteralWords:
         assert tree.walk('fleet f1 retreat off').data() == {'fleet': 'f1', 'share': None}
 
     def test_a_quoted_word_is_never_a_literal(self, tree):
-        with pytest.raises(ReadError, match=r"retreat \{share\}: 'off' is not a number"):
+        with pytest.raises(ReadError, match=r"fleet f1 retreat <share>: 'off' is not a number"):
             tree.walk('fleet f1 retreat "off"')
 
     def test_the_share_s_bounds_are_seared_s(self, tree):
-        with pytest.raises(ReadError, match=r'retreat \{share\}: must be >= 5, got 2\.0'):
+        with pytest.raises(ReadError, match=r'fleet f1 retreat <share>: must be >= 5, got 2\.0'):
             tree.read('fleet f1 retreat 2%')
 
     def test_a_name_s_literal_comes_before_its_resolver(self):
@@ -301,7 +301,7 @@ class TestPairs:
                 r"no variable 'hme' for routine 'mining'; did you mean home\? `fleet <fleet> run <routine>",
                 'hme',
             ),
-            ('fleet f1 run mining home mars', r"run \{routine\} \{variables\*\*\}: no home 'mars'", 'mars'),
+            ('fleet f1 run mining home mars', r"fleet f1 run mining <variables …>: no home 'mars'", 'mars'),
             ('fleet f1 run mining ore iron home', r"'home' and its value\? pairs come in twos", 'home'),
             ('fleet f1 run mining ore iron ore coal', r'ore is given twice', 'ore'),
         ],
@@ -343,11 +343,11 @@ class TestPlaceholders:
             tree.walk('fleet <fleet> <verb>', placeholders=True)
 
     def test_only_when_asked(self, tree):
-        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>' is not a whole number"):
             tree.walk('log <n>')
 
     def test_a_quoted_one_is_a_value(self, tree):
-        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>' is not a whole number"):
             tree.walk('log "<n>"', placeholders=True)
 
     def test_its_reading_doesn_t_load(self, tree):
@@ -586,7 +586,7 @@ class TestChainPlace:
         assert found.steps[1].data()['station'] == 'vesta'
         refused = _refusal(tree, 'fleet Prospector jump sol then dock vesta', names=farlandia.NAMES)
         assert str(refused) == (
-            "fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' "
+            "fleet Prospector jump sol then dock <station>: no station 'vesta' for fleet 'Prospector', once at 'sol' "
             '`fleet <fleet> dock [<station>]`'
         )
         assert (refused.word, refused.field) == ('vesta', 'station')
@@ -614,7 +614,7 @@ class TestChainPlace:
             Tree([_ShipWarp, _ShipLoad]), 'ship s1 warp --to sol then load iron at vesta', names=_SHIP_NAMES
         )
         assert str(refused).startswith(
-            "ship {ship} load {good} at {site}: no site 'vesta' for ship 's1', once at 'sol'"
+            "ship s1 warp --to sol then load iron at <site>: no site 'vesta' for ship 's1', once at 'sol'"
         )
 
     def test_a_placeholder_says_no_place(self, tree):
@@ -882,11 +882,42 @@ class TestRefusalsAsData:
         }
 
 
+class TestARefusalSaysTheWords:
+    # A slot's refusal says the line's words up to it, as typed, then the slot as a usage writes it; a command's
+    # message, the command as the line says it.
+    def test_an_optional_slot_without_its_brackets(self, tree):
+        with pytest.raises(ReadError, match=r'^log <n>: '):
+            tree.read('log 0')
+
+    def test_a_tree_s_prefix_among_the_words(self):
+        farm = Tree.collect('_support_farlandia', under='farm')
+        with pytest.raises(ReadError, match=r'^farm log <n>: must be >= 1, got 0$'):
+            farm.read('farm log 0')
+
+    def test_a_flag_before_the_slot_left_out(self, tree):
+        with pytest.raises(ReadError, match=r"^fleets merge <fleet>: no fleet 'zed'"):
+            tree.read('fleets --into f2 merge zed', names=farlandia.NAMES)
+
+    def test_the_command_as_the_line_says_it(self, tree):
+        reading = tree.walk('fleets merge --into f2 f1 --quiet')
+        assert (reading.said, [word.raw for word in reading.words]) == ('fleets merge f1', ['fleets', 'merge', 'f1'])
+        chain = tree.walk('fleet f1 jump sol --yes then move belt then mine')
+        assert [step.said for step in chain.steps] == [
+            'fleet f1 jump sol',
+            'fleet f1 jump sol --yes then move belt',  # a later step with the line before it
+            'fleet f1 jump sol --yes then move belt then mine',
+        ]
+
+    def test_a_quoted_scope_by_its_text(self, tree):
+        with pytest.raises(ReadError, match=r"no station 'zed' for fleet 'Hauler'"):
+            tree.read('fleet "Hauler" dock zed', names=farlandia.NAMES)
+
+
 class TestSearedsRefusals:
     # A value seared refuses comes back as the word that gave it.
     def test_a_slot_s_value(self, tree):
         found = _refusal(tree, 'log 0', load=True)
-        assert str(found) == 'log {n}: must be >= 1, got 0'
+        assert str(found) == 'log <n>: must be >= 1, got 0'
         assert (found.kind, found.column, found.word, found.field) == ('validation', 4, '0', 'n')
         assert isinstance(found.__cause__, parsed.ValidationError)
 
@@ -909,7 +940,7 @@ class TestSearedsRefusals:
         note = _one('note {text**}', text=parsed.Str(required=True, max_length=5))
         found = _refusal(note, 'note far too long', load=True)
         assert (found.column, found.word, found.field) == (5, 'far too long', 'text')
-        assert found.message.startswith('note {text**}: ')
+        assert found.message.startswith('note <text …>: ')
 
     def test_a_pattern(self):
         code = _one('code {c}', c=parsed.Str(required=True, pattern='[a-z]+'))

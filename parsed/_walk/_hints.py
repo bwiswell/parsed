@@ -42,6 +42,11 @@ def slot(place: Place) -> str:
     return said if place.required else f'[{said}]'
 
 
+def plain_slot(place: Place) -> str:
+    """A slot as a refusal or a help's row names it: as a usage writes it, an optional one without its brackets."""
+    return slot(place).removeprefix('[').removesuffix(']')
+
+
 def _flag(flag: Flag, field: Field) -> str:
     if flag.arity is Arity.SWITCH:
         return f'[--{flag.name}]'

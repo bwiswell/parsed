@@ -198,7 +198,7 @@ class TestAnAgentsTooling:
             (
                 ('fetch', 'FleetState', 'fleet'),
                 2,
-                "fetch {operation} {slots}: 'fleet' is not slot=value, such as fleet=f1",
+                "fetch FleetState <slots> …: 'fleet' is not slot=value, such as fleet=f1",
             ),
             (('wait', 'FleetState'), 2, 'wait FleetState needs --until'),
             (('wait', 'X', '--until', 'docked'), 2, "--until: 'docked' is not path=value, such as docked=true"),

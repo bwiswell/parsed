@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._walk import THEN
-from ._walk._hints import slot
+from ._walk._hints import plain_slot
 from .command import declaration
 from .tree import Arity
 from .wait import FLAGS as WAIT_FLAGS
@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 
     from seared import Field
 
-    from ._phrase import Place
     from .command import Declaration
     from .tree import Flag, Tree
 
@@ -96,7 +95,7 @@ def command(tree: Tree, cls: type, *, phrase: int = 0, instead: str | None = Non
     if said:
         parts.append(said)
     arguments = [
-        (_slot(place), _what(fields[place.field].doc, found.kind_of(place).describe(fields[place.field])))
+        (plain_slot(place), _what(fields[place.field].doc, found.kind_of(place).describe(fields[place.field])))
         for place in bound.places
     ]
     arguments += [
@@ -137,11 +136,6 @@ def summary(obj: object) -> str | None:
 
 def _what(given: str | None, described: str) -> str:
     return given.strip() if given and given.strip() else described
-
-
-def _slot(place: Place) -> str:
-    """A slot as an argument's row says it: as a usage does, without the brackets of an optional one."""
-    return slot(place).removeprefix('[').removesuffix(']')
 
 
 def _flag(flag: Flag, short: str | None, *, many: bool) -> str:

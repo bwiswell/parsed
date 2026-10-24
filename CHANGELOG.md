@@ -7,6 +7,24 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.2.0 — unreleased
+
+**The first real version.**
+
+### Added
+
+- **`Reading.words` and `Reading.said`:** the words the command is said in, its flags aside, and the command as the
+  line says it (`fleets show f1`), for a message to name it.
+
+### Changed
+
+- **A refusal says the line's words, never a phrase with braces:** a slot's refusal (a word its kind can't read, a
+  value seared refuses, a name no resolver answers to) says the line's words up to the slot, as typed, then the slot
+  as a usage writes it: `fleet f1 retreat <share>: must be <= 95, got 100.0`, where it said
+  `fleet {fleet} retreat {share}: …`. A wait past its bound and a command for a person at a terminal are named as
+  the line says them (`fleets show f1: docked=true not met within 30s`). A name's scope is quoted by its text, a
+  quoted name's quotes left off.
+
 ## 0.1.8 — 2026-10-23
 
 **The command line and help.** `app.main(argv)` runs a program's arguments as its command line: its root options

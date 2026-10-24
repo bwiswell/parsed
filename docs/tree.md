@@ -70,7 +70,7 @@ read up to it, then any did-you-mean and a hint; the same parts are there as dat
 ```
 fleet f1 jump: which system? `fleet f1 jump <system>`
 no command 'fleet f1 mien'; did you mean mine?
-log {n}: must be >= 1, got 0
+log <n>: must be >= 1, got 0
 ```
 
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
