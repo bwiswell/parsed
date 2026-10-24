@@ -7,18 +7,16 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.1.8 — unreleased
+## 0.1.8 — 2026-10-23
 
-**The command line and help.**
+**The command line and help.** `app.main(argv)` runs a program's arguments as its command line: its root options
+before the first word, then the line, every flag after the first word its own, a single argument the whole line,
+short flags where a command gives them, parsed's own flags at any depth, and `--json` for the envelope. Help says a
+command in its own words, a listing says what a line may still say, a mount's namespace a line of it, and a package
+gets reference pages. A command for a person at a terminal is refused without one, naming what to say instead.
 
 ### Added
 
-- **Whether a person is at a terminal:** `app.open(state, terminal=True)` says one is, and `app.run` takes it too.
-  It's `False` by default, so a program that runs lines in-process needn't say so. A handler reads it as
-  `ctx.terminal`, so a viewer gives text where it would draw. Without one, a line that says an `INTERACTIVE`
-  command, a chain's step among them, is refused before its values are loaded or any hook runs: a `refused` error,
-  exit 3, naming its `INSTEAD` (``say `ships make <ship> add <part>` instead``), and `parsed.RefusedError` from
-  `session.call`. `--help` is still answered. `tree.usage_of(cls)` says a command by its `PHRASE`.
 - **The command line:** `app.main(argv)` runs a program's arguments as its command line and gives its exit code,
   for `sys.exit(app.main())`. After the first word every flag is the line's, and a single argument is the whole
   line (`prog "look log --n 40"`). A person is at a terminal when stdin and stdout both are, and there a question a
@@ -33,11 +31,16 @@ lines as it lands, and the entry is dated when that version is released.
   (`tree.shorts`), refused at build otherwise, and only on the commands that declare it; any other `-x` is a word.
 - **parsed's own flags at any depth:** `--help` (or `-h`), `--json`, `--yes` and `--dry-run` may stand anywhere on a
   line, before its first word too (`--yes fleet f1 buy ship hauler`), and among a command line's root options, where
-  they're the line's. A line that gives `--help` short of a command is answered with what it may still say: the
-  usage of each command beneath where its words go, one a line (`relay --help`, `fleet f1 jump --help`, every
-  command for a bare `--help`), exit 0. `prog --help` writes the program's usage above them.
+  they're the line's. A line that gives `--help` short of a command is answered with what it may still say, exit 0,
+  not refused: a bare `--help`, a mount's prefix (`relay --help`), a phrase partway (`fleet f1 jump --help`).
 - **`--json` on a command line** writes each result's envelope as a line of JSON on stdout, a refusal's too, so a
   tool reads one stream.
+- **Whether a person is at a terminal:** `app.open(state, terminal=True)` says one is, and `app.run` takes it too.
+  It's `False` by default, so a program that runs lines in-process needn't say so. A handler reads it as
+  `ctx.terminal`, so a viewer gives text where it would draw. Without one, a line that says an `INTERACTIVE`
+  command, a chain's step among them, is refused before its values are loaded or any hook runs: a `refused` error,
+  exit 3, naming its `INSTEAD` (``say `ships make <ship> add <part>` instead``), and `parsed.RefusedError` from
+  `session.call`. `--help` is still answered.
 - **Help in a command's own words:** a line that gives `--help` on a command gets its help, by the phrase it said:
   its usage, its docstring, a row for each argument (its field's `doc=`, or what its words are), its other phrases,
   its `EXAMPLES`, and what it asks of the line (`--yes`, a wait's flags, `then`, or a person at a terminal and what
