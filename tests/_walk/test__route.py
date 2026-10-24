@@ -26,10 +26,10 @@ def _held(label: str, *targets: str, under: str = '') -> Held:
 
 
 @parsed.parsed
-class Rio(parsed.Command):
+class Mesh(parsed.Command):
     """A command whose word is where another tree is mounted."""
 
-    PHRASE = 'rio'
+    PHRASE = 'mesh'
 
 
 @pytest.fixture(scope='module')
@@ -44,7 +44,7 @@ def relay() -> Held:
 
 @pytest.fixture(scope='module')
 def gateway() -> Held:
-    return _held('gateway', '_support_service', under='rio gateway')
+    return _held('gateway', '_support_service', under='mesh gateway')
 
 
 @pytest.fixture(scope='module')
@@ -76,8 +76,8 @@ class TestAdding:
                 r"logs is mounted where farm says 'fleet': a line would read two ways",
             ),
             (
-                Held(Tree([farlandia.Log], under='rio gateway run'), 'logs'),
-                r"logs is mounted where gateway says 'rio gateway run': a line would read two ways",
+                Held(Tree([farlandia.Log], under='mesh gateway run'), 'logs'),
+                r"logs is mounted where gateway says 'mesh gateway run': a line would read two ways",
             ),
         ],
     )
@@ -88,8 +88,8 @@ class TestAdding:
     def test_a_first_word_where_others_are_mounted(self, gateway):
         routes: Routes[Held] = Routes()
         routes.add(gateway)
-        with pytest.raises(DeclarationError, match=r"rio says 'rio', where gateway is mounted"):
-            routes.add(Held(Tree([Rio]), 'rio'))
+        with pytest.raises(DeclarationError, match=r"mesh says 'mesh', where gateway is mounted"):
+            routes.add(Held(Tree([Mesh]), 'mesh'))
 
     def test_a_tree_with_no_commands(self):
         with pytest.raises(DeclarationError, match=r'empty has no commands to mount'):
@@ -112,9 +112,9 @@ class TestRouting:
             ('log', 'farm'),
             ('relay run', 'relay'),
             ('RELAY Run', 'relay'),  # case aside, as a tree reads a literal
-            ('rio gateway status --config c.toml', 'gateway'),
+            ('mesh gateway status --config c.toml', 'gateway'),
             ('relay --yes run', 'relay'),  # parsed's own flags may stand among its words
-            ('rio --json gateway run', 'gateway'),
+            ('mesh --json gateway run', 'gateway'),
             ('--yes relay run', 'relay'),  # first among them too
             ('-h relay run', 'relay'),
         ],
@@ -129,11 +129,11 @@ class TestRouting:
             ('--into c relay run', '--into comes before a command: a flag follows the first word', 0, '--into', []),
             ('rela run', "no command 'rela'; did you mean relay?", 0, 'rela', ['relay']),
             ('relay', 'relay: then what? run | validate-config | status', 5, None, ['run', 'validate-config']),
-            ('rio', 'rio: then what? gateway', 3, None, ['gateway']),
-            ('rio gateway', 'rio gateway: then what? run | validate-config | status', 11, None, ['run']),
+            ('mesh', 'mesh: then what? gateway', 4, None, ['gateway']),
+            ('mesh gateway', 'mesh gateway: then what? run | validate-config | status', 12, None, ['run']),
             ('relay zzz', "no command 'relay zzz': run | validate-config | status", 6, 'zzz', ['run']),
             ('relay "run"', 'no command \'relay "run"\': run | validate-config | status', 6, '"run"', ['run']),
-            ('rio --config c.toml gateway run', 'rio: then what? gateway', 4, '--config', ['gateway']),
+            ('mesh --config c.toml gateway run', 'mesh: then what? gateway', 5, '--config', ['gateway']),
             ('relay -- run', 'relay: then what? run | validate-config | status', 6, '--', ['run']),
         ],
     )
@@ -155,14 +155,15 @@ class TestCompleting:
         ('text', 'expected'),
         [
             ('rel', (['relay'], 3)),
-            ('r', (['relay', 'rio'], 1)),
+            ('r', (['relay'], 1)),
+            ('f', (['fleet', 'fleets'], 1)),  # each word the typed one begins
             ('relay ', (['run', 'validate-config', 'status'], 0)),
             ('relay s', (['status'], 1)),
-            ('rio ', (['gateway'], 0)),
-            ('rio --yes g', (['gateway'], 1)),
+            ('mesh ', (['gateway'], 0)),
+            ('mesh --yes g', (['gateway'], 1)),
             ('relay "s', ([], 2)),  # a quoted word is never a command's word
             ('relay zzz ', ([], 0)),
-            ('rio --config ', ([], 0)),
+            ('mesh --config ', ([], 0)),
         ],
     )
     def test_short_of_a_mount_its_words(self, routes, text, expected):
@@ -171,7 +172,7 @@ class TestCompleting:
     def test_every_first_word_at_the_root(self, routes):
         found = routes.complete('')
         assert isinstance(found, Completion)
-        assert found.words[-2:] == ['relay', 'rio']
+        assert found.words[-2:] == ['relay', 'mesh']
 
     @pytest.mark.parametrize(('text', 'label'), [('fleet ', 'farm'), ('fleet f', 'farm'), ('relay run --c', 'relay')])
     def test_past_its_first_word_the_mount_s(self, routes, text, label):
@@ -185,16 +186,16 @@ class TestHowFarWordsGo:
     def test_a_word_that_begins_a_line(self, routes):
         assert routes.begins(split('fleet')[0])
         assert routes.begins(split('Relay')[0])  # case aside
-        assert routes.begins(split('rio')[0])  # a prefix's first word
+        assert routes.begins(split('mesh')[0])  # a prefix's first word
         assert not routes.begins(split('mine')[0])
         assert not routes.begins(split('"fleet"')[0])  # quoted, a value
 
     def test_how_far_words_go(self, routes, farm, relay):
         assert routes.reach(split('fleet f1 mine')) is farm  # its first word is the mount's
         assert routes.reach(split('relay run')) is relay
-        assert routes.reach(split('rio')) is True  # along a prefix, short of a mount
+        assert routes.reach(split('mesh')) is True  # along a prefix, short of a mount
         assert routes.reach(split('mine')) is False
-        assert routes.reach(split('rio zzz')) is False
+        assert routes.reach(split('mesh zzz')) is False
 
 
 class TestBeneath:
@@ -204,8 +205,8 @@ class TestBeneath:
         assert routes.beneath(split('relay')) == [relay]  # along its prefix, the mount beneath it
 
     def test_each_beneath_where_they_stop(self, routes, farm, relay, gateway):
-        assert routes.beneath(split('rio')) == [gateway]
+        assert routes.beneath(split('mesh')) == [gateway]
         assert routes.beneath([]) == [farm, relay, gateway]  # every mount, once, in the order they were mounted
 
     def test_none_where_a_word_goes_nowhere(self, routes):
-        assert routes.beneath(split('rio zzz')) == []
+        assert routes.beneath(split('mesh zzz')) == []

@@ -30,11 +30,11 @@ class TestTheDocSet:
 class TestTheCommandLine:
     def test_written_then_checked(self, tmp_path, capsys):
         out = tmp_path / 'commands'
-        assert main(['_support_rio', '-o', str(out)]) == 0
+        assert main(['_support_protocol', '-o', str(out)]) == 0
         assert (out / 'HandheldConnect.md').read_text(encoding='utf-8').startswith('# HandheldConnect\n')
-        assert main(['_support_rio', '-o', str(out), '--check']) == 0
+        assert main(['_support_protocol', '-o', str(out), '--check']) == 0
         (out / 'HandheldConnect.md').write_text('stale', encoding='utf-8')
-        assert main(['_support_rio', '-o', str(out), '--check']) == 1
+        assert main(['_support_protocol', '-o', str(out), '--check']) == 1
         assert 'stale:   HandheldConnect.md' in capsys.readouterr().err
 
     def test_a_field_without_a_doc_refused_when_asked(self, tmp_path, monkeypatch, capsys):

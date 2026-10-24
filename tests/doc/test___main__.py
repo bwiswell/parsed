@@ -16,7 +16,7 @@ def _run(*argv: str) -> subprocess.CompletedProcess[str]:
 
 def test_it_writes_a_package_s_pages_then_checks_them(tmp_path):
     out = str(tmp_path / 'commands')
-    written = _run('_support_rio', '-o', out)
+    written = _run('_support_protocol', '-o', out)
     assert (written.returncode, written.stdout.split(' written')[0]) == (0, '3')
-    assert _run('_support_rio', '-o', out, '--check').returncode == 0
+    assert _run('_support_protocol', '-o', out, '--check').returncode == 0
     assert (tmp_path / 'commands' / 'HandheldConnect.md').exists()

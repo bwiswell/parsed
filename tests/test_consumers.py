@@ -29,13 +29,13 @@ def _column(text: str) -> list[str]:
 
 
 class TestAServicesCommandLine:
-    # relayctl: root options before the verb, the skeleton at the root, and a command built from a protocol's request.
+    # servicectl: root options before the verb, the skeleton at the root, and a command built from a protocol's request.
     @pytest.fixture
-    def relayctl(self):
-        return apps.relayctl()
+    def servicectl(self):
+        return apps.servicectl()
 
-    def test_its_version(self, relayctl, capsys):
-        assert _main(relayctl, capsys, '--version') == (0, 'relayctl 0.6.0\n', '')
+    def test_its_version(self, servicectl, capsys):
+        assert _main(servicectl, capsys, '--version') == (0, 'servicectl 1.2.3\n', '')
 
     @pytest.mark.parametrize(
         ('argv', 'said'),
@@ -46,21 +46,21 @@ class TestAServicesCommandLine:
             (('run --config own.toml',), 'relay on port 5085, config own.toml'),  # a single argument, the line
         ],
     )
-    def test_root_options_then_the_line_s_own(self, relayctl, capsys, argv, said):
-        assert _main(relayctl, capsys, *argv) == (0, f'{said}\n', '')
+    def test_root_options_then_the_line_s_own(self, servicectl, capsys, argv, said):
+        assert _main(servicectl, capsys, *argv) == (0, f'{said}\n', '')
 
-    def test_a_config_checked(self, relayctl, capsys, tmp_path):
+    def test_a_config_checked(self, servicectl, capsys, tmp_path):
         good, bad = tmp_path / 'good.toml', tmp_path / 'bad.toml'
         good.write_text('port = 5085\n', encoding='utf-8')
         bad.write_text('port = \n', encoding='utf-8')
-        assert _main(relayctl, capsys, '-c', str(good), 'validate-config') == (0, f'{good} is valid\n', '')
-        code, out, err = _main(relayctl, capsys, 'validate-config', '--config', str(bad))
+        assert _main(servicectl, capsys, '-c', str(good), 'validate-config') == (0, f'{good} is valid\n', '')
+        code, out, err = _main(servicectl, capsys, 'validate-config', '--config', str(bad))
         assert (code, out) == (1, '')
         assert err.startswith(f'ValueError: {bad}: ')
 
-    def test_a_command_built_from_a_protocol_s_request(self, relayctl, capsys):
+    def test_a_command_built_from_a_protocol_s_request(self, servicectl, capsys):
         code, out, _ = _main(
-            relayctl, capsys, 'handheld', 'connect', 'dock', 'r7', '--host', 'h', '--label', 'north dock'
+            servicectl, capsys, 'handheld', 'connect', 'dock', 'r7', '--host', 'h', '--label', 'north dock'
         )
         assert code == 0
         assert json.loads(out) == {
@@ -71,14 +71,14 @@ class TestAServicesCommandLine:
             'source': 'dock',
         }
 
-    def test_the_protocol_s_bounds_hold(self, relayctl, capsys):
-        code, _, err = _main(relayctl, capsys, 'handheld', 'connect', 'dock', 'r7', '--host', 'h', '--port', '70000')
+    def test_the_protocol_s_bounds_hold(self, servicectl, capsys):
+        code, _, err = _main(servicectl, capsys, 'handheld', 'connect', 'dock', 'r7', '--host', 'h', '--port', '70000')
         assert (code, err) == (4, '--port: must be <= 65535, got 70000\n')
 
-    def test_its_help(self, relayctl, capsys):
-        code, out, _ = _main(relayctl, capsys, '--help')
+    def test_its_help(self, servicectl, capsys):
+        code, out, _ = _main(servicectl, capsys, '--help')
         program, options, listed = out.split('\n\n')
-        assert (code, program) == (0, 'relayctl [--config <config>] [--version] <command> …')
+        assert (code, program) == (0, 'servicectl [--config <config>] [--version] <command> …')
         assert options.splitlines()[0] == '  -c, --config <config>  the config file; left out, the service default'
         assert _column(listed) == [
             'run [--config <config>]',
@@ -87,8 +87,8 @@ class TestAServicesCommandLine:
             'handheld connect <source> <reader_id> --host <host> [--port <port>] [--label <label>]',
         ]
 
-    def test_its_envelope(self, relayctl, capsys):
-        code, out, _ = _main(relayctl, capsys, '--json', 'status')
+    def test_its_envelope(self, servicectl, capsys):
+        code, out, _ = _main(servicectl, capsys, '--json', 'status')
         assert (code, json.loads(out)['text'], json.loads(out)['command']) == (0, 'relay is up', 'status')
 
     @pytest.mark.parametrize(
@@ -99,17 +99,17 @@ class TestAServicesCommandLine:
             (('handheld', 'connect', 'dock', 'r7'), 2, 'handheld connect dock r7 needs --host'),
         ],
     )
-    def test_its_refusals(self, relayctl, capsys, argv, code, says):
-        found, out, err = _main(relayctl, capsys, *argv)
+    def test_its_refusals(self, servicectl, capsys, argv, code, says):
+        found, out, err = _main(servicectl, capsys, *argv)
         assert (found, out) == (code, '')
         assert err.startswith(says)
 
 
 class TestAnAggregateCommandLine:
-    # devctl: one skeleton mounted twice, each mount with its own settings and its own namespace's line.
+    # meshctl: one skeleton mounted twice, each mount with its own settings and its own namespace's line.
     @pytest.fixture
-    def devctl(self):
-        return apps.devctl()
+    def meshctl(self):
+        return apps.meshctl()
 
     @pytest.mark.parametrize(
         ('argv', 'said'),
@@ -119,23 +119,23 @@ class TestAnAggregateCommandLine:
             (('gateway', 'status'), 'gateway is up'),
         ],
     )
-    def test_each_mount_with_its_own_settings(self, devctl, capsys, argv, said):
-        assert _main(devctl, capsys, *argv) == (0, f'{said}\n', '')
+    def test_each_mount_with_its_own_settings(self, meshctl, capsys, argv, said):
+        assert _main(meshctl, capsys, *argv) == (0, f'{said}\n', '')
 
-    def test_its_namespaces_a_line_each(self, devctl, capsys):
-        code, out, _ = _main(devctl, capsys, '--help')
+    def test_its_namespaces_a_line_each(self, meshctl, capsys):
+        code, out, _ = _main(meshctl, capsys, '--help')
         assert (code, out.split('\n\n')[-1].splitlines()) == (
             0,
-            ["relay …    The relay: a site's readers.", "gateway …  The gateway: the mesh's boundary."],
+            ["relay …    The relay: a site's messages, onto the mesh.", "gateway …  The gateway: the mesh's boundary."],
         )
-        assert _column(_main(devctl, capsys, 'gateway', '--help')[1]) == [
+        assert _column(_main(meshctl, capsys, 'gateway', '--help')[1]) == [
             'gateway run [--config <config>]',
             'gateway validate-config [--config <config>]',
             'gateway status [--config <config>]',
         ]
 
-    def test_a_mount_s_command_with_no_handler(self, devctl, capsys):
-        code, _, err = _main(devctl, capsys, 'relay', 'validate-config')
+    def test_a_mount_s_command_with_no_handler(self, meshctl, capsys):
+        code, _, err = _main(meshctl, capsys, 'relay', 'validate-config')
         assert (code, err) == (
             1,
             "LookupError: ValidateConfig has no handler in _support_service under 'relay': bind one with app.on\n",
@@ -230,7 +230,7 @@ class TestAnAgentsTooling:
 
 
 class TestTheirReferencePages:
-    @pytest.mark.parametrize('target', ['_support_tooled', '_support_rio', '_support_service'])
+    @pytest.mark.parametrize('target', ['_support_tooled', '_support_protocol', '_support_service'])
     def test_each_package_checks_clean(self, target):
         report = check([target])
         assert (report.ok, report.problems) == (True, ())

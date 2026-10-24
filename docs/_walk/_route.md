@@ -23,7 +23,7 @@ ways:
 |---|---|
 | a word that begins a command in two mounts at one prefix | `relay and other both say 'relay run'` |
 | a prefix that runs through a word of another mount's | `logs is mounted where farm says 'fleet'` |
-| a first word where other mounts stand | `rio says 'rio', where gateway is mounted` |
+| a first word where other mounts stand | `mesh says 'mesh', where gateway is mounted` |
 | a tree with no commands | `empty has no commands to mount` |
 
 Nothing is added when a mount is refused. Two mounts may share a prefix, as long as no word begins a command in

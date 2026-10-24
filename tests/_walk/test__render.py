@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import pytest
 
 import parsed
@@ -18,7 +18,7 @@ from parsed.tree import Tree
 
 @pytest.fixture(scope='module')
 def fixtures() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 def _command(phrase: str, **fields: object) -> type[Command]:
@@ -55,9 +55,9 @@ class TestLines:
             (farlandia.FleetsShow(fleet='f1'), 'fleets show f1'),
             (farlandia.ShipsMakeAdd(ship='s1', part='drill'), 'ships make s1 add drill'),
             (farlandia.ShipFit(ship='s1'), 'ship s1 fit'),
-            (rio.HandheldConnect(source='dock', reader_id='r7', host='h'), 'handheld connect dock r7 --host h'),
+            (protocol.HandheldConnect(source='dock', reader_id='r7', host='h'), 'handheld connect dock r7 --host h'),
             (
-                rio.HandheldConnect(source='dock', reader_id='r7', host='h', port=5085, label='north dock'),
+                protocol.HandheldConnect(source='dock', reader_id='r7', host='h', port=5085, label='north dock'),
                 'handheld connect dock r7 --host h --port 5085 --label "north dock"',
             ),
         ],

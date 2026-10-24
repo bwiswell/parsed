@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 import pytest
 import seared
@@ -79,7 +79,7 @@ class TestCommandOrBase:
             farlandia.FleetsShow,
             farlandia.ShipsMakeAdd,
             farlandia.ShipFit,
-            rio.HandheldConnect,
+            protocol.HandheldConnect,
         ):
             assert declaration(cls).is_command, cls.__name__
 
@@ -538,22 +538,24 @@ class TestARequestInherited:
     # bounds are the protocol's own, not copied by hand.
 
     def test_its_fields_are_the_request_s(self):
-        names = [spec.attr for spec in rio.HandheldConnect.__seared_fields__]
+        names = [spec.attr for spec in protocol.HandheldConnect.__seared_fields__]
         assert names == ['source', 'reader_id', 'host', 'port', 'label']
-        assert issubclass(rio.HandheldConnect, rio.HandheldEndpoint)
+        assert issubclass(protocol.HandheldConnect, protocol.HandheldEndpoint)
 
     def test_it_loads_and_keeps_the_request_s_bounds(self):
-        found = rio.HandheldConnect.load({'source': 's1', 'reader_id': 'r1', 'host': 'h'}, unknown='raise')
+        found = protocol.HandheldConnect.load({'source': 's1', 'reader_id': 'r1', 'host': 'h'}, unknown='raise')
         assert found.port == 5084
         with pytest.raises(seared.ValidationError, match=r'port: must be <= 65535'):
-            rio.HandheldConnect.load({'source': 's1', 'reader_id': 'r1', 'host': 'h', 'port': 70000})
+            protocol.HandheldConnect.load({'source': 's1', 'reader_id': 'r1', 'host': 'h', 'port': 70000})
 
     def test_its_constants_are_not_fields(self):
         with pytest.raises(seared.ValidationError, match=r'PHRASE: unknown key'):
-            rio.HandheldConnect.load({'source': 's1', 'reader_id': 'r1', 'host': 'h', 'PHRASE': 'x'}, unknown='raise')
+            protocol.HandheldConnect.load(
+                {'source': 's1', 'reader_id': 'r1', 'host': 'h', 'PHRASE': 'x'}, unknown='raise'
+            )
 
     def test_it_declares(self):
-        found = declaration(rio.HandheldConnect)
+        found = declaration(protocol.HandheldConnect)
         assert found.is_command
         assert found.effect is Effect.WRITE
 

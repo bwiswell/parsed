@@ -123,7 +123,7 @@ class Tree:
     Args:
         commands: The command classes. A base, which has no ``PHRASE``, is left out, and a class given twice counts
             once.
-        under: A prefix of words every phrase follows (``'rio relay'``); none by default.
+        under: A prefix of words every phrase follows (``'mesh relay'``); none by default.
 
     Attributes:
         commands: Each command's declaration, in the order given.

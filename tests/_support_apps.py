@@ -1,8 +1,8 @@
 """The fixtures as whole apps, as their command lines would build them: each a fresh ``App``, its handlers bound.
 
-- ``relayctl()``: a service's command line. Root options before the verb (``-c/--config``, ``--version``), the
+- ``servicectl()``: a service's command line. Root options before the verb (``-c/--config``, ``--version``), the
   service's skeleton at the root with its settings, and ``handheld connect``, built from a protocol's request class.
-- ``devctl()``: an aggregate command line, the same skeleton mounted twice, each mount with its own settings and its
+- ``meshctl()``: an aggregate command line, the same skeleton mounted twice, each mount with its own settings and its
   own namespace's line.
 - ``tooled()``: an agent's tooling's verbs, each handler saying what the line was read to.
 """
@@ -12,7 +12,7 @@ import tomllib
 from pathlib import Path  # noqa: TC003
 from typing import ClassVar
 
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 import _support_tooled as tooled_verbs
 
@@ -55,27 +55,32 @@ def _status(command: service.Status, ctx: parsed.Context) -> str:
     return f'{ctx.mount.under or "relay"} is up'
 
 
-def _connect(command: rio.HandheldConnect, ctx: parsed.Context) -> str:
+def _connect(command: protocol.HandheldConnect, ctx: parsed.Context) -> str:
     """The protocol's request the command is, on the wire: what a service would send."""
-    return json.dumps(rio.HandheldEndpoint.dump(command), sort_keys=True)
+    return json.dumps(protocol.HandheldEndpoint.dump(command), sort_keys=True)
 
 
-def relayctl() -> parsed.App:
-    """A service's command line: ``relayctl -c relay.toml run``."""
-    app = parsed.App('relayctl', options=RelayOptions, version='0.6.0')
+def servicectl() -> parsed.App:
+    """A service's command line: ``servicectl -c service.toml run``."""
+    app = parsed.App('servicectl', options=RelayOptions, version='1.2.3')
     app.mount('_support_service', params=service.RelaySettings())
-    app.mount('_support_rio')
+    app.mount('_support_protocol')
     app.on(service.Run, _run)
     app.on(service.ValidateConfig, _validate)
     app.on(service.Status, _status)
-    app.on(rio.HandheldConnect, _connect)
+    app.on(protocol.HandheldConnect, _connect)
     return app
 
 
-def devctl() -> parsed.App:
-    """An aggregate command line, a service's skeleton twice: ``devctl relay run``, ``devctl gateway run``."""
-    app = parsed.App('devctl', version='0.6.0')
-    app.mount('_support_service', under='relay', params=service.RelaySettings(), doc="The relay: a site's readers.")
+def meshctl() -> parsed.App:
+    """An aggregate command line, a service's skeleton twice: ``meshctl relay run``, ``meshctl gateway run``."""
+    app = parsed.App('meshctl', version='1.2.3')
+    app.mount(
+        '_support_service',
+        under='relay',
+        params=service.RelaySettings(),
+        doc="The relay: a site's messages, onto the mesh.",
+    )
     app.mount(
         '_support_service', under='gateway', params=service.GatewaySettings(), doc="The gateway: the mesh's boundary."
     )

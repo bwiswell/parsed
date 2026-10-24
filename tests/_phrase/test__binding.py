@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import pytest
 
 import parsed
@@ -33,7 +33,7 @@ class TestPhrase:
 
     def test_every_other_field_is_a_flag(self):
         assert declaration(farlandia.FleetMine).flags == ('for_',)
-        assert declaration(rio.HandheldConnect).flags == ('host', 'port', 'label')
+        assert declaration(protocol.HandheldConnect).flags == ('host', 'port', 'label')
         assert declaration(farlandia.FleetsShow).flags == ()
 
     def test_a_field_that_may_be_left_out_makes_an_optional_slot(self):

@@ -33,7 +33,7 @@ sys.exit(app.main())                                         # the program's arg
 `app.mount(target, under='', params=None, doc=None)` mounts a tree, or a module or package of commands by name
 (collected as [`Tree.collect`](tree.md) collects them), and returns its `Mount`:
 
-- **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'rio relay'`. None mounts it at the
+- **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'mesh relay'`. None mounts it at the
   root. A tree with a prefix of its own keeps it, beneath `under`.
 - **`params`** is what its handlers are given beside the command: a service's settings, say. It's the mount's, so
   one package can be mounted several times, each with its own prefix and its own settings: one group serves many
@@ -257,20 +257,20 @@ one gives both, as `app.main` does.
 line and gives its exit code, so a program's entry point is one line:
 
 ```python
-app = parsed.App('relayctl', options=Options, version='1.2.3')
+app = parsed.App('servicectl', options=Options, version='1.2.3')
 app.mount('relay.cli')
 
 
 def main() -> None:
-    sys.exit(app.main())                                     # relayctl -c relay.toml run
+    sys.exit(app.main())                                     # servicectl -c service.toml run
 ```
 
 - **The arguments** (`sys.argv[1:]` by default) are the root options, then a line ([`argv.md`](argv.md)). After
   the first word, every flag is the line's, and a single argument is the whole line:
-  `relayctl "run --config own.toml"`.
+  `servicectl "run --config own.toml"`.
 - **Root options** are the fields of `App(prog, options=Options)`, a seared class whose fields are each optional:
   read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, which exits 0.
-- **parsed's own flags** given among the root options are the line's, put first on it: `relayctl --json status`
+- **parsed's own flags** given among the root options are the line's, put first on it: `servicectl --json status`
   runs `--json status`. A bare `--help` writes the program's own help (its usage, then a row for each root option
   and `--version`) above the root's listing.
 - **A person is at a terminal** when stdin and stdout both are one. There, a line's `INTERACTIVE` command runs and
