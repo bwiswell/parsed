@@ -7,6 +7,7 @@ from typing import ClassVar
 
 import _support_farlandia as farlandia
 import _support_protocol as protocol
+import _support_tooled as tooled
 import pytest
 
 import parsed
@@ -93,6 +94,34 @@ class TestQuoting:
         command = farlandia.Say(message='say "hi"')
         assert fixtures.render(command) == r'say say \"hi\"'  # the rest of the line, each word as a line says it
         assert fixtures.read(fixtures.render(command)) == command
+
+
+@pytest.fixture(scope='module')
+def verbs() -> Tree:
+    return Tree.collect('_support_tooled')
+
+
+class TestALinePassedOn:
+    @pytest.mark.parametrize(
+        ('command', 'line'),
+        [
+            (tooled.See(line='fleet f1 buy --yes', pretty=True), 'see --pretty fleet f1 buy --yes'),
+            (tooled.See(line='--weird --x'), 'see -- --weird --x'),
+            (
+                tooled.SessionRun(command='fleet "Vesta Ring" dock --label "a \\"b\\""'),
+                'session run fleet "Vesta Ring" dock --label "a \\"b\\""',
+            ),
+        ],
+    )
+    def test_as_it_is_after_the_command_s_flags(self, verbs, command, line):
+        assert verbs.render(command) == line
+        assert verbs.read(line) == command
+
+    @pytest.mark.parametrize('line', ['', ' fleet f1', 'say "hi', 'help me'])
+    def test_one_no_line_passes_on_as_it_is(self, line):
+        helped = Tree([tooled.See, _command('see help', words=parsed.Str(default=''))])
+        with pytest.raises(RenderError, match=r'which no line passes on as it is'):
+            helped.render(tooled.See(line=line))
 
 
 class TestPhrases:

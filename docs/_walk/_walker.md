@@ -43,6 +43,19 @@ the names it narrows, whatever their order on the line, and gives each resolver 
 chain is given that place instead of its field's value, or no scope where a step went somewhere the line doesn't
 say ([`names.md`](../names.md#a-chains-place)). A placeholder is a place the line doesn't say.
 
+## A line passed on
+
+A slot read by a [`Line`](../kinds.md#line) takes the rest of the line as typed, from its first word, its flags
+among it. Since flags are split off before the walk knows its command, `cut(tree, line, tokens)` looks first, on a
+tree that has a `Line` slot (`tree.lines`): it follows the words through the tree, the flags passed over (a value
+flag's value with it, `--` ending them) and nothing refused, and where they enter a `Line` slot it cuts the line.
+The rest, from that word's start to the line's end, as typed, becomes one word, which is never a literal, a flag or
+`then`. Then the walk reads as ever:
+
+- the flags before the cut are the command's, parsed's own among them, and a flag no command takes is refused there;
+- `then` within the rest is the line's, so a line passed on is never cut into a chain's steps;
+- a tree with no `Line` slot is never looked at, so its lines read as they did.
+
 ## Placeholders
 
 `walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes for

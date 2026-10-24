@@ -5,10 +5,11 @@ from __future__ import annotations
 import enum
 
 import _support_farlandia as farlandia
+import _support_tooled as tooled
 import pytest
 
 import parsed
-from parsed._walk._hints import close, either, label, usage
+from parsed._walk._hints import close, either, label, passes, usage
 from parsed.command import Command, declaration
 from parsed.kinds import Choice, Duration, Name, Number, Word
 from parsed.tree import Tree
@@ -47,6 +48,15 @@ class TestUsage:
     )
     def test_a_phrase_and_its_flags(self, cls, at, said):
         assert _usage(cls, at) == said
+
+    def test_one_that_passes_a_line_on_says_its_flags_first(self):
+        found = declaration(tooled.Do)
+        flags = Tree([tooled.Do]).flags_of(tooled.Do).values()
+        fields = {spec.attr: spec.field for spec in tooled.Do.__seared_fields__}
+        said = usage(found.phrases[0], flags, fields, asks=True, passing=True)
+        assert said == 'do [--policy <path>] [--pretty] [--select <select>] [--yes] <line …>'
+        assert passes(found, found.phrases[0])
+        assert not passes(declaration(farlandia.Say), declaration(farlandia.Say).phrases[0])  # a rest, not a Line
 
     def test_one_that_asks_ends_with_yes(self):
         assert _usage(farlandia.FleetsMerge, asks=True) == 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'

@@ -208,6 +208,39 @@ reads a field that isn't keyed or isn't said as the rest of the line, or when a 
 `Name` and `Pairs` are both `parsed.kinds.Named`: a category, a scope, and a label, its term the label or the
 category. A pair's key is refused by its term (`no variable 'hme'`).
 
+## `Line`
+
+`parsed.kinds.Line()` reads the rest of a line as typed, from its first word: a line one command passes on to
+another, its flags, parsed's own, `--` and `then` among it, quotes and escapes kept, so it reads there as it was
+said.
+
+```python
+@parsed.parsed
+class See(Verb):
+    PHRASE = 'see {line**}'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'line': parsed.kinds.Line()}
+
+    line: str = parsed.Str(required=True, doc="the app's line")
+```
+
+| The line | `line` | The command's |
+|---|---|---|
+| `see fleet f1 buy ship hauler --yes` | `fleet f1 buy ship hauler --yes` | |
+| `see --pretty fleet f1 show --until docked=true` | `fleet f1 show --until docked=true` | `--pretty` |
+| `--yes see fleet f1 --help` | `fleet f1 --help` | `--yes` |
+| `session run -- fleet f1 --x` | `fleet f1 --x` | |
+
+- **It starts at its first word,** as argparse's `REMAINDER` does: a flag before it is the command's own, parsed's
+  among them, so a command that passes a line on may take flags of its own, said first (`see [--pretty] <line …>`),
+  and `see --help` is its own help. `--` before it ends the command's flags: `see -- --x` passes `--x` on.
+- **Declared where it fits:** a `Str` of one value, said as the rest of each phrase (`{line**}`), on a command that
+  isn't a chain's step, since it takes `then` too. Anywhere else, the command is refused.
+- **How it's read** ([`_walk/_walker.md`](_walk/_walker.md#a-line-passed-on)): before a line's flags are split, the
+  walk follows its words to see whether they enter a `Line` slot, and there the rest is the slot's one word. A tree
+  with none reads as ever.
+- **Written back,** it's said as it is, after the command's flags ([`_walk/_render.md`](_walk/_render.md));
+  completion offers nothing within it, since it's another app's.
+
 ## The default kinds
 
 `Word`, `Number`, `Switch`, `Choice`, `Duration` and `Moment` are `parsed.kinds.*`, beside `Kind`, the base of

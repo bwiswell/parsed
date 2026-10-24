@@ -38,11 +38,13 @@ from ._walker import (
     _Moved,
     _moved,
     _onward,
+    _Passed,
     _pieces,
     _place_of,
     _shared,
     _taken,
     _Walker,
+    cut,
 )
 from ._words import Token, split, word
 
@@ -80,6 +82,8 @@ class Completion(NamedTuple):
 def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None) -> Completion:
     """What may come next on ``text``, a line up to the cursor, as the module's docstring describes."""
     tokens, partial = being_typed(text)
+    if tree.lines and _passing(tree, text, tokens, partial):  # the line is another app's to complete
+        return Completion(words=[], replace=0 if partial is None else len(text) - partial.start)
     flagging = partial is not None and not partial.quoted and partial.text.startswith('--')
     chained = _chained(tree, text, tokens, names or {}) if tree.chains else (tokens, None, [])
     if chained is None:
@@ -96,6 +100,12 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
             continue
         words.append(typed)
     return Completion(words=words, replace=0 if partial is None else len(text) - partial.start)
+
+
+def _passing(tree: Tree, text: str, tokens: list[Token], partial: Token | None) -> bool:
+    """Whether the cursor stands in a line passed on (a ``Line`` slot's): its first word or after."""
+    found = cut(tree, text, [*tokens, partial] if partial is not None else tokens)
+    return bool(found) and isinstance(found[-1], _Passed)
 
 
 def goes(tree: Tree, tokens: list[Token]) -> bool:

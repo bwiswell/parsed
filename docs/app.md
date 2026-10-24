@@ -278,7 +278,8 @@ def main() -> None:
   refused and the question left unanswered.
 - **What it writes:** each result's text as it comes, a watch's at each change: to stdout when it went well, else to
   stderr. With `--json` anywhere on the line, or before it, each result's envelope instead
-  ([`reply.md`](reply.md#as-json)), a line of JSON on stdout, a refusal's too, so a tool reads one stream. Its exit
+  ([`reply.md`](reply.md#as-json)), a line of JSON on stdout, a refusal's too, so a tool reads one stream; a line
+  passed on keeps its own (`prog see fleet f1 --json` writes `see`'s text, and the line asks for JSON). Its exit
   code is the last result's ([`reply.md`](reply.md#errors-and-exit-codes)), or 130 when it's interrupted (Ctrl-C).
 
 It runs an event loop of its own, as `app.run` does, so it's refused inside one with a `RuntimeError`.

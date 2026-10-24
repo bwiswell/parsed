@@ -9,7 +9,7 @@ lines as it lands, and the entry is dated when that version is released.
 
 ## 0.2.1 — unreleased
 
-**Arguments as given.**
+**Arguments as given, and lines passed on whole.**
 
 ### Added
 
@@ -18,6 +18,14 @@ lines as it lands, and the entry is dated when that version is released.
   line's argument holding one reads as given, so at a shell `call t --args '{"station": "s1"}'` gives the field the
   JSON, and `line_of` no longer refuses it; `render` writes a value holding one, and completion offers a name
   holding one, each escaped. `parsed._walk._words.word(text)` writes any string as a word that reads back to it.
+- **A line passed on whole:** `parsed.kinds.Line()`, on a `{line**}` slot, takes the rest of the line as typed,
+  from its first word: its flags, parsed's own, `--` and `then` among it, quotes kept. So `see fleet f1 buy ship
+  hauler --yes` gives `see` the line `fleet f1 buy ship hauler --yes`, and `--yes` is the line's. A flag before the
+  line's first word is the command's own (`see --pretty fleet f1 show`), and the command's usage says its flags
+  first (`see [--pretty] <line …>`). Render writes the line as it is, completion offers nothing within it, and
+  `app.main` writes JSON only for a `--json` the line doesn't pass on. `SlotKind.LINE` and `Tree.lines` say where
+  one is; a tree without one reads as before. A `Line` is a `Str` of one value, said as the rest of each phrase, on
+  no chain's step.
 
 ### Changed
 

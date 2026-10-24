@@ -24,6 +24,7 @@ class SlotKind(enum.StrEnum):
     ONE = 'one'  # one word
     MANY = 'many'  # one word or more, until a literal after them or the end
     REST = 'rest'  # the rest of the line
+    LINE = 'line'  # the rest of the line as typed, its flags among it: a line passed on (a `Line` kind's)
 
 
 class Arity(enum.StrEnum):

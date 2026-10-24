@@ -50,10 +50,10 @@ from seared.doc import collect
 from . import _walk
 from ._phrase import Word, parse
 from ._walk import RESERVED, THEN, Arity, Completion, Reading, SlotKind
-from ._walk._hints import label, usage
+from ._walk._hints import label, passes, usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
-from .kinds import Switch
+from .kinds import Line, Switch
 from .wait import FLAGS as WAIT_FLAGS
 from .wait import LABELS as WAIT_LABELS
 from .wait import SWITCHES as WAIT_SWITCHES
@@ -62,11 +62,17 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from ._phrase import Bound, Place
+    from .kinds import Kind
     from .names import Resolver
 
 _FLAG = re.compile(r'[a-z0-9][a-z0-9-]*')
 
-_SAID = {SlotKind.ONE: 'one word', SlotKind.MANY: 'several words', SlotKind.REST: 'the rest of the line'}
+_SAID = {
+    SlotKind.ONE: 'one word',
+    SlotKind.MANY: 'several words',
+    SlotKind.REST: 'the rest of the line',
+    SlotKind.LINE: 'the rest of the line as typed',
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +152,8 @@ class Tree:
         shorts: Each short flag a command declares (``SHORTS``), to the flag it says: ``{'c': 'config'}``. A short
             says one flag throughout the tree, and only on the commands that declare it.
         waits: Whether any of its commands can wait (:mod:`parsed.wait`).
+        lines: Whether any of its phrases ends at a line passed on (a :class:`~parsed.kinds.Line`), which a walk looks
+            for before it splits a line's flags.
         chains: Each chain's base, to the steps beneath it among the tree's commands, in their order: the commands
             ``then`` joins on a line.
 
@@ -168,6 +176,7 @@ class Tree:
         for word in self.under.split():
             self.top = self.top.words.setdefault(word, Node())
         self._flags: dict[type, Mapping[str, Flag]] = {}
+        self.lines = False
         arities: dict[str, tuple[Arity, str]] = {}
         labels: dict[str, set[str]] = {}
         shorts: dict[str, tuple[str, str]] = {}  # each short's flag, and the command that first said so
@@ -254,7 +263,7 @@ class Tree:
 
     def _usage(self, found: Declaration, bound: Bound) -> str:
         fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
-        said = usage(bound, self.flags_of(found.cls).values(), fields, asks=found.asks)
+        said = usage(bound, self.flags_of(found.cls).values(), fields, asks=found.asks, passing=passes(found, bound))
         return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
@@ -316,7 +325,8 @@ class Tree:
             place = read.get(part.name)
             if place is None:
                 continue  # an optional slot, left out on this route
-            kind = SlotKind.REST if place.rest else SlotKind.MANY if place.many else SlotKind.ONE
+            kind = _slot_kind(place, found.kind_of(place))
+            self.lines = self.lines or kind is SlotKind.LINE
             edge = node.slot
             if edge is None:
                 edge = node.slot = Edge(kind=kind, node=Node(), slot=place.slot, phrase=bound.phrase.text, command=name)
@@ -332,6 +342,13 @@ class Tree:
         if node.end is not None:
             raise DeclarationError(_same_lines(node.end, end))
         node.end = end
+
+
+def _slot_kind(place: Place, kind: Kind) -> SlotKind:
+    """What a slot takes: a line passed on, the rest of the line, several words or one."""
+    if place.rest:
+        return SlotKind.LINE if isinstance(kind, Line) else SlotKind.REST
+    return SlotKind.MANY if place.many else SlotKind.ONE
 
 
 def _chains(commands: tuple[Declaration, ...]) -> Mapping[type, tuple[Declaration, ...]]:

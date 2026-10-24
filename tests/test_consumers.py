@@ -191,6 +191,22 @@ class TestAnAgentsTooling:
         _, said = self._read(tooled, capsys, 'wait', 'FleetState', '--until', 'name="40"')
         assert said['until'] == ['name="40"']
 
+    def test_a_line_passed_on_whole(self, tooled, capsys):
+        # `tooled see fleet f1 buy ship hauler --yes`: the line's flags are its own, parsed's among them.
+        argv = ('see', 'fleet', 'f1', 'buy', 'ship', 'hauler', '--yes', '--until', 'docked=true')
+        verb, said = self._read(tooled, capsys, *argv)
+        assert (verb, said['line']) == ('see', 'fleet f1 buy ship hauler --yes --until docked=true')
+        _, said = self._read(tooled, capsys, 'do', '--pretty', 'fleet', 'f1', 'dock', 'Vesta Ring')
+        assert (said['line'], said['pretty']) == ('fleet f1 dock "Vesta Ring"', True)
+        _, said = self._read(tooled, capsys, 'session', 'run', '--', 'fleet', 'f1', '--x')
+        assert said['command'] == 'fleet f1 --x'
+
+    def test_a_line_passed_on_keeps_its_json(self, tooled, capsys):
+        code, out, _ = _main(tooled, capsys, 'see', 'fleet', 'f1', '--json')
+        assert (code, out.split(' ', 1)[0]) == (0, 'see')  # the verb's text: --json is the line's
+        code, out, _ = _main(tooled, capsys, '--json', 'see', 'fleet', 'f1')
+        assert (code, json.loads(out)['text'].split(' ', 1)[0]) == (0, 'see')  # before it, the verb's own
+
     def test_an_invoke_s_dry_run_and_its_negated_switch(self, tooled, capsys):
         code, out, _ = _main(tooled, capsys, 'invoke', 'FleetOrder', 'fleet=f1', '--dry-run', '--no-retry')
         assert (code, out.strip().endswith('(a dry run)')) == (0, True)
