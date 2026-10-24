@@ -38,7 +38,7 @@ holds under one.
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
 `tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all, and
-`[--yes]` last for one that may ask first: `fleets merge <fleet> --into <into> [--quiet] [--yes]`.
+`[--yes]` last for one that may ask first: `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`.
 `tree.usage_of(cls, phrase=0)` says one of its commands by a phrase alike: `0`, its `PHRASE`
 (`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a `KeyError` for a class that
 isn't one of them, and an `IndexError` for a phrase it hasn't.
@@ -152,8 +152,12 @@ value, and `--watch`, a switch ([`wait.md`](wait.md)). A field of another comman
 as the wait's does. `tree.waits` says whether any command can wait.
 
 `tree.flags` is the tree-wide table, name to arity; `tree.flags_of(cls)` is one command's flags, each with its name,
-its field, its arity and whether it's negated. parsed's own, `--help`, `--json`, `--yes` and `--dry-run`, are
-switches every command takes, kept apart from its fields (`Reading.own`).
+its field, its arity, whether it's negated, and its `label`: what a usage writes its value as, by its kind
+([`kinds.md`](kinds.md#labelling-a-value)), `span` for `--for <span>`. `tree.labels` is the tree-wide table, name to
+label, for a refusal before the command is known (`--for needs a value`): the label every command that takes the
+flag gives it, a wait's among them (`path=value`, `span`, `n`), or its name where they differ. parsed's own,
+`--help`, `--json`, `--yes` and `--dry-run`, are switches every command takes, kept apart from its fields
+(`Reading.own`).
 
 ## What the build refuses
 

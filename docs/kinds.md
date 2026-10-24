@@ -102,10 +102,30 @@ then its literal words (`a number, % after it or not, or off`):
 | `Choice` | `one of red, green or blue`, the `Enum`'s values |
 | `Duration` | `a span of time, such as 90s, 10m or 1h30m` |
 | `Moment` | `a date, such as 2026-10-21`, a time or both, by its field |
-| `Name` | `a station`, its category, and `, within its fleet` for a scoped one |
-| `Pairs` | `variable and value pairs`, by its category |
+| `Name` | `a station`, by its [term](#name), and `, within its fleet` for a scoped one; `an ore` before a vowel's sound, `a unit` |
+| `Pairs` | `variable and value pairs`, by its term |
 
 A kind of an app's own overrides `what` (`a hex number, such as ff`); its literal words follow, as they do for any.
+
+## Labelling a value
+
+`kind.usage_label(field)` is what a usage writes a flag's value as, between `<` and `>`: `--for <span>`, not
+`--for <for>`. `None` leaves it to the flag's name. A usage writes the kind's literal words after it, each after a
+`|` (`--share <n|off>`), and says it wherever a flag's value is written: a usage and a refusal's hint, help's rows,
+the root options' usage and help, and a reference page ([`_walk/_hints.md`](_walk/_hints.md)).
+
+| Kind | Labels a value |
+|---|---|
+| `Word` | `path` for a `Path`, `uuid` for a `UUID`; else `None`, the flag's name |
+| `Number` | `n` |
+| `Switch` | `true\|false`, for a value; a `Bool` flag is a switch, and takes none |
+| `Choice` | the `Enum`'s values: `visual\|text\|auto` |
+| `Duration` | `span` |
+| `Moment` | `date`, `time` or `datetime`, by its field |
+| `Name`, `Pairs` | its [term](#name): `fleet`, `ore` |
+
+A slot keeps its name (`<fleet>`, `<goods> …`): a phrase is read by its slots' names, and a slot's name already says
+what it holds. A kind of an app's own may override `usage_label`; the base's gives `None`.
 
 ## An example
 
@@ -122,8 +142,8 @@ a name's are its resolver's `options`. A kind of an app's own may override `offe
 
 ## `Name`
 
-`parsed.Name(category, scope=None, *, follows=False)` is one of an app's names: a fleet, a station, a good. Its
-words read to the name's key by the resolver the app gives for its `category` with each line
+`parsed.Name(category, scope=None, *, follows=False, label=None)` is one of an app's names: a fleet, a station, a
+good. Its words read to the name's key by the resolver the app gives for its `category` with each line
 ([`names.md`](names.md)); with none, as typed.
 
 ```python
@@ -156,11 +176,16 @@ class FleetDock(FleetCommand):
   chain on, where it will be ([`command.md`](command.md#a-chains-place)). It needs a scope, and is refused on a
   command that isn't a step, or with a scope the chain doesn't share. A kind that follows isn't equal to one that
   doesn't.
+- **`label`** is what a person calls one, where the category isn't: an app splits a category by how a name is read
+  (a good in the deposit where the fleet is), so `Name('good_in_deposit', scope='fleet', label='ore')` is refused as
+  `no ore 'lab'`, written `--ore <ore>` and described as `an ore`. It's words, with no `<`, `>` or `|`. Its
+  **term**, `kind.term`, is the label, or else the category: what refusals, usages and help say. The category stays
+  the key resolvers are given by, and a schema's `x-kind` ([`doc/json_schema.md`](doc/json_schema.md)).
 
 ## `Pairs`
 
-`parsed.kinds.Pairs(category, scope=None)` reads a `keyed` field's words as `key value` pairs, said as the rest of
-the line: a routine's variables.
+`parsed.kinds.Pairs(category, scope=None, *, label=None)` reads a `keyed` field's words as `key value` pairs, said
+as the rest of the line: a routine's variables.
 
 ```python
 @parsed.parsed
@@ -180,7 +205,8 @@ category reads each key, and gives each key's values a resolver of their own
 ([`names.md`](names.md#pairs)); with none, keys and values read as typed. A command is refused when a `Pairs` kind
 reads a field that isn't keyed or isn't said as the rest of the line, or when a keyed field reads by any other kind.
 
-`Name` and `Pairs` are both `parsed.kinds.Named`: a category, and a scope.
+`Name` and `Pairs` are both `parsed.kinds.Named`: a category, a scope, and a label, its term the label or the
+category. A pair's key is refused by its term (`no variable 'hme'`).
 
 ## The default kinds
 

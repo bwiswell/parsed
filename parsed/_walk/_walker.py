@@ -23,7 +23,8 @@ naming the phrase or the flag.
 **A name is read by the resolver the app gives for its category** (:mod:`parsed.names`), or kept as typed when it
 gives none. A scoped name waits for its scope: the fields are read in an order that puts a scope before the names it
 narrows, whatever their order on the line, and the resolver is given the scope's value. A word no name answers to is
-refused with the resolver's suggestions.
+refused by the kind's term (its label, or else its category), with the resolver's suggestions; or with its reason,
+where its ``lookup`` raises a ``ValueError`` saying why.
 
 **A chain's place moves on** with each step that declares ``MOVES``: after ``jump sol``, the fleet will be at
 ``sol``. A later step's name whose scope follows the chain (``follows=True``) is given that place as its scope, or
@@ -385,7 +386,7 @@ class _Walker:
             if arity is Arity.VALUE and value is None:
                 if at == len(tokens) or tokens[at].raw == '--' or _flag(tokens[at], self.tree.shorts) is not None:
                     msg = f'{_given(token, name)} needs a value'
-                    raise self.refuse(msg, word=token, hint=f'{_given(token, name)} <{name}>')
+                    raise self.refuse(msg, word=token, hint=f'{_given(token, name)} <{self.tree.labels[name]}>')
                 value = tokens[at]
                 at += 1
             flags.append((name, token, value))
@@ -558,7 +559,7 @@ class _Walker:
         for flag in takes.values():
             if fields[flag.field].required and flag.field not in out and flag.field not in have:
                 said = f'{self.line.strip()} --{flag.name}'  # the line as given, the flag added
-                hint = said if flag.arity is Arity.SWITCH else f'{said} <{flag.name}>'
+                hint = said if flag.arity is Arity.SWITCH else f'{said} <{flag.label}>'
                 msg = f'{_said(words)} needs --{flag.name}'
                 raise self.refuse(msg, field=flag.field, hint=hint)
         return out
@@ -709,7 +710,7 @@ class _Walker:
         literal = NOT_LITERAL if word.quoted else kind.literal(word.text)
         if literal is not NOT_LITERAL:
             return literal
-        return self._resolved(found, resolver, word, scope, kind.category)
+        return self._resolved(found, resolver, word, scope, kind.term)
 
     def _pairs(self, found: _Field, kind: Pairs, scope: _Scope | None) -> dict[str, object]:
         """A keyed field's pairs: each key read by its category's resolver, each value by the one it gives the key."""
@@ -724,7 +725,7 @@ class _Walker:
         given = None if scope is None else scope[1]
         out: dict[str, object] = {}
         for key_word, value_word in zip(words[0::2], words[1::2], strict=True):
-            key = key_word.text if resolver is None else self._resolved(found, resolver, key_word, scope, kind.category)
+            key = key_word.text if resolver is None else self._resolved(found, resolver, key_word, scope, kind.term)
             if key in out:
                 msg = f'{found.where}: {key_word.raw} is given twice'
                 raise self.refuse(msg, word=key_word, field=found.by.field)
@@ -734,17 +735,33 @@ class _Walker:
         return out
 
     def _resolved(self, found: _Field, resolver: Resolver, word: Token, scope: _Scope | None, what: str) -> str:
-        """The key a resolver reads a word to; a word no name answers to is refused, with what's close to it."""
+        """The key a resolver reads a word to; a word no name answers to is refused, with what's close to it.
+
+        A resolver that says why, by a ``ValueError``, is refused with its reason and no suggestions: the reason says
+        what's near.
+        """
         if self.placeholders and _placeholder(word):
             return word.text
         given = None if scope is None else scope[1]
-        key = resolver.lookup(word.text, given)
+        try:
+            key = resolver.lookup(word.text, given)
+        except ValueError as e:
+            msg = f'{found.where}: {e}'
+            raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end)) from None
         if key is not None:
             return key
         near = list(resolver.suggest(word.text, given))
         within = '' if scope is None else _within(scope)
         msg = f'{found.where}: no {what} {word.text!r}{within}'  # its text: a name may be quoted for its spaces
         raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end), near=near)
+
+
+def _key(resolver: Resolver, word: str, scope: str | None) -> str | None:
+    """The key a resolver reads ``word`` to, or ``None`` where it names nothing, whether or not it says why."""
+    try:
+        return resolver.lookup(word, scope)
+    except ValueError:
+        return None
 
 
 def _within(scope: _Scope) -> str:

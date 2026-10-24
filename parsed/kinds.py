@@ -22,9 +22,14 @@ its own gives, since one made from the field's type alone may not read. ``None``
 **Describing its words** (:meth:`Kind.describe`), for help and pages: the kind's own description (:meth:`Kind.what`,
 ``a span of time, such as 90s or 1h30m``), then its literal words (``, or off``).
 
+**Labelling a value** (:meth:`Kind.usage_label`), for a usage: what a flag's value is written as between ``<`` and
+``>``, ``span`` in ``--for <span>``; ``None`` leaves it to the flag's name. A usage adds the literal words after it
+(``<n|off>``).
+
 **A named kind** (:class:`Named`) is read through the app: a :class:`Name` by the resolver the app gives for its
 category, and :class:`Pairs`, a keyed field's ``key value`` pairs, by one that reads each key and gives its values
-their own (:mod:`parsed.names`).
+their own (:mod:`parsed.names`). Its ``label`` is what a person calls one, where its category isn't: refusals, usages
+and help say its :attr:`~Named.term`, the label or else the category.
 
 Every field of a command has a kind: its ``KINDS`` entry, or the default for its seared type (:func:`default_kind`):
 
@@ -71,6 +76,9 @@ _WHOLE = re.compile(r'[+-]?\d+')
 _DECIMAL = re.compile(r'[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?')
 _SPAN = re.compile(r'(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?')
 _LITERAL = re.compile(r'[a-z0-9][a-z0-9_-]*')
+_LABEL = re.compile(r'[^\s<>|]+(?: [^\s<>|]+)*')
+#: A word whose ``u`` is said as *you*: a consonant, then a vowel, after it (``unit``, ``user``).
+_YOU = re.compile(r'u[^aeiou][aeiou]')
 
 #: Below this, a whole float is spelled as an integer's digits; above it, Python's ``repr`` keeps it exact.
 _WHOLE_UP_TO = 1e15
@@ -162,6 +170,10 @@ class Kind:
         """The kind's own form, described for a person: here, ``a word``."""
         return 'a word'
 
+    def usage_label(self, field: Field) -> str | None:  # noqa: ARG002 -- every kind labels alike
+        """What a usage writes a flag's value as, between ``<`` and ``>``: here, ``None``, the flag's name."""
+        return None
+
 
 @dataclass(frozen=True, slots=True)
 class Word(Kind):
@@ -180,6 +192,10 @@ class Word(Kind):
     def what(self, field: Field) -> str:
         """``a word``, ``a path`` or ``a UUID``, by its field."""
         return {FieldKind.PATH: 'a path', FieldKind.UUID: 'a UUID'}.get(field_kind(field), 'a word')
+
+    def usage_label(self, field: Field) -> str | None:
+        """``path`` for a ``Path`` and ``uuid`` for a ``UUID``; ``None`` for any other, the flag's name."""
+        return {FieldKind.PATH: 'path', FieldKind.UUID: 'uuid'}.get(field_kind(field))
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +231,10 @@ class Number(Kind):
         what = 'a whole number' if field_kind(field) is FieldKind.INT else 'a number'
         return f'{what}, {self.suffix} after it or not' if self.suffix else what
 
+    def usage_label(self, field: Field) -> str | None:  # noqa: ARG002 -- every kind labels alike
+        """``n``."""
+        return 'n'
+
     def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
         """The number as digits: a whole float without its ``.0``, any other as Python writes it, exactly."""
         if isinstance(value, float) and value.is_integer() and abs(value) < _WHOLE_UP_TO:
@@ -246,6 +266,10 @@ class Switch(Kind):
         """``true or false``."""
         return 'true or false'
 
+    def usage_label(self, field: Field) -> str | None:  # noqa: ARG002 -- every kind labels alike
+        """``true|false``, for a value; a flag that's a switch takes none."""
+        return 'true|false'
+
 
 @dataclass(frozen=True, slots=True)
 class Choice(Kind):
@@ -271,6 +295,10 @@ class Choice(Kind):
         """``one of iron, coal or ice``: the ``Enum``'s values."""
         return f'one of {_either(list(self.offers(field)))}'
 
+    def usage_label(self, field: Field) -> str | None:
+        """The ``Enum``'s values: ``iron|coal|ice``."""
+        return '|'.join(self.offers(field))
+
 
 @dataclass(frozen=True, slots=True)
 class Duration(Kind):
@@ -291,6 +319,10 @@ class Duration(Kind):
     def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
         """``a span of time, such as 90s, 10m or 1h30m``."""
         return 'a span of time, such as 90s, 10m or 1h30m'
+
+    def usage_label(self, field: Field) -> str | None:  # noqa: ARG002 -- every kind labels alike
+        """``span``."""
+        return 'span'
 
 
 #: What a moment's word is read by, what it is, and what one looks like, by its field's type.
@@ -320,6 +352,10 @@ class Moment(Kind):
         _, what, like = _moment(field)
         return f'{what}, such as {like}'
 
+    def usage_label(self, field: Field) -> str | None:
+        """``date``, ``time`` or ``datetime``, by its field."""
+        return {FieldKind.DATE: 'date', FieldKind.TIME: 'time'}.get(field_kind(field) or FieldKind.DATETIME, 'datetime')
+
 
 @dataclass(frozen=True, slots=True)
 class Named(Kind):
@@ -332,14 +368,18 @@ class Named(Kind):
         follows: Whether the scope follows its chain's place, on a step whose scope is a field its chain shares: once
             an earlier step has moved the chain on (its ``MOVES``), the scope is where it moved to, so a station is
             looked for where the fleet will be. Keyword-only.
+        label: What a person calls one, where its category isn't (``Name('good_in_deposit', label='ore')``): words,
+            for refusals, usages and help to say. ``None``, by default, says its category. Keyword-only.
 
     Raises:
-        DeclarationError: The category or the scope isn't a name, or ``follows`` has no scope to follow.
+        DeclarationError: The category or the scope isn't a name, ``follows`` has no scope to follow, or the label
+            isn't words.
     """
 
     category: str
     scope: str | None = None
     follows: bool = dataclasses.field(default=False, kw_only=True)
+    label: str | None = dataclasses.field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         """Refuse a category or a scope that isn't a name, and a ``follows`` with no scope."""
@@ -360,6 +400,18 @@ class Named(Kind):
                 f"a scope, the chain's field: scope='fleet'"
             )
             raise DeclarationError(msg)
+        if self.label is not None and (not isinstance(self.label, str) or not _LABEL.fullmatch(self.label)):
+            msg = f'{said}({self.category!r}, label={self.label!r}): a label is words a person says, such as ore'
+            raise DeclarationError(msg)
+
+    @property
+    def term(self) -> str:
+        """What refusals, usages and help call one: its label, or else its category."""
+        return self.label or self.category
+
+    def usage_label(self, field: Field) -> str | None:  # noqa: ARG002 -- every kind labels alike
+        """Its :attr:`term`: ``fleet``, ``ore``."""
+        return self.term
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,8 +419,8 @@ class Name(Named):
     """One of an app's names, read to its key by the resolver the app gives for its category; else as typed."""
 
     def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
-        """``a station``, its category, and ``within its fleet`` where it has a scope."""
-        return f'a {self.category}' + (f', within its {self.scope}' if self.scope else '')
+        """``a station``, its :attr:`~Named.term`, and ``within its fleet`` where it has a scope."""
+        return f'{_a(self.term)} {self.term}' + (f', within its {self.scope}' if self.scope else '')
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,8 +438,8 @@ class Pairs(Named):
         return [str(word) for pair in pairs for word in pair]
 
     def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
-        """``variable and value pairs``, by its category."""
-        return f'{self.category} and value pairs'
+        """``variable and value pairs``, by its :attr:`~Named.term`."""
+        return f'{self.term} and value pairs'
 
 
 _DEFAULTS: dict[FieldKind, Kind] = {
@@ -409,6 +461,12 @@ _DEFAULTS: dict[FieldKind, Kind] = {
 def _moment(field: Field) -> tuple[Callable[[str], object], str, str]:
     """A moment field's reader, what it is, and what one looks like."""
     return _MOMENTS.get(field_kind(field) or FieldKind.DATETIME, _MOMENTS[FieldKind.DATETIME])
+
+
+def _a(word: str) -> str:
+    """The article before ``word``: ``an`` before a vowel's sound (``an ore``, ``an upgrade``), else ``a``."""
+    said = word.lower()
+    return 'an' if said[:1] in 'aeio' or (said[:1] == 'u' and not _YOU.match(said)) else 'a'
 
 
 def _either(words: list[str]) -> str:

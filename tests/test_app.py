@@ -528,7 +528,7 @@ class TestRunning:
     async def test_help_runs_nothing(self, bound):
         found = await self._run(bound, 'relay run --help')
         assert found == parsed.Result('relay run --help', 'relay run', text=found.text)
-        assert found.text.splitlines()[0] == 'relay run [--config <config>]'  # its help, its usage first
+        assert found.text.splitlines()[0] == 'relay run [--config <path>]'  # its help, its usage first
         found = await self._run(bound, 'log 0 --help')  # its values aren't loaded, so not refused
         assert (found.ok, found.text.splitlines()[0]) == (True, 'log [<n>]')
 
@@ -608,7 +608,7 @@ class TestCallingWithHelpAndReplies:
         app.on(service.Run, recorder)
         async with app.open() as session:
             said = await session.call('relay run --help')
-        assert said.splitlines()[0] == 'relay run [--config <config>]'
+        assert said.splitlines()[0] == 'relay run [--config <path>]'
         assert recorder.calls == []
 
     async def test_a_reply_it_shouldn_t_return_is_raised(self, app):
@@ -1554,7 +1554,7 @@ class TestSubjects:
 
     async def test_help_under_a_subject(self, game):
         async with game.open(subjects=_PROSPECTOR) as session:
-            assert (await session.run('mine --help')).text.splitlines()[0] == 'fleet <fleet> mine [--for <for>]'
+            assert (await session.run('mine --help')).text.splitlines()[0] == 'fleet <fleet> mine [--for <span>]'
 
     async def test_a_handler_makes_one_the_session_s(self, game):
         async with game.open() as session:
@@ -1853,16 +1853,16 @@ class TestMain:
         assert self._main(relay, capsys, '--version', 'status') == (0, 'servicectl 1.2.3\n', '')
         code, out, _ = self._main(relay, capsys, '-h')
         program, options, listed = out.split('\n\n')
-        assert (code, program) == (0, 'servicectl [--config <config>] [--n <n>] [--version] <command> …')
+        assert (code, program) == (0, 'servicectl [--config <path>] [--n <n>] [--version] <command> …')
         assert options.splitlines() == [  # the program's, above what it may say
-            '  -c, --config <config>  a path',
-            '  --n <n>                a whole number',
-            "  --version              the program's version",
+            '  -c, --config <path>  a path',
+            '  --n <n>              a whole number',
+            "  --version            the program's version",
         ]
         assert _column(listed) == [
-            'run [--config <config>]',
-            'validate-config [--config <config>]',
-            'status [--config <config>]',
+            'run [--config <path>]',
+            'validate-config [--config <path>]',
+            'status [--config <path>]',
             'look log [--n <n>]',
         ]
         code, out, _ = self._main(relay, capsys, '--help', 'look')  # one command beneath: its own help
@@ -1990,9 +1990,9 @@ class TestHelpAtAnyDepth:
             (
                 'relay --help',
                 [
-                    'relay run [--config <config>]',
-                    'relay validate-config [--config <config>]',
-                    'relay status [--config <config>]',
+                    'relay run [--config <path>]',
+                    'relay validate-config [--config <path>]',
+                    'relay status [--config <path>]',
                 ],
             ),
             ('fleet f1 jump --help', ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']),
@@ -2008,20 +2008,20 @@ class TestHelpAtAnyDepth:
         found = await self._run(app, 'fleet f1 mine --for soon --help')  # its value isn't read
         assert (found.command, found.text.split('\n\n')[:2]) == (
             None,
-            ['fleet <fleet> mine [--for <for>]', 'Mine until the hold is full.'],
+            ['fleet <fleet> mine [--for <span>]', 'Mine until the hold is full.'],
         )
 
     async def test_each_with_its_summary_in_a_column(self, app):
         assert (await self._run(app, 'relay --help')).text.splitlines() == [
-            "relay run [--config <config>]              Run the service until it's stopped.",
-            "relay validate-config [--config <config>]  Check the config file, and say what's wrong with it.",
-            'relay status [--config <config>]           Say whether the service is up.',
+            "relay run [--config <path>]              Run the service until it's stopped.",
+            "relay validate-config [--config <path>]  Check the config file, and say what's wrong with it.",
+            'relay status [--config <path>]           Say whether the service is up.',
         ]
 
     async def test_with_no_words_every_command_and_each_namespace_s_line(self, app):
         found = (await self._run(app, '--help')).text.splitlines()
-        assert found[0].startswith('fleet <fleet> mine [--for <for>]  ')  # the root's commands, in their order
-        assert 'detachment <detachment> mine [--for <for>]' in _column('\n'.join(found))
+        assert found[0].startswith('fleet <fleet> mine [--for <span>]  ')  # the root's commands, in their order
+        assert 'detachment <detachment> mine [--for <span>]' in _column('\n'.join(found))
         summary = "A service's skeleton group, as each service of a family carries one: mounted by many apps"
         assert [line.split('  ')[0] for line in found[-2:]] == ['relay …', 'gateway …']  # each mount under a prefix
         assert all(summary in line for line in found[-2:])  # its module's docstring
@@ -2031,16 +2031,16 @@ class TestHelpAtAnyDepth:
         relays.mount('_support_service', under='mesh relay', doc="Relay a site's messages.\n\nMore.")
         assert (await self._run(relays, '--help')).text == "mesh relay …  Relay a site's messages."
         assert (await self._run(relays, 'mesh --help')).text == "mesh relay …  Relay a site's messages."
-        assert _column((await self._run(relays, 'mesh relay --help')).text)[0] == 'mesh relay run [--config <config>]'
+        assert _column((await self._run(relays, 'mesh relay --help')).text)[0] == 'mesh relay run [--config <path>]'
 
     async def test_a_command_s_own_where_it_says_one(self, app):
         found = await self._run(app, 'relay run --help')
         assert found.command == 'relay run'
         assert found.text == '\n\n'.join(
             [
-                'relay run [--config <config>]',
+                'relay run [--config <path>]',
                 "Run the service until it's stopped.",
-                '  -c, --config <config>  the config file; left out, the service default',
+                '  -c, --config <path>  the config file; left out, the service default',
             ]
         )
 
@@ -2066,7 +2066,7 @@ class TestHelpAtAnyDepth:
 
     async def test_call_gives_it_too(self, app):
         async with app.open() as session:
-            assert (await session.call('relay --help')).startswith('relay run [--config <config>]')
+            assert (await session.call('relay --help')).startswith('relay run [--config <path>]')
             with pytest.raises(ReadError, match=r"no command 'rela'"):
                 await session.call('rela --help')
 

@@ -14,12 +14,36 @@ tree.read('fleet Prospector dock vesta', names={'fleet': fleets, 'station': stat
 
 | Method | Gives |
 |---|---|
-| `lookup(word, scope)` | the key `word` names, or `None` when it names nothing |
+| `lookup(word, scope)` | the key `word` names, or `None` when it names nothing; or it [says why](#saying-why) |
 | `suggest(word, scope)` | the names close to `word`, the closest first, for a did-you-mean |
 | `options(scope)` | every name it may be, for completion |
 
 How a word matches (case, keys as well as names, spaces) is the resolver's to say. parsed passes the word as the
 line gives it, its quotes left off, and keeps the key it returns.
+
+## Saying why
+
+A resolver often knows more than parsed of why a word names nothing: where to look, or every name there is. Its
+`lookup` may raise a `ValueError` whose message is the reason, and parsed refuses the word with it, as it refuses a
+word its kind can't read:
+
+```python
+class Blueprints:
+    def lookup(self, word, scope):
+        found = self.held(scope).get(word.lower())
+        if found is None:
+            raise ValueError(f'no blueprint {word!r} here: inquire blueprints, docked')
+        return found
+```
+
+```
+fleet f1 acquire <blueprint>: no blueprint 'shield-9' here: inquire blueprints, docked `fleet <fleet> acquire <blueprint>`
+```
+
+The refusal has the command's usage as its hint and no suggestions, since the reason says what's near. A resolver
+that gives `None` is refused as before (`no blueprint 'shield-9'`, with its `suggest`), so one that never raises
+reads as it did. A `PairsResolver`'s `lookup`, and the resolver its `values` gives, may say why alike. Completion
+and rendering take a reason as a word that names nothing.
 
 ## Scopes
 
@@ -76,13 +100,15 @@ A word no name answers to is a [`ReadError`](errors.md#readerror) at that word, 
 the command's usage:
 
 ```
---into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet] [--yes]`
+--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`
 fleet Hauler dock <station>: no station 'vesta' for fleet 'Hauler' `fleet <fleet> dock [<station>]`
 ```
 
-A slot by an alias reads by its own category, so a polymorphic twin's word is refused as that category's:
-`detachment <detachment>: no detachment 'Prospector'`. A pair's key is refused as its category's
-(`no variable 'hme' for routine 'mining'`), and its value by its key (`no home 'mars'`).
+A name is refused by its [term](kinds.md#name), its label or else its category:
+`Name('good_in_deposit', label='ore')` says `no ore 'lab'`. A slot by an alias reads by its own category, so a
+polymorphic twin's word is refused as that category's: `detachment <detachment>: no detachment 'Prospector'`. A
+pair's key is refused by its category's term (`no variable 'hme' for routine 'mining'`), and its value by its key
+(`no home 'mars'`). A resolver that [says why](#saying-why) is refused with its reason instead.
 
 A [literal word](kinds.md#literal-words) comes before the resolver: `Name('station', words={'here': None})` reads
 `here` as `None`, and only `"here"`, quoted, is looked up.

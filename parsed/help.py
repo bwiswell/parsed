@@ -3,7 +3,7 @@
 **A command's help** (``<line> --help``, :func:`command`) is its usage by the phrase the line said, then:
 
 - its docstring;
-- a row for each of its arguments, a slot (``<fleet>``) or a flag (``-c, --config <config>``), with its field's
+- a row for each of its arguments, a slot (``<fleet>``) or a flag (``-c, --config <path>``), with its field's
   ``doc=``, or else what its kind's words are (:meth:`parsed.kinds.Kind.describe`), and ``--yes`` last for one that
   asks first, which its usage ends with too;
 - the other phrases that say it, and its ``EXAMPLES``;
@@ -31,6 +31,7 @@ from ._walk._hints import plain_slot
 from .command import declaration
 from .tree import Arity
 from .wait import FLAGS as WAIT_FLAGS
+from .wait import LABELS as WAIT_LABELS
 from .wait import TIMEOUT
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from .tree import Flag, Tree
 
 #: A wait's flags, as a note says them.
-_WAITS = {'until': '--until <path=value>', 'timeout': '--timeout <span>', 'watch': '--watch', 'count': '--count <n>'}
+_WAITS = {name: f'--{name} <{WAIT_LABELS[name]}>' if name in WAIT_LABELS else f'--{name}' for name in WAIT_FLAGS}
 
 #: An RST role's mark before a literal: ``:class:`Tree``` is written ```Tree```.
 _ROLE = re.compile(r':[a-z]+:`~?([^`]+)`')
@@ -143,7 +144,7 @@ def _what(given: str | None, described: str) -> str:
 
 def _flag(flag: Flag, short: str | None, *, many: bool) -> str:
     """A flag as an argument's row says it: its short form first, then its name, and its value."""
-    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.name}>'
+    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.label}>'
     if many and flag.arity is Arity.VALUE:
         said += ' …'
     return f'-{short}, {said}' if short else said

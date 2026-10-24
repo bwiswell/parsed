@@ -1,9 +1,10 @@
 """What a refusal says besides what's wrong: how a command is said, and what may have been meant.
 
-A **usage** is a phrase with a ``<slot>`` for each slot, then its flags: ``fleets merge <fleet> --into <into>
-[--quiet]``. An optional slot is ``[<n>]``, several words ``<goods> …``, the rest of the line ``<message …>``. A
-required flag stands as it is said; any other is in brackets, a list's flag with ``…`` after it. A command that may
-ask first (``ASKS``) ends with ``[--yes]``, which answers it.
+A **usage** is a phrase with a ``<slot>`` for each slot, then its flags: ``fleets merge <fleet> --into <fleet>
+[--quiet] [--yes]``. An optional slot is ``[<n>]``, several words ``<goods> …``, the rest of the line ``<message
+…>``. A required flag stands as it is said; any other is in brackets, a list's flag with ``…`` after it. A flag's
+value is written by its kind (:func:`label`): ``--for <span>``, ``--into <fleet>``. A command that may ask first
+(``ASKS``) ends with ``[--yes]``, which answers it.
 
 **Did-you-mean** is the standard library's ``difflib``: up to three words or flags close to the one given.
 """
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from seared import Field
 
     from parsed._phrase import Bound, Place
+    from parsed.kinds import Kind
     from parsed.tree import Flag
 
 
@@ -51,10 +53,19 @@ def plain_slot(place: Place) -> str:
     return slot(place).removeprefix('[').removesuffix(']')
 
 
+def label(kind: Kind, field: Field, name: str) -> str:
+    """What a usage writes a flag's value as, between ``<`` and ``>``: ``span``, ``n|off``.
+
+    Its kind's label (:meth:`parsed.kinds.Kind.usage_label`), else ``name``, the flag's; then the kind's literal
+    words, each after a ``|``.
+    """
+    return '|'.join([kind.usage_label(field) or name, *kind.words])
+
+
 def _flag(flag: Flag, field: Field) -> str:
     if flag.arity is Arity.SWITCH:
         return f'[--{flag.name}]'
-    said = f'--{flag.name} <{flag.name}>'
+    said = f'--{flag.name} <{flag.label}>'
     if field.many:
         said = f'{said} …'
     return said if field.required else f'[{said}]'
