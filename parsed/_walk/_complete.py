@@ -44,7 +44,7 @@ from ._walker import (
     _taken,
     _Walker,
 )
-from ._words import Token, split
+from ._words import Token, split, word
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -90,9 +90,9 @@ def complete(tree: Tree, text: str, names: Mapping[str, Resolver] | None = None)
     said = '' if partial is None else partial.text.lower()
     quoted = partial is not None and partial.quoted
     words: list[str] = []
-    for word, literal in found:
-        typed = _typed(word)
-        if (quoted and literal) or typed in words or not word.lower().startswith(said):
+    for offer, literal in found:
+        typed = _typed(offer)
+        if (quoted and literal) or typed in words or not offer.lower().startswith(said):
             continue
         words.append(typed)
     return Completion(words=words, replace=0 if partial is None else len(text) - partial.start)
@@ -366,6 +366,6 @@ def _field(end: End, attr: str) -> Field:
     return next(spec.field for spec in end.declaration.cls.__seared_fields__ if spec.attr == attr)
 
 
-def _typed(word: str) -> str:
-    """A candidate as it would be typed: quoted, when it's empty or holds a space."""
-    return f'"{word}"' if not word or any(ch.isspace() for ch in word) else word
+def _typed(text: str) -> str:
+    """A candidate as it would be typed: quoted, when it's empty or holds a space; a double quote in it escaped."""
+    return word(text)

@@ -173,6 +173,6 @@ class TestTheLine:
         assert line_of(['say', '', 'x']) == 'say "" x'
         assert line_of([]) == ''
 
-    def test_a_double_quote_among_several_is_refused(self):
-        with pytest.raises(ReadError, match=r"'a\"b' holds a double quote, which no word of a line can"):
-            line_of(['say', 'a"b'])
+    def test_a_double_quote_among_several_escaped(self):
+        assert line_of(['call', 't', '--args', '{"station": "s1"}']) == r'call t --args "{\"station\": \"s1\"}"'
+        assert line_of(['say', 'a"b']) == r'say a\"b'

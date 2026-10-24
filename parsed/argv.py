@@ -10,8 +10,9 @@
   ``--dry-run``), which are the line's: they stand first on it. ``--`` ends them.
 - **After the first word, every flag is the line's,** never the program's: ``prog relay run --config c.toml`` gives
   the line its ``--config``.
-- **The arguments are the line's words,** each as the shell gave it, one with a space quoted (``fleet f1 dock "Vesta
-  Ring"``). A single argument is the whole line, so a caller quotes once: ``prog "look log --n 40"``.
+- **The arguments are the line's words,** each as the shell gave it: one with a space quoted (``fleet f1 dock "Vesta
+  Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``. A
+  single argument is the whole line, so a caller quotes once: ``prog "look log --n 40"``.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from seared.doc import is_seared_class
 from ._walk._hints import close, label
 from ._walk._terms import RESERVED, Arity
 from ._walk._walker import _flag, _given, _is_short, _text
-from ._walk._words import Token
+from ._walk._words import Token, word
 from .command import _kinds, _shorts
 from .errors import DeclarationError, ReadError
 from .help import rows
@@ -179,7 +180,7 @@ def read(args: Sequence[str], options: Options) -> Said:
 
     Raises:
         ReadError: A root option the program doesn't take, given twice, missing its value, or holding one its field
-            refuses; or an argument with a double quote among several.
+            refuses.
     """
     tokens, at = _tokens(args), 0
     given: dict[str, list[Token | None]] = {}
@@ -225,20 +226,14 @@ def _own(token: Token, name: str, value: Token | None, own: set[str], shown: str
 
 
 def line_of(args: Sequence[str]) -> str:
-    """The line a program's arguments say: a single one as it is, several each a word, one with a space quoted.
+    r"""The line a program's arguments say: a single one as it is; several each a word, as given.
 
-    Raises:
-        ReadError: Of several, one holds a double quote, which no word of a line can hold.
+    Each of several is written so the line reads it back as given (:func:`parsed._walk._words.word`): quoted where it
+    holds a space or is empty, each double quote in it written ``\"``.
     """
     if len(args) == 1:
         return args[0]
-    words: list[str] = []
-    for arg in args:
-        if '"' in arg:
-            msg = f'{arg!r} holds a double quote, which no word of a line can: say the line as one argument'
-            raise ReadError(msg, line=' '.join(args), word=arg)
-        words.append(f'"{arg}"' if not arg or any(ch.isspace() for ch in arg) else arg)
-    return ' '.join(words)
+    return ' '.join(word(arg) for arg in args)
 
 
 def _tokens(args: Sequence[str]) -> list[Token]:
