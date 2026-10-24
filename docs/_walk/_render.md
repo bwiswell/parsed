@@ -37,7 +37,8 @@ words, single-spaced, or as one quoted word where its own spacing differs.
 | nothing at all | `""` |
 | in a step, spelled `then`, case aside, since a step's line is cut there | `move "then"` |
 
-A value holding a double quote can't be said, since a line has no escapes, and raises a `RenderError`.
+A double quote in a value is escaped, `\"` ([`_words.md`](_words.md)), so every string can be said: `say "a"`
+renders `say say \"a\"`, which reads back to it.
 
 **Then the flags,** in the order the command declares its fields, each not at its default: a switch alone
 (`--quiet`, or `--no-stop` for one that defaults to `True`), a value after its name (`--for 1h30m`), and a list's

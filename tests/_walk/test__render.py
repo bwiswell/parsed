@@ -89,9 +89,10 @@ class TestQuoting:
         cls = sell.commands[0].cls
         assert sell.render(cls(goods=['iron', 'now'])) == 'sell iron "now" now'
 
-    def test_a_double_quote_can_t_be_said(self, fixtures):
-        with pytest.raises(RenderError, match=r"can't be said on a line: a word can't hold a double quote"):
-            fixtures.render(farlandia.Say(message='say "hi"'))
+    def test_a_double_quote_escaped(self, fixtures):
+        command = farlandia.Say(message='say "hi"')
+        assert fixtures.render(command) == r'say say \"hi\"'  # the rest of the line, each word as a line says it
+        assert fixtures.read(fixtures.render(command)) == command
 
 
 class TestPhrases:

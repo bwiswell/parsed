@@ -179,6 +179,18 @@ class TestAnAgentsTooling:
         _, said = self._read(tooled, capsys, 'listen', 'FleetState', '--count', '3', '--for', '30s', '--meta')
         assert (said['count'], said['for'], said['meta'], said['slots']) == (3, 30.0, True, [])
 
+    def test_json_arguments_as_the_shell_gives_them(self, tooled, capsys):
+        # `tooled call t --args '{"station": "s1"}'`: the shell gives the argument with its double quotes.
+        _, said = self._read(tooled, capsys, 'call', 'dock', '--args', '{"station": "s1", "note": "a \\"b\\""}')
+        assert json.loads(said['args']) == {'station': 's1', 'note': 'a "b"'}
+        _, said = self._read(tooled, capsys, 'query', 'Prices', 'station=s1', '--request', '{"good": "iron"}')
+        assert (said['request'], said['slots']) == ('{"good": "iron"}', ['station=s1'])
+
+    def test_a_condition_on_a_string_that_reads_as_a_number(self, tooled, capsys):
+        # `--until 'name="40"'`: the string "40", where `name=40` would be the number.
+        _, said = self._read(tooled, capsys, 'wait', 'FleetState', '--until', 'name="40"')
+        assert said['until'] == ['name="40"']
+
     def test_an_invoke_s_dry_run_and_its_negated_switch(self, tooled, capsys):
         code, out, _ = _main(tooled, capsys, 'invoke', 'FleetOrder', 'fleet=f1', '--dry-run', '--no-retry')
         assert (code, out.strip().endswith('(a dry run)')) == (0, True)

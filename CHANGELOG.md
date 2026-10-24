@@ -7,6 +7,24 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.2.1 — unreleased
+
+**Arguments as given.**
+
+### Added
+
+- **A word may hold a double quote:** a backslash right before one makes it a plain character, quoted or not, so
+  `--args "{\"station\": \"s1\"}"` reads `{"station": "s1"}`; any other backslash is itself (`C:\temp`). A command
+  line's argument holding one reads as given, so at a shell `call t --args '{"station": "s1"}'` gives the field the
+  JSON, and `line_of` no longer refuses it; `render` writes a value holding one, and completion offers a name
+  holding one, each escaped. `parsed._walk._words.word(text)` writes any string as a word that reads back to it.
+
+### Changed
+
+- **Breaking: a backslash right before a double quote escapes it.** It was a plain backslash, and the quote opened
+  or closed: `"C:\dir\"`, which read `C:\dir\`, now leaves its quote open, and is refused. Say it `"C:\dir"\`, or
+  `C:\dir\` where it holds no space. No other line reads differently.
+
 ## 0.2.0 — 2026-10-24
 
 **The first real version.** Its public surface is settled: a breaking change waits for a minor version from here.

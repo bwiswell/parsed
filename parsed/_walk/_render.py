@@ -1,4 +1,4 @@
-"""Rendering: a command's instance back to the line that says it, so the tree reads that line to the same instance.
+r"""Rendering: a command's instance back to the line that says it, so the tree reads that line to the same instance.
 
 ``render(tree, command, names)`` takes the first of the command's phrases that can say it:
 
@@ -10,7 +10,7 @@
 **Each value is written by its field's kind** (:meth:`parsed.kinds.Kind.write`): a literal word for a value one reads
 to, else the kind's own spelling, from the field's wire value. **A word is quoted** where the line would read it
 otherwise: a value spelled like a literal word that may stand there (``dock "nearest"``), one with a space, one that
-begins with ``--``, or none at all. A value holding a double quote can't be said, since a line has no escapes.
+begins with ``--``, or none at all; a double quote in one is escaped (``\"``), so every string can be said.
 
 **Then the flags,** in the order the command declares its fields, each not at its default: a switch alone
 (``--quiet``, or ``--no-stop`` for one that defaults to ``True``), a value after its name, and a list's given once for
@@ -33,6 +33,7 @@ from parsed.kinds import Name, Pairs
 
 from ._terms import THEN, Arity, SlotKind
 from ._walker import _key, _Moved, _shared, head_of
+from ._words import word
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
@@ -289,10 +290,6 @@ class _Saying:
         return words
 
 
-def _quoted(word: str, literals: Collection[str]) -> str:
+def _quoted(text: str, literals: Collection[str]) -> str:
     """A word as a line says it: quoted where it would read as a literal, hold a space, or begin as a flag."""
-    if '"' in word:
-        msg = f"{word!r} can't be said on a line: a word can't hold a double quote"
-        raise RenderError(msg)
-    plain = word and not any(ch.isspace() for ch in word) and not word.startswith('--')
-    return word if plain and word.lower() not in literals else f'"{word}"'
+    return word(text, quoted=text.startswith('--') or text.lower() in literals)
