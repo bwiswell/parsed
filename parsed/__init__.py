@@ -68,7 +68,7 @@ from .names import Resolver
 from .reply import Ask, Result
 from .tree import Tree
 
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 __all__ = [
     'UUID',
