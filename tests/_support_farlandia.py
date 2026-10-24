@@ -29,7 +29,7 @@ import enum
 
 # At runtime: tooling evaluates a command's annotations (`typing.get_type_hints`).
 from datetime import timedelta  # noqa: TC003
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import parsed
 
@@ -84,6 +84,31 @@ class Variables(Table):
     def values(self, key: str, scope: str | None) -> parsed.Resolver | None:
         held = [self.routines[scope]] if scope in self.routines else list(self.routines.values())
         return next((found[key] for found in held if key in found), None)
+
+
+class Saying:
+    """A resolver that says why a word names nothing, as an app's may: where to look. Else it reads as ``inner``.
+
+    ``reason`` is its message, with the word and the scope put in: ``'no station {word!r} in reach of {scope}'``.
+    """
+
+    def __init__(self, inner: parsed.Resolver, reason: str) -> None:
+        self.inner, self.reason = inner, reason
+
+    def lookup(self, word: str, scope: str | None) -> str | None:
+        found = self.inner.lookup(word, scope)
+        if found is None:
+            raise ValueError(self.reason.format(word=word, scope=scope))
+        return found
+
+    def suggest(self, word: str, scope: str | None) -> list[str]:
+        return list(self.inner.suggest(word, scope))
+
+    def options(self, scope: str | None) -> list[str]:
+        return list(self.inner.options(scope))
+
+    def values(self, key: str, scope: str | None) -> parsed.Resolver | None:
+        return cast('parsed.names.PairsResolver', self.inner).values(key, scope)
 
 
 #: The system each scope is in: a fleet, where it is; a system, itself; a site, its own.
@@ -165,7 +190,7 @@ class FleetMine(FleetCommand):
     PHRASE = 'fleet {fleet} mine'
     EXTRA_PHRASES = ('detachment {detachment} mine',)
     POLYMORPHIC = True
-    EXAMPLES = ('fleet <fleet> mine', 'fleet <fleet> mine --for <for>', 'fleet prospector mine --for 1h30m')
+    EXAMPLES = ('fleet <fleet> mine', 'fleet <fleet> mine --for <span>', 'fleet prospector mine --for 1h30m')
 
     for_: timedelta | None = parsed.TimeDelta(data_key='for', default=None, doc='stop after this long')
 

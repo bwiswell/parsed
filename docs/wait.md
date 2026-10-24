@@ -105,5 +105,5 @@ condition is any condition, the bound is the default, and a count is none.
 | `Condition(path, value, text)` | one `--until`; `Condition.parse(text)`, `find(wire)`, `met(wire)` |
 | `Wait(until, timeout, watch, count)` | a read's wait, or its watch; `met(reply)` |
 | `problem(condition, reply)` | why a condition's path names nothing in a reply class's dump schema, and what may have been meant; `None` when it names a field |
-| `FLAGS` | `('until', 'timeout', 'watch', 'count')`; `SWITCHES`, `{'watch'}` |
+| `FLAGS` | `('until', 'timeout', 'watch', 'count')`; `SWITCHES`, `{'watch'}`; `LABELS`, what a usage writes each value as: `path=value`, `span`, `n` |
 | `TIMEOUT` | `30.0`, seconds |

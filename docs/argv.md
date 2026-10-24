@@ -72,7 +72,7 @@ hold.
 ## In this module
 
 - `options_of(prog, cls, version)` declares and checks an app's root options, giving `Options`: their flags, shorts
-  and kinds, `defaults()`, `usage()` (`servicectl [--config <config>] [--quiet] [--version] <command> …`) and
+  and kinds, `defaults()`, `usage()` (`servicectl [--config <path>] [--quiet] [--version] <command> …`) and
   `help()`, the usage then a row for each root option and `--version`, each with its field's `doc=` or what its
   words are.
 - `read(args, options)` reads a program's arguments to `Said`: the root options loaded, parsed's own flags given

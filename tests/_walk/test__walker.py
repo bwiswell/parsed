@@ -172,6 +172,20 @@ class _Recording:
 
 
 @parsed.parsed
+class Dig(Command):
+    """A fleet's dig, its ore a name of a category whose label says what a person calls it."""
+
+    PHRASE = 'fleet {fleet} dig'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {
+        'fleet': farlandia.FLEET,
+        'ore': parsed.Name('good_in_deposit', scope='fleet', label='ore'),
+    }
+
+    fleet: str = parsed.Str(required=True)
+    ore: str | None = parsed.Str(default=None)
+
+
+@parsed.parsed
 class Board(Command):
     """A station boarded, scoped by a fleet given after it, or not at all."""
 
@@ -229,16 +243,45 @@ class TestNames:
     def test_a_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleets merge Prospector --into Haulr', names=farlandia.NAMES)
         assert str(found) == (
-            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet] [--yes]`"
+            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`"
         )
         assert (found.kind, found.column, found.word, found.field) == ('usage', 31, 'Haulr', 'into')
         assert found.suggestions == ('Hauler',)
-        assert found.hint == 'fleets merge <fleet> --into <into> [--quiet] [--yes]'
+        assert found.hint == 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'
 
     def test_a_list_s_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleet f1 sell iron gold', names=farlandia.NAMES)
         assert (found.word, found.column, found.field) == ('gold', 19, 'goods')
         assert found.message.startswith("fleet f1 sell <goods> …: no good 'gold'")
+
+    def test_a_resolver_that_says_why(self, tree):
+        reason = 'no station {word!r} in reach of {scope}: fleet <fleet> scan lists them'
+        stations = farlandia.Saying(farlandia.STATIONS, reason)
+        found = _refusal(tree, 'fleet Hauler dock vesta', names={**farlandia.NAMES, 'station': stations})
+        assert str(found) == (
+            "fleet Hauler dock <station>: no station 'vesta' in reach of f2: fleet <fleet> scan lists them "
+            '`fleet <fleet> dock [<station>]`'
+        )
+        assert (found.kind, found.word, found.field) == ('usage', 'vesta', 'station')
+        assert found.suggestions == ()  # the reason says what's near
+        assert found.hint == 'fleet <fleet> dock [<station>]'
+        assert tree.read('fleet Hauler dock ceres', names={**farlandia.NAMES, 'station': stations}).station == 'ceres'
+
+    def test_a_flag_s_resolver_that_says_why(self, tree):
+        fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}: fleets list names them')
+        found = _refusal(tree, 'fleets merge Prospector --into Haulr', names={**farlandia.NAMES, 'fleet': fleets})
+        assert found.message == (
+            "--into: no fleet 'Haulr': fleets list names them `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`"
+        )
+        assert (found.word, found.field, found.suggestions) == ('Haulr', 'into', ())
+
+    def test_a_name_said_by_its_label(self):
+        names = {**farlandia.NAMES, 'good_in_deposit': farlandia.GOODS}
+        digs = Tree([Dig])
+        assert digs.read('fleet f1 dig --ore Iron', names=names).ore == 'iron'
+        found = _refusal(digs, 'fleet f1 dig --ore lab', names=names)
+        assert found.message.startswith("--ore: no ore 'lab' for fleet 'f1' `")  # not good_in_deposit, its category
+        assert found.hint == 'fleet <fleet> dig [--ore <ore>]'
 
 
 class TestLiteralWords:
@@ -310,6 +353,39 @@ class TestPairs:
         found = _refusal(tree, line, names=farlandia.NAMES)
         assert re.search(says, str(found))
         assert (found.word, found.field) == (word, 'variables')
+
+    def test_a_key_s_resolver_and_a_value_s_that_say_why(self, tree):
+        variables = farlandia.Variables(
+            {'mining': {'ore': farlandia.Saying(farlandia.GOODS, 'no ore {word!r}: the deposit holds iron and coal')}}
+        )
+        keys = farlandia.Saying(variables, 'no variable {word!r} for {scope}: routines show {scope} lists them')
+        names = {**farlandia.NAMES, 'variable': keys}
+        hint = ' `fleet <fleet> run <routine> [<variables …>]`'
+        found = _refusal(tree, 'fleet f1 run mining hme iron', names=names)
+        assert found.message == (
+            f"fleet f1 run mining <variables …>: no variable 'hme' for mining: routines show mining lists them{hint}"
+        )
+        found = _refusal(tree, 'fleet f1 run mining ore gold', names=names)
+        assert found.message == (
+            f"fleet f1 run mining <variables …>: no ore 'gold': the deposit holds iron and coal{hint}"
+        )
+        assert (found.word, found.suggestions) == ('gold', ())
+
+    def test_a_key_said_by_its_label(self):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = 'run {routine} {variables**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {
+                'routine': parsed.Name('routine'),
+                'variables': parsed.kinds.Pairs('routine_variable', scope='routine', label='variable'),
+            }
+
+            routine: str = parsed.Str(required=True)
+            variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        names = {**farlandia.NAMES, 'routine_variable': farlandia.NAMES['variable']}
+        found = _refusal(Tree([Run]), 'run mining hme vesta', names=names)
+        assert found.message.startswith("run mining <variables …>: no variable 'hme' for routine 'mining';")
 
     def test_a_plain_resolver_for_pairs_is_a_mistake_in_the_app(self, tree):
         names = {**farlandia.NAMES, 'variable': farlandia.Table({'ore': 'ore'})}
@@ -411,7 +487,7 @@ class TestWaits:
                 'fleet f1 mine --until docked=true',
                 (
                     "fleet f1 mine can't wait: --until is for a read, a command that declares EFFECT = READ and a "
-                    'REPLY `fleet <fleet> mine [--for <for>]`'
+                    'REPLY `fleet <fleet> mine [--for <span>]`'
                 ),
                 '--until',
             ),
@@ -678,7 +754,9 @@ def shorts() -> Tree:
 class TestShortFlags:
     def test_a_short_says_its_flag(self, shorts):
         assert shorts.read('run -c c.toml') == service.Run(config=Path('c.toml'))
-        assert shorts.walk('run -c c.toml').given['config'].by == Flag(name='config', field='config', arity='value')
+        assert shorts.walk('run -c c.toml').given['config'].by == Flag(
+            name='config', field='config', arity='value', label='path'
+        )
 
     def test_h_is_help_s(self, shorts):
         assert shorts.walk('run -h').own == {'help'}
@@ -725,7 +803,7 @@ class TestReading:
         assert list(reading.given) == ['fleet', 'into', 'quiet']
         fleet, into, quiet = reading.given.values()
         assert (fleet.by.slot, [w.text for w in fleet.words], fleet.value) == ('fleet', ['f1'], 'f1')
-        assert into.by == Flag(name='into', field='into', arity=parsed.tree.Arity.VALUE)
+        assert into.by == Flag(name='into', field='into', arity=parsed.tree.Arity.VALUE, label='fleet')
         assert ([w.raw for w in into.words], into.value) == (['--into', 'f2'], 'f2')
         assert ([w.start for w in quiet.words], quiet.value) == ([26], True)
 
@@ -763,8 +841,8 @@ class TestRefusals:
             ('say "hello', r'the quote at column 5 is never closed'),
             ('log --n 3', r'no command takes --n'),
             ('log --into f2', r'log takes no --into `log \[<n>\]`'),
-            ('fleet f1 mine --into f2', r'fleet f1 mine takes no --into `fleet <fleet> mine \[--for <for>\]`'),
-            ('fleets merge f1', r'fleets merge f1 needs --into `fleets merge f1 --into <into>`'),
+            ('fleet f1 mine --into f2', r'fleet f1 mine takes no --into `fleet <fleet> mine \[--for <span>\]`'),
+            ('fleets merge f1', r'fleets merge f1 needs --into `fleets merge f1 --into <fleet>`'),
             ('fleet f1 mine --for', r'--for needs a value'),
             ('fleet f1 mine --for --yes', r'--for needs a value'),
             ('fleet f1 mine --for -- 90', r'--for needs a value'),
@@ -821,14 +899,14 @@ class TestRefusalsAsData:
             ('fleet f1 jump nearest', 'fleet f1 jump nearest <ore>'),
             ('log 40 50', 'log [<n>]'),
             ('log --into f2', 'log [<n>]'),
-            ('fleet f1 mine --for', '--for <for>'),
-            ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <into>'),
-            ('fleets merge', 'fleets merge <fleet> --into <into> [--quiet] [--yes]'),  # one command past it: its usage
+            ('fleet f1 mine --for', '--for <span>'),
+            ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <fleet>'),
+            ('fleets merge', 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'),  # one command past it: its usage
             ('ships make s1 add', 'ships make s1 add <part>'),
             ('fleet f1 sell', 'fleet f1 sell <goods> …'),
             (
                 'handheld connect',
-                'handheld connect <source> <reader_id> --host <host> [--port <port>] [--label <label>]',
+                'handheld connect <source> <reader_id> --host <host> [--port <n>] [--label <label>]',
             ),
         ],
     )
@@ -954,7 +1032,7 @@ class TestFarlandiasCases:
     Lifted: words, slots and flags anywhere after the first word; a slot of several words; a span of time and true or
     false; the refusals that are the walk's, with did-you-mean and a usage for a hint. Changed on purpose: ``--quiet
     yes`` reads ``yes`` as a word, since the tree knows ``--quiet`` is a switch; a flag the command doesn't take says
-    so with the command's usage (``takes no --into `fleet <fleet> mine [--for <for>]```), and a required flag left out
+    so with the command's usage (``takes no --into `fleet <fleet> mine [--for <span>]```), and a required flag left out
     with the line it's missing from. Later: a share's ``off`` or percent (a kind of its own), names alone (names),
     chains and subjects, ``--help``, completion, schemas and ``render``.
     """
@@ -974,7 +1052,7 @@ class TestFarlandiasCases:
             ('fleet', 'which fleet'),
             ('fleet f1 progrms', "no command 'fleet f1 progrms'"),
             ('fleet f1 jump', 'which system'),
-            ('fleet f1 mine --into f2', 'takes no --into `fleet <fleet> mine \\[--for <for>\\]`'),
+            ('fleet f1 mine --into f2', 'takes no --into `fleet <fleet> mine \\[--for <span>\\]`'),
             ('fleets merge f1', '--into'),
             ('fleet f1 mine --for 1h --for 2h', 'given twice'),
             ('fleet f1 mine --for', 'needs a value'),

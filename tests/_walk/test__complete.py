@@ -111,6 +111,12 @@ class TestNames:
     def test_no_resolver_no_names(self, tree):
         assert _words(tree, 'fleet ') == []
 
+    def test_a_scope_whose_resolver_says_why_as_one_that_names_nothing(self, tree):
+        fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}')
+        names = {**farlandia.NAMES, 'fleet': fleets}
+        assert _words(tree, 'fleet Nobody dock ', names) == _words(tree, 'fleet Nobody dock ', farlandia.NAMES)
+        assert _words(tree, 'fleet Hauler dock ', names) == ['Ceres', 'nearest', 'then']
+
 
 class TestPairs:
     def test_the_keys_scoped_by_the_routine(self, tree):
@@ -126,6 +132,11 @@ class TestPairs:
 
     def test_a_key_whose_values_read_as_typed(self, tree):
         assert _words(tree, 'fleet f1 run patrol route ', farlandia.NAMES) == []
+
+    def test_a_key_whose_resolver_says_why_as_one_that_names_nothing(self, tree):
+        names = {**farlandia.NAMES, 'variable': farlandia.Saying(farlandia.NAMES['variable'], 'no variable {word!r}')}
+        assert _words(tree, 'fleet f1 run mining hme ', names) == []
+        assert _words(tree, 'fleet f1 run mining ore ', names) == ['Iron', 'Coal']
 
 
 @parsed.parsed

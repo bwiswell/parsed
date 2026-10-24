@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from seared.doc import render_enums, render_fields_table, render_header, render_variants
 
+from parsed._walk._hints import label
 from parsed.tree import Tree
 
 from .introspect import CommandDoc, introspect_command
@@ -95,7 +96,7 @@ def _arguments(found: CommandDoc) -> str:
         said = f'<{slot.name} …>' if slot.rest else f'<{slot.name}> …' if slot.many else f'<{slot.name}>'
         rows.append(f'| `{said}` | `{slot.field}` | {_cell(slot.kind.describe(fields[slot.field]))} |')
     for flag in found.flags:
-        said = f'--{flag.name}' if flag.switch else f'--{flag.name} <{flag.name}>'
+        said = f'--{flag.name}' if flag.switch else f'--{flag.name} <{label(flag.kind, fields[flag.field], flag.name)}>'
         said = f'`-{flag.short}`, `{said}`' if flag.short else f'`{said}`'
         what = ('off when given' if flag.negated else 'on when given') if flag.switch else None
         what = what or flag.kind.describe(fields[flag.field])

@@ -32,7 +32,7 @@ from parsed.errors import RenderError
 from parsed.kinds import Name, Pairs
 
 from ._terms import THEN, Arity, SlotKind
-from ._walker import _Moved, _shared, head_of
+from ._walker import _key, _Moved, _shared, head_of
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
@@ -249,7 +249,7 @@ class _Saying:
             scope = self._value(kind.scope) if kind.scope is not None else None
         values = self._value(place.field)
         each = values if isinstance(values, list) else [values]
-        return all(resolver.lookup(str(value), None if scope is None else str(scope)) is not None for value in each)
+        return all(_key(resolver, str(value), None if scope is None else str(scope)) is not None for value in each)
 
     def _slot_words(self, place: Place, kind: SlotKind, node: Node, after: Node) -> list[str]:
         """A slot's value as words, each quoted where the line would read it otherwise."""

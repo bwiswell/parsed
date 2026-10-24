@@ -36,7 +36,8 @@ The words before the one being typed are read loosely, as far as they go, and wh
 
 A name's scope is its field's words so far, read by the scope's own resolver: `fleet Hauler dock ` offers the
 stations within Hauler's reach, and `board --fleet Hauler ` does too; `fleet Hauler jump vruba then dock ` offers
-those in Vruba, where it will be. A quoted word is a value, so while one is typed, no literal word or flag is
+those in Vruba, where it will be. A scope, or a pair's key, that its resolver says names nothing (`None`, or a
+reason it raises) is kept as typed. A quoted word is a value, so while one is typed, no literal word or flag is
 offered. A candidate with a space in it comes back quoted, so it replaces the word being typed whole. A line whose
 words don't read as far as they go is offered nothing. Flags are offered by their names, never their short forms,
 though a short already typed (`-c relay.toml`) takes its value as its flag would.

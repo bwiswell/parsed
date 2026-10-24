@@ -29,6 +29,7 @@ import difflib
 import json
 from dataclasses import dataclass
 from functools import cache
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from seared.doc import json_schema
@@ -43,6 +44,9 @@ FLAGS = ('until', 'timeout', 'watch', 'count')
 
 #: Those of :data:`FLAGS` that are switches; the others take a value.
 SWITCHES = frozenset({'watch'})
+
+#: What a usage writes each of :data:`FLAGS` that takes a value as, between ``<`` and ``>``.
+LABELS = MappingProxyType({'until': 'path=value', 'timeout': 'span', 'count': 'n'})
 
 #: How long a wait waits, in seconds, unless ``--timeout`` says.
 TIMEOUT = 30.0

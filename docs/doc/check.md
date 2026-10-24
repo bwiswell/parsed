@@ -26,7 +26,7 @@ A field read by a kind with a form of its own takes the kind's example instead, 
 fit. A command whose required field takes none of them (a pattern no word fits) has no round trips, and is listed
 under `skipped` with that field. Its examples and its schema are still checked, so an `EXAMPLES` line covers it.
 
-**An example's `<name>` stands for any value,** as help writes one (`fleet <fleet> mine --for <for>`): the walk
+**An example's `<name>` stands for any value,** as help writes one (`fleet <fleet> mine --for <span>`): the walk
 reads it by no kind and no resolver ([`_walk/_walker.md`](../_walk/_walker.md#placeholders)), and the line must end
 at the command whose example it is. A line with no placeholder is loaded too, so its values keep their bounds:
 `log 0` is refused where `log {n}` has `ge=1`.

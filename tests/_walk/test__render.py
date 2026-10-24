@@ -111,6 +111,13 @@ class TestPhrases:
         with pytest.raises(RenderError, match=r'no phrase of FleetMine says .*, with the names given'):
             fixtures.render(farlandia.FleetMine(fleet='nobody'), names=farlandia.NAMES)
 
+    def test_a_resolver_that_says_why_as_one_that_names_nothing(self, fixtures):
+        fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}: fleets list names them')
+        names = {**farlandia.NAMES, 'fleet': fleets}
+        assert fixtures.render(farlandia.FleetMine(fleet='f1'), names=names) == 'fleet f1 mine'
+        with pytest.raises(RenderError, match=r'no phrase of FleetMine says .*, with the names given'):
+            fixtures.render(farlandia.FleetMine(fleet='nobody'), names=names)
+
     def test_not_one_of_the_tree_s(self, fixtures):
         with pytest.raises(RenderError, match=r"FleetView is not one of the tree's commands"):
             fixtures.render(farlandia.FleetView(fleet='f1'))  # ty: ignore[invalid-argument-type]

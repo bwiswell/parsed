@@ -126,6 +126,23 @@ class TestName:
         with pytest.raises(DeclarationError, match=r"Name\('station', follows='yes'\): True or False"):
             Name('station', scope='fleet', follows='yes')  # ty: ignore[invalid-argument-type] -- what's refused
 
+    def test_a_label_what_a_person_calls_one(self):
+        ore = Name('good_in_deposit', scope='fleet', label='ore')
+        assert (ore.category, ore.label, ore.term) == ('good_in_deposit', 'ore', 'ore')
+        assert Name('fleet').label is None
+        assert Name('fleet').term == 'fleet'  # its category, by default
+        assert Name('trade_route', label='trade route').term == 'trade route'
+        assert ore != Name('good_in_deposit', scope='fleet')  # it reads alike, but says another word
+
+    def test_a_label_is_keyword_only(self):
+        with pytest.raises(TypeError):
+            Name('good', 'fleet', False, 'ore')  # noqa: FBT003  # ty: ignore[too-many-positional-arguments] -- refused
+
+    @pytest.mark.parametrize('label', ['', ' ore', 'ore ', 'two  spaces', '<ore>', 'ore|good', 3])
+    def test_a_label_is_words(self, label):
+        with pytest.raises(DeclarationError, match=r'a label is words a person says, such as ore'):
+            Name('good', label=label)
+
 
 _ID = str(uuid.UUID(int=7))
 
@@ -258,6 +275,11 @@ class TestNamed:
             Pairs('a b')
         with pytest.raises(DeclarationError, match=r"Pairs\('variable', scope='the routine'\): a scope is the name"):
             Pairs('variable', scope='the routine')
+        with pytest.raises(DeclarationError, match=r"Pairs\('variable', label='<v>'\): a label is words"):
+            Pairs('variable', label='<v>')
+
+    def test_pairs_take_a_label_as_a_name_does(self):
+        assert Pairs('routine_variable', scope='routine', label='variable').term == 'variable'
 
     def test_a_name_s_form_is_the_word_as_typed(self):
         assert Name('fleet').form('Prospector', seared.Str()) == 'Prospector'
@@ -300,7 +322,12 @@ class TestDescribing:
             (Moment(), seared.DateTime(), 'a date and time, such as 2026-10-21T14:30'),
             (Name('station'), seared.Str(), 'a station'),
             (Name('station', scope='fleet'), seared.Str(), 'a station, within its fleet'),
+            (Name('good_in_deposit', scope='fleet', label='ore'), seared.Str(), 'an ore, within its fleet'),
+            (Name('item'), seared.Str(), 'an item'),
+            (Name('unit'), seared.Str(), 'a unit'),
+            (Name('upgrade'), seared.Str(), 'an upgrade'),
             (Pairs('variable', scope='routine'), seared.Str(keyed=True), 'variable and value pairs'),
+            (Pairs('routine_variable', label='variable'), seared.Str(keyed=True), 'variable and value pairs'),
         ],
     )
     def test_each_kind_s_own(self, kind, field, said):
@@ -320,6 +347,42 @@ class TestDescribing:
                 return 'a hex number, such as ff'
 
         assert Hex(words={'none': None}).describe(seared.Str()) == 'a hex number, such as ff, or none'
+
+
+class TestUsageLabels:
+    # What a usage writes a flag's value as, between `<` and `>`; `None` leaves it to the flag's name.
+    @pytest.mark.parametrize(
+        ('kind', 'field', 'label'),
+        [
+            (Word(), seared.Str(), None),
+            (Word(), seared.Path(), 'path'),
+            (Word(), seared.UUID(), 'uuid'),
+            (Number(), seared.Int(), 'n'),
+            (Number(suffix='%'), seared.Float(), 'n'),
+            (Switch(), seared.Bool(), 'true|false'),
+            (Choice(), seared.Enum(enum=Colour), 'red|green|blue'),
+            (Duration(), seared.TimeDelta(), 'span'),
+            (Moment(), seared.Date(), 'date'),
+            (Moment(), seared.Time(), 'time'),
+            (Moment(), seared.DateTime(), 'datetime'),
+            (Name('fleet'), seared.Str(), 'fleet'),
+            (Name('good_in_deposit', label='ore'), seared.Str(), 'ore'),
+            (Pairs('variable'), seared.Str(keyed=True), 'variable'),
+        ],
+    )
+    def test_each_kind_s_own(self, kind, field, label):
+        assert kind.usage_label(field) == label
+
+    def test_a_kind_of_an_app_s_own_says_none_unless_it_gives_one(self):
+        class Hex(Kind):
+            pass
+
+        class Colour(Kind):
+            def usage_label(self, field):
+                return 'colour'
+
+        assert Hex().usage_label(seared.Str()) is None
+        assert Colour().usage_label(seared.Str()) == 'colour'
 
 
 class TestWriting:

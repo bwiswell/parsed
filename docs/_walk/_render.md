@@ -17,7 +17,8 @@ The first of the command's phrases, `PHRASE` and then each of `EXTRA_PHRASES`, t
 - **a field the phrase leaves out holds its default,** and an optional slot holding its field's default is left out
   too, as the line it reads from would have (`FleetDock(fleet='f1')` is `fleet f1 dock`);
 - **with names,** each slot read by a `Name` with a resolver holds a key the resolver knows, given its scope, so a
-  detachment's key is said by the detachment's twin and not by the fleet's phrase. Loose, any value does.
+  detachment's key is said by the detachment's twin and not by the fleet's phrase; a key it gives a reason for is
+  one it doesn't know. Loose, any value does.
 
 ## The words
 
