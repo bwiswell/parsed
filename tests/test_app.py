@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 import threading
 from datetime import timedelta
@@ -77,6 +78,15 @@ class TestMounting:
         assert _mount(app, 'gateway').params == service.GatewaySettings()
         assert _mount(app, '').params is None
 
+    def test_its_doc_its_module_s_unless_given(self, app):
+        relay = _mount(app, 'relay')
+        assert relay.doc is not None
+        assert relay.doc.startswith("A service's skeleton group")
+        assert relay.summary == relay.doc.splitlines()[0]
+        given = App('p').mount('_support_service', doc='  Relay a site.\n\n  More.  ')
+        assert (given.doc, given.summary) == ('Relay a site.\n\nMore.', 'Relay a site.')
+        assert App('p').mount(Tree([Hail])).summary == _mount_summary()
+
     def test_a_line_that_would_read_two_ways_names_both_mounts(self, app):
         pattern = r"_support_service under 'relay' and _support_service under 'relay' both say 'relay run'"
         with pytest.raises(DeclarationError, match=pattern):
@@ -131,6 +141,11 @@ class TestReading:
         assert app.complete('relay run --c') == (['--config'], 3)
         assert app.complete('fleet ').words == ['Prospector', 'Hauler']  # the app's names
         assert app.complete('').words[-2:] == ['relay', 'gateway']
+
+
+def _mount_summary() -> str:
+    """This module's docstring's first line: a tree's mount's summary, by its first command's module."""
+    return __doc__.splitlines()[0].replace('``', '`')
 
 
 @parsed.parsed
@@ -512,9 +527,10 @@ class TestRunning:
 
     async def test_help_runs_nothing(self, bound):
         found = await self._run(bound, 'relay run --help')
-        assert found == parsed.Result('relay run --help', 'relay run', text='relay run [--config <config>]')
+        assert found == parsed.Result('relay run --help', 'relay run', text=found.text)
+        assert found.text.splitlines()[0] == 'relay run [--config <config>]'  # its help, its usage first
         found = await self._run(bound, 'log 0 --help')  # its values aren't loaded, so not refused
-        assert (found.ok, found.text) == (True, 'log [<n>]')
+        assert (found.ok, found.text.splitlines()[0]) == (True, 'log [<n>]')
 
     async def test_a_line_that_doesn_t_read(self, bound):
         found = await self._run(bound, 'rela run')
@@ -591,7 +607,8 @@ class TestCallingWithHelpAndReplies:
         recorder = _Recorder()
         app.on(service.Run, recorder)
         async with app.open() as session:
-            assert await session.call('relay run --help') == 'relay run [--config <config>]'
+            said = await session.call('relay run --help')
+        assert said.splitlines()[0] == 'relay run [--config <config>]'
         assert recorder.calls == []
 
     async def test_a_reply_it_shouldn_t_return_is_raised(self, app):
@@ -1534,7 +1551,7 @@ class TestSubjects:
 
     async def test_help_under_a_subject(self, game):
         async with game.open(subjects=_PROSPECTOR) as session:
-            assert (await session.run('mine --help')).text == 'fleet <fleet> mine [--for <for>]'
+            assert (await session.run('mine --help')).text.splitlines()[0] == 'fleet <fleet> mine [--for <for>]'
 
     async def test_a_handler_makes_one_the_session_s(self, game):
         async with game.open() as session:
@@ -1655,7 +1672,8 @@ class TestATerminal:
 
     async def test_help_still_answers(self, app, fits):
         found = await self._run(app, 'ship s1 fit --help')
-        assert (found.ok, found.text) == (True, 'ship <ship> fit')
+        assert (found.ok, found.text.splitlines()[0]) == (True, 'ship <ship> fit')
+        assert found.text.endswith('It is for a person at a terminal: say `ships make <ship> add <part>` instead.')
 
     async def test_a_dry_run_is_refused_too(self, app, fits):
         assert (await self._run(app, 'ship s1 fit --dry-run')).code == 3
@@ -1831,17 +1849,21 @@ class TestMain:
     def test_version_and_help(self, relay, capsys):
         assert self._main(relay, capsys, '--version', 'status') == (0, 'relayctl 1.2.3\n', '')
         code, out, _ = self._main(relay, capsys, '-h')
-        assert (code, out.splitlines()) == (
-            0,
-            [
-                'relayctl [--config <config>] [--n <n>] [--version] <command> …',  # the program's, above what it says
-                'run [--config <config>]',
-                'validate-config [--config <config>]',
-                'status [--config <config>]',
-                'look log [--n <n>]',
-            ],
-        )
-        assert self._main(relay, capsys, '--help', 'look') == (0, 'look log [--n <n>]\n', '')
+        program, options, listed = out.split('\n\n')
+        assert (code, program) == (0, 'relayctl [--config <config>] [--n <n>] [--version] <command> …')
+        assert options.splitlines() == [  # the program's, above what it may say
+            '  -c, --config <config>  a path',
+            '  --n <n>                a whole number',
+            "  --version              the program's version",
+        ]
+        assert _column(listed) == [
+            'run [--config <config>]',
+            'validate-config [--config <config>]',
+            'status [--config <config>]',
+            'look log [--n <n>]',
+        ]
+        code, out, _ = self._main(relay, capsys, '--help', 'look')
+        assert (code, _column(out)) == (0, ['look log [--n <n>]'])
 
     def test_parsed_s_own_before_the_first_word_are_the_line_s(self, relay, capsys):
         relay.on(service.ValidateConfig, lambda command, ctx: f'dry run: {ctx.dry_run}')
@@ -1873,7 +1895,10 @@ class TestMain:
 
     def test_json_help_s_envelope_alone(self, relay, capsys):
         code, out, _ = self._main(relay, capsys, '--json', '--help', 'look')
-        assert (code, json.loads(out)['text']) == (0, 'look log [--n <n>]')
+        assert (code, json.loads(out)['text']) == (
+            0,
+            "look log [--n <n>]  Look at the log's last lines: its --n, after the first word, the line's.",
+        )
 
     def test_json_a_watch_s_a_line_each(self, app, capsys):
         app.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet='f1', docked=ctx.state.flipped))
@@ -1946,6 +1971,11 @@ class TestMain:
             relay.main(['status'])
 
 
+def _column(text: str) -> list[str]:
+    """A listing's said column: each line up to its summary."""
+    return [re.split(r'\s{2,}', line)[0] for line in text.splitlines()]
+
+
 class TestHelpAtAnyDepth:
     async def _run(self, app: App, line: str, **given):
         async with app.open(**given) as session:
@@ -1970,21 +2000,56 @@ class TestHelpAtAnyDepth:
     async def test_short_of_a_command_what_it_may_still_say(self, app, line, usages):
         found = await self._run(app, line)
         assert (found.ok, found.done, found.command, found.code) == (True, False, None, 0)
-        assert found.text.splitlines() == usages
+        assert _column(found.text) == usages
 
-    async def test_with_no_words_every_command(self, app):
-        found = (await self._run(app, '--help')).text.splitlines()
-        assert found[0] == 'fleet <fleet> mine [--for <for>]'  # each mount's in turn, its commands in their order
-        assert 'detachment <detachment> mine [--for <for>]' in found
-        assert found[-3:] == [
-            'gateway run [--config <config>]',
-            'gateway validate-config [--config <config>]',
-            'gateway status [--config <config>]',
+    async def test_each_with_its_summary_in_a_column(self, app):
+        assert (await self._run(app, 'relay --help')).text.splitlines() == [
+            "relay run [--config <config>]              Run the service until it's stopped.",
+            "relay validate-config [--config <config>]  Check the config file, and say what's wrong with it.",
+            'relay status [--config <config>]           Say whether the service is up.',
         ]
+
+    async def test_with_no_words_every_command_and_each_namespace_s_line(self, app):
+        found = (await self._run(app, '--help')).text.splitlines()
+        assert found[0].startswith('fleet <fleet> mine [--for <for>]  ')  # the root's commands, in their order
+        assert 'detachment <detachment> mine [--for <for>]' in _column('\n'.join(found))
+        summary = "A service's skeleton group, as each service of a family carries one: mounted by many apps"
+        assert [line.split('  ')[0] for line in found[-2:]] == ['relay …', 'gateway …']  # each mount under a prefix
+        assert all(summary in line for line in found[-2:])  # its module's docstring
+
+    async def test_a_namespace_s_line_by_its_mount_s_doc(self):
+        relays = App('relays')
+        relays.mount('_support_service', under='rio relay', doc="Relay a site's readers.\n\nMore.")
+        assert (await self._run(relays, '--help')).text == "rio relay …  Relay a site's readers."
+        assert (await self._run(relays, 'rio --help')).text == "rio relay …  Relay a site's readers."
+        assert _column((await self._run(relays, 'rio relay --help')).text)[0] == 'rio relay run [--config <config>]'
 
     async def test_a_command_s_own_where_it_says_one(self, app):
         found = await self._run(app, 'relay run --help')
-        assert (found.command, found.text) == ('relay run', 'relay run [--config <config>]')
+        assert found.command == 'relay run'
+        assert found.text == '\n\n'.join(
+            [
+                'relay run [--config <config>]',
+                "Run the service until it's stopped.",
+                '  -c, --config <config>  the config file; left out, the service default',
+            ]
+        )
+
+    async def test_no_terminal_leaves_a_command_for_a_person_out(self, app):
+        listed = _column((await self._run(app, '--help')).text)
+        assert 'ship <ship> fit' not in listed
+        assert 'ships make <ship> add <part>' in listed
+        at_one = _column((await self._run(app, '--help', terminal=True)).text)
+        assert 'ship <ship> fit' in at_one
+        asked = _column((await self._run(app, '--help --json', terminal=True)).text)
+        assert 'ship <ship> fit' not in asked  # asked for JSON, as a tool would
+
+    async def test_where_that_leaves_nothing_its_refusal(self, app):
+        found = await self._run(app, 'ship s1 --help')
+        assert (found.ok, found.text) == (
+            True,
+            'ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead',
+        )
 
     @pytest.mark.parametrize('line', ['rela --help', 'fleet f1 progrms --help', 'relay'])
     async def test_a_word_that_goes_nowhere_still_refused(self, app, line):
@@ -1998,9 +2063,9 @@ class TestHelpAtAnyDepth:
 
     async def test_under_a_subject(self, app):
         found = await self._run(app, 'jump --help', subjects=('fleet prospector',))
-        assert (found.line, found.text) == (
+        assert (found.line, _column(found.text)) == (
             'fleet prospector jump --help',
-            'fleet <fleet> jump nearest <ore>\nfleet <fleet> jump <system>',
+            ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>'],
         )
 
     async def test_own_flags_first_take_a_subject_too(self, app):

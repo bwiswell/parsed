@@ -29,6 +29,7 @@ from ._walk._walker import _flag, _given, _is_short, _text
 from ._walk._words import Token
 from .command import _kinds, _shorts
 from .errors import DeclarationError, ReadError
+from .help import rows
 from .kinds import Named, Switch, default_kind
 from .tree import _FLAG, Flag, flag_name
 
@@ -75,6 +76,18 @@ class Options:
         if self.version is not None:
             said.append(f'[--{VERSION}]')
         return ' '.join([*said, '<command> …'])
+
+    def help(self) -> str:
+        """The program's help, above what it may say: its usage, then a row for each root option and ``--version``."""
+        fields = {spec.attr: spec.field for spec in self.cls.__seared_fields__} if self.cls is not None else {}
+        shorts = {name: short for short, name in self.shorts.items()}
+        said = [
+            (_row(flag, shorts.get(flag.name)), _what(flag, fields[flag.field], self.kinds[flag.field]))
+            for flag in self.flags.values()
+        ]
+        if self.version is not None:
+            said.append((f'--{VERSION}', "the program's version"))
+        return '\n\n'.join([self.usage(), '\n'.join(rows(said))]) if said else self.usage()
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +291,19 @@ def _second(tokens: list[Token], name: str, options: Options) -> Token:
     """The second word that gives ``--name``, for a refusal to point at."""
     giving = [token for token in tokens if (found := _flag(token, options.shorts)) is not None and found[0] == name]
     return giving[1]
+
+
+def _row(flag: Flag, short: str | None) -> str:
+    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.name}>'
+    return f'-{short}, {said}' if short else said
+
+
+def _what(flag: Flag, field: Field, kind: Kind) -> str:
+    if field.doc and field.doc.strip():
+        return field.doc.strip()
+    if flag.arity is Arity.SWITCH:
+        return 'off when given' if flag.negated else 'on when given'
+    return kind.describe(field)
 
 
 def _usage(flag: Flag, field: Field) -> str:

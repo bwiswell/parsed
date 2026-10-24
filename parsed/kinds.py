@@ -16,6 +16,9 @@ kind's own form (:meth:`Kind.form`), which a kind of an app's own overrides.
 literal word first (``None`` back to ``off``), else the kind's own spelling (:meth:`Kind.spell`), which reads back to
 the same value.
 
+**Describing its words** (:meth:`Kind.describe`), for help and pages: the kind's own description (:meth:`Kind.what`,
+``a span of time, such as 90s or 1h30m``), then its literal words (``, or off``).
+
 **A named kind** (:class:`Named`) is read through the app: a :class:`Name` by the resolver the app gives for its
 category, and :class:`Pairs`, a keyed field's ``key value`` pairs, by one that reads each key and gives its values
 their own (:mod:`parsed.names`).
@@ -55,6 +58,8 @@ from seared import FieldKind, field_kind
 from .errors import DeclarationError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from seared import Field
 
 #: A number with its thousands grouped by commas: ``1,000``, ``-12,500.5``.
@@ -137,6 +142,15 @@ class Kind:
         """The kind's own words for a wire value, which :meth:`form` reads back to it: here, the value as a word."""
         return [str(value)]
 
+    def describe(self, field: Field) -> str:
+        """What the field's words are, for help and pages: :meth:`what`'s, then the literal words: ``…, or off``."""
+        what = self.what(field)
+        return f'{what}, or {_either(list(self.words))}' if self.words else what
+
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """The kind's own form, described for a person: here, ``a word``."""
+        return 'a word'
+
 
 @dataclass(frozen=True, slots=True)
 class Word(Kind):
@@ -151,6 +165,10 @@ class Word(Kind):
                 msg = f'{word!r} is not a UUID'
                 raise ValueError(msg) from None
         return word
+
+    def what(self, field: Field) -> str:
+        """``a word``, ``a path`` or ``a UUID``, by its field."""
+        return {FieldKind.PATH: 'a path', FieldKind.UUID: 'a UUID'}.get(field_kind(field), 'a word')
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +199,11 @@ class Number(Kind):
             raise ValueError(msg)
         return text if field_kind(field) is FieldKind.DECIMAL else float(text)
 
+    def what(self, field: Field) -> str:
+        """``a whole number`` for an ``Int``, else ``a number``; and its suffix, which may follow it."""
+        what = 'a whole number' if field_kind(field) is FieldKind.INT else 'a number'
+        return f'{what}, {self.suffix} after it or not' if self.suffix else what
+
     def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
         """The number as digits: a whole float without its ``.0``, any other as Python writes it, exactly."""
         if isinstance(value, float) and value.is_integer() and abs(value) < _WHOLE_UP_TO:
@@ -208,6 +231,10 @@ class Switch(Kind):
         """``true`` or ``false``."""
         return ['true' if value else 'false']
 
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """``true or false``."""
+        return 'true or false'
+
 
 @dataclass(frozen=True, slots=True)
 class Choice(Kind):
@@ -229,6 +256,10 @@ class Choice(Kind):
         """The ``Enum``'s values, as they're written."""
         return tuple(str(member.value) for member in getattr(field, 'enum', ()))
 
+    def what(self, field: Field) -> str:
+        """``one of iron, coal or ice``: the ``Enum``'s values."""
+        return f'one of {_either(list(self.offers(field)))}'
+
 
 @dataclass(frozen=True, slots=True)
 class Duration(Kind):
@@ -246,12 +277,16 @@ class Duration(Kind):
         """Seconds as a span: hours, minutes and seconds, those that aren't nought (``5400.0`` as ``1h30m``)."""
         return [spell_span(float(value))]  # ty: ignore[invalid-argument-type] -- a TimeDelta's wire value is a number
 
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """``a span of time, such as 90s, 10m or 1h30m``."""
+        return 'a span of time, such as 90s, 10m or 1h30m'
 
-#: What a moment's word is read by, and what one looks like, by its field's type.
+
+#: What a moment's word is read by, what it is, and what one looks like, by its field's type.
 _MOMENTS = {
-    FieldKind.DATE: (date.fromisoformat, 'a date: say 2026-10-21'),
-    FieldKind.TIME: (time.fromisoformat, 'a time: say 14:30'),
-    FieldKind.DATETIME: (datetime.fromisoformat, 'a date and time: say 2026-10-21T14:30'),
+    FieldKind.DATE: (date.fromisoformat, 'a date', '2026-10-21'),
+    FieldKind.TIME: (time.fromisoformat, 'a time', '14:30'),
+    FieldKind.DATETIME: (datetime.fromisoformat, 'a date and time', '2026-10-21T14:30'),
 }
 
 
@@ -261,13 +296,18 @@ class Moment(Kind):
 
     def form(self, word: str, field: Field) -> object:
         """The word as written, once it's checked to be its field's ISO 8601."""
-        reads, said = _MOMENTS.get(field_kind(field) or FieldKind.DATETIME, _MOMENTS[FieldKind.DATETIME])
+        reads, what, like = _moment(field)
         try:
             reads(word)
         except ValueError:
-            msg = f'{word!r} is not {said}'
+            msg = f'{word!r} is not {what}: say {like}'
             raise ValueError(msg) from None
         return word
+
+    def what(self, field: Field) -> str:
+        """``a date, such as 2026-10-21``, a time or both, by its field."""
+        _, what, like = _moment(field)
+        return f'{what}, such as {like}'
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,6 +355,10 @@ class Named(Kind):
 class Name(Named):
     """One of an app's names, read to its key by the resolver the app gives for its category; else as typed."""
 
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """``a station``, its category, and ``within its fleet`` where it has a scope."""
+        return f'a {self.category}' + (f', within its {self.scope}' if self.scope else '')
+
 
 @dataclass(frozen=True, slots=True)
 class Pairs(Named):
@@ -329,6 +373,10 @@ class Pairs(Named):
         """Each pair's key and its value, in turn."""
         pairs = value.items() if isinstance(value, dict) else ()
         return [str(word) for pair in pairs for word in pair]
+
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """``variable and value pairs``, by its category."""
+        return f'{self.category} and value pairs'
 
 
 _DEFAULTS: dict[FieldKind, Kind] = {
@@ -345,6 +393,16 @@ _DEFAULTS: dict[FieldKind, Kind] = {
     FieldKind.DATETIME: Moment(),
     FieldKind.TIME: Moment(),
 }
+
+
+def _moment(field: Field) -> tuple[Callable[[str], object], str, str]:
+    """A moment field's reader, what it is, and what one looks like."""
+    return _MOMENTS.get(field_kind(field) or FieldKind.DATETIME, _MOMENTS[FieldKind.DATETIME])
+
+
+def _either(words: list[str]) -> str:
+    """Words joined for a sentence: ``a``, ``a or b``, ``a, b or c``."""
+    return words[0] if len(words) == 1 else f'{", ".join(words[:-1])} or {words[-1]}'
 
 
 def span(word: str) -> float:

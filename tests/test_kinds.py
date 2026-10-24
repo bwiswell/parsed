@@ -281,6 +281,44 @@ class TestOffers:
         assert kind.offers(field) == offers
 
 
+class TestDescribing:
+    # What a field's words are, for help and pages: the kind's own, then its literal words.
+    @pytest.mark.parametrize(
+        ('kind', 'field', 'said'),
+        [
+            (Word(), seared.Str(), 'a word'),
+            (Word(), seared.Path(), 'a path'),
+            (Word(), seared.UUID(), 'a UUID'),
+            (Number(), seared.Int(), 'a whole number'),
+            (Number(), seared.Float(), 'a number'),
+            (Number(suffix='%'), seared.Float(), 'a number, % after it or not'),
+            (Switch(), seared.Bool(), 'true or false'),
+            (Choice(), seared.Enum(enum=Colour), 'one of red, green or blue'),
+            (Duration(), seared.TimeDelta(), 'a span of time, such as 90s, 10m or 1h30m'),
+            (Moment(), seared.Date(), 'a date, such as 2026-10-21'),
+            (Moment(), seared.Time(), 'a time, such as 14:30'),
+            (Moment(), seared.DateTime(), 'a date and time, such as 2026-10-21T14:30'),
+            (Name('station'), seared.Str(), 'a station'),
+            (Name('station', scope='fleet'), seared.Str(), 'a station, within its fleet'),
+            (Pairs('variable', scope='routine'), seared.Str(keyed=True), 'variable and value pairs'),
+        ],
+    )
+    def test_each_kind_s_own(self, kind, field, said):
+        assert kind.describe(field) == said
+
+    def test_then_its_literal_words(self):
+        share = Number(suffix='%', words={'off': None})
+        assert share.describe(seared.Float(nullable=True)) == 'a number, % after it or not, or off'
+        assert Word(words={'here': 'h', 'there': 't'}).describe(seared.Str()) == 'a word, or here or there'
+
+    def test_a_kind_of_an_app_s_own_says_what_it_is(self):
+        class Hex(Kind):
+            def what(self, field):
+                return 'a hex number, such as ff'
+
+        assert Hex(words={'none': None}).describe(seared.Str()) == 'a hex number, such as ff, or none'
+
+
 class TestWriting:
     # A wire value back to its words, which read to it again.
     @pytest.mark.parametrize(

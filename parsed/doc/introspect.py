@@ -64,6 +64,7 @@ class FlagDoc:
         negated: Whether it's a ``--no-…`` switch, setting its field ``False``.
         required: Whether the command can't go without it.
         many: Whether it may be given again, each time adding a value.
+        short: Its short form's letter (``SHORTS``), ``'c'`` for ``-c``; ``None`` for none.
     """
 
     name: str
@@ -73,6 +74,7 @@ class FlagDoc:
     negated: bool
     required: bool
     many: bool
+    short: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +161,7 @@ def introspect_command(cls: type[Command]) -> CommandDoc:
             negated=flag.negated,
             required=fields[flag.field].required,
             many=fields[flag.field].many,
+            short=found.shorts.get(flag.field),
         )
         for flag in Tree([cls]).flags_of(cls).values()
     )

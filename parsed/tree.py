@@ -219,16 +219,21 @@ class Tree:
         """
         return self._usage(end.declaration, end.bound)
 
-    def usage_of(self, cls: type) -> str:
-        """How one of the tree's commands is said by its ``PHRASE``, as :meth:`usage` writes it: ``log [<n>]``.
+    def usage_of(self, cls: type, phrase: int = 0) -> str:
+        """How one of the tree's commands is said by a phrase, as :meth:`usage` writes it: ``log [<n>]``.
+
+        Args:
+            cls: The command.
+            phrase: Which phrase: ``0``, its ``PHRASE``, by default; then each of ``EXTRA_PHRASES``, from ``1``.
 
         Raises:
             KeyError: ``cls`` isn't one of the tree's commands.
+            IndexError: It has no such phrase.
         """
         if cls not in self._flags:
             raise KeyError(cls)
         found = declaration(cls)
-        return self._usage(found, found.phrases[0])
+        return self._usage(found, found.phrases[phrase])
 
     def _usage(self, found: Declaration, bound: Bound) -> str:
         fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}

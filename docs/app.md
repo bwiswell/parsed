@@ -30,18 +30,21 @@ sys.exit(app.main())                                         # the program's arg
 
 ## Mounting
 
-`app.mount(target, under='', params=None)` mounts a tree, or a module or package of commands by name (collected as
-[`Tree.collect`](tree.md) collects them), and returns its `Mount`:
+`app.mount(target, under='', params=None, doc=None)` mounts a tree, or a module or package of commands by name
+(collected as [`Tree.collect`](tree.md) collects them), and returns its `Mount`:
 
 - **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'rio relay'`. None mounts it at the
   root. A tree with a prefix of its own keeps it, beneath `under`.
 - **`params`** is what its handlers are given beside the command: a service's settings, say. It's the mount's, so
   one package can be mounted several times, each with its own prefix and its own settings: one group serves many
   apps, or one app twice.
+- **`doc`** is what it's for, as help says it on its namespace's line ([sessions](#sessions)): by default its
+  module's docstring, the package's named, or a tree's first command's module's.
 
-A `Mount` has its `app`, its `tree` (under its prefix), its `under`, its `params` and its `source`: the module or
-package named, or a tree's first command's module. Its `label` (`service.cli under 'relay'`) is how a refusal names
-it, and `holds(cls)` says whether a command is one of its own. `app.mounts` lists them, in the order they were made.
+A `Mount` has its `app`, its `tree` (under its prefix), its `under`, its `params`, its `doc` (and its `summary`,
+the first line) and its `source`: the module or package named, or a tree's first command's module. Its `label`
+(`service.cli under 'relay'`) is how a refusal names it, and `holds(cls)` says whether a command is one of its own.
+`app.mounts` lists them, in the order they were made.
 
 **A mount that would make a line read two ways is refused** with a `DeclarationError` naming both mounts and the
 words they share ([`_walk/_route.md`](_walk/_route.md)):
@@ -189,12 +192,21 @@ under way isn't missed.
 
 **A line that gives `--help` runs nothing,** at any depth. It's answered as `run`'s text and `call`'s result:
 
-- **where it says a command,** with the command's usage ([`tree.usage`](tree.md#reading-a-line)), its values not
-  loaded;
-- **short of one,** with what it may still say: the usage of every command beneath where its words go, one a line,
-  in the order they're mounted and declared. That's every command for a bare `--help`, a mount's for its prefix
-  (`relay --help`), and a phrase's for its words so far (`fleet f1 jump --help`). The result has no `command`, and
-  exits 0. A word that goes nowhere (`rela --help`) is still refused.
+- **where it says a command,** with the command's help ([`help.md`](help.md#a-commands-help)), by the phrase the
+  line said: its usage, its docstring, a row for each argument, its other phrases, its examples and what it asks of
+  the line. Its values aren't loaded.
+- **short of one,** with what it may still say ([`help.md`](help.md#a-listing)), one entry a line, each with its
+  summary in a column, in the order they're mounted and declared:
+  - **a mount whose prefix the line hasn't said yet** as its namespace's line, its prefix and its `doc`'s summary:
+    `relay …  A service's skeleton group.` A bare `--help` gives the root's commands, then each namespace's line;
+  - **any other** by each command beneath where the line's words go: a mount's for its prefix (`relay --help`), a
+    phrase's for its words so far (`fleet f1 jump --help`).
+
+  The result has no `command`, and exits 0. A word that goes nowhere (`rela --help`) is still refused.
+- **An `INTERACTIVE` command is left out of a listing** when no one is at a terminal
+  ([a person at a terminal](#a-person-at-a-terminal)), or the line gives `--json`, as a tool would: it's not theirs
+  to run. Where that leaves nothing (`ship s1 --help`), each one's refusal is the answer, naming its `INSTEAD`. Its
+  own help, asked by its whole line, is answered whoever asks.
 
 parsed's own flags (`--help` or `-h`, `--json`, `--yes`, `--dry-run`) may stand anywhere on a line, the first word's
 place among them: `--yes fleet f1 buy ship hauler`.
@@ -257,7 +269,8 @@ def main() -> None:
 - **Root options** are the fields of `App(prog, options=Options)`, a seared class whose fields are each optional:
   read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, which exits 0.
 - **parsed's own flags** given among the root options are the line's, put first on it: `relayctl --json status`
-  runs `--json status`. A bare `--help` writes the program's usage above every command's.
+  runs `--json status`. A bare `--help` writes the program's own help (its usage, then a row for each root option
+  and `--version`) above the root's listing.
 - **A person is at a terminal** when stdin and stdout both are one. There, a line's `INTERACTIVE` command runs and
   a question a line asks is put to them (`parsed.reply.terminal`); elsewhere, under a pipe or a tool, the command is
   refused and the question left unanswered.
