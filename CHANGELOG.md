@@ -24,6 +24,11 @@ lines as it lands, and the entry is dated when that version is released.
   `fleet {fleet} retreat {share}: …`. A wait past its bound and a command for a person at a terminal are named as
   the line says them (`fleets show f1: docked=true not met within 30s`). A name's scope is quoted by its text, a
   quoted name's quotes left off.
+- **An asking command's usage ends with `[--yes]`:** a command that declares `ASKS` shows `[--yes]` last wherever
+  its usage is written (a refusal's hint, `tree.usage` and `usage_of`, help's first line, a reference page's Usage),
+  and help gives `--yes` a row of its own: `fleets merge <fleet> --into <into> [--quiet] [--yes]`. Any other
+  command's usage leaves it out, though every command still takes it. Help's note for one now reads
+  `It asks before it acts, and --yes answers it.`
 
 ## 0.1.8 — 2026-10-23
 

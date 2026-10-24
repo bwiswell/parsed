@@ -2,7 +2,8 @@
 
 A **usage** is a phrase with a ``<slot>`` for each slot, then its flags: ``fleets merge <fleet> --into <into>
 [--quiet]``. An optional slot is ``[<n>]``, several words ``<goods> …``, the rest of the line ``<message …>``. A
-required flag stands as it is said; any other is in brackets, a list's flag with ``…`` after it.
+required flag stands as it is said; any other is in brackets, a list's flag with ``…`` after it. A command that may
+ask first (``ASKS``) ends with ``[--yes]``, which answers it.
 
 **Did-you-mean** is the standard library's ``difflib``: up to three words or flags close to the one given.
 """
@@ -25,15 +26,18 @@ if TYPE_CHECKING:
     from parsed.tree import Flag
 
 
-def usage(bound: Bound, flags: Iterable[Flag], fields: Mapping[str, Field], *, start: int = 0) -> str:
+def usage(
+    bound: Bound, flags: Iterable[Flag], fields: Mapping[str, Field], *, start: int = 0, asks: bool = False
+) -> str:
     """How a command is said by ``bound``'s phrase: its words, a ``<slot>`` for each slot, then its flags.
 
-    ``start`` is where in the phrase's parts to begin, for the rest of a line that says the parts before it.
+    ``start`` is where in the phrase's parts to begin, for the rest of a line that says the parts before it; ``asks``,
+    whether the command may ask first, so it ends with ``[--yes]``.
     """
     places = {place.slot: place for place in bound.places}
     parts = bound.phrase.parts[start:]
     words = [part.text if isinstance(part, Word) else slot(places[part.name]) for part in parts]
-    return ' '.join([*words, *(_flag(flag, fields[flag.field]) for flag in flags)])
+    return ' '.join([*words, *(_flag(flag, fields[flag.field]) for flag in flags), *(['[--yes]'] if asks else [])])
 
 
 def slot(place: Place) -> str:

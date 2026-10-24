@@ -11,10 +11,10 @@ from parsed.command import Command, declaration
 from parsed.tree import Tree
 
 
-def _usage(cls: type[Command], at: int = 0) -> str:
+def _usage(cls: type[Command], at: int = 0, *, asks: bool = False) -> str:
     found = declaration(cls)
     fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
-    return usage(found.phrases[at], Tree([cls]).flags_of(cls).values(), fields)
+    return usage(found.phrases[at], Tree([cls]).flags_of(cls).values(), fields, asks=asks)
 
 
 def _command(phrase: str, **fields: object) -> type[Command]:
@@ -39,6 +39,10 @@ class TestUsage:
     )
     def test_a_phrase_and_its_flags(self, cls, at, said):
         assert _usage(cls, at) == said
+
+    def test_one_that_asks_ends_with_yes(self):
+        assert _usage(farlandia.FleetsMerge, asks=True) == 'fleets merge <fleet> --into <into> [--quiet] [--yes]'
+        assert _usage(farlandia.FleetBuyShip, asks=True) == 'fleet <fleet> buy ship <hull> [--yes]'
 
     def test_a_negated_switch_and_a_list_s_flag(self):
         cls = _command('tag', stop=parsed.Bool(default=True), tags=parsed.Str(many=True, default_factory=list))

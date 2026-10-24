@@ -46,6 +46,10 @@ class TestAPage:
         usage = _sections(render_command(farlandia.FleetMine))['Usage']
         assert usage == '```\nfleet <fleet> mine [--for <for>]\ndetachment <detachment> mine [--for <for>]\n```'
 
+    def test_its_usage_ends_with_yes_when_it_asks(self):
+        usage = _sections(render_command(farlandia.FleetsMerge))['Usage']
+        assert usage == '```\nfleets merge <fleet> --into <into> [--quiet] [--yes]\n```'
+
     def test_its_arguments_and_what_their_words_are(self):
         arguments = _sections(render_command(service.Run))['Arguments']
         assert arguments.splitlines()[-1] == '| `-c`, `--config <config>` | `config` | a path |'

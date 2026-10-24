@@ -229,11 +229,11 @@ class TestNames:
     def test_a_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleets merge Prospector --into Haulr', names=farlandia.NAMES)
         assert str(found) == (
-            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]`"
+            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet] [--yes]`"
         )
         assert (found.kind, found.column, found.word, found.field) == ('usage', 31, 'Haulr', 'into')
         assert found.suggestions == ('Hauler',)
-        assert found.hint == 'fleets merge <fleet> --into <into> [--quiet]'
+        assert found.hint == 'fleets merge <fleet> --into <into> [--quiet] [--yes]'
 
     def test_a_list_s_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleet f1 sell iron gold', names=farlandia.NAMES)
@@ -823,7 +823,7 @@ class TestRefusalsAsData:
             ('log --into f2', 'log [<n>]'),
             ('fleet f1 mine --for', '--for <for>'),
             ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <into>'),
-            ('fleets merge', 'fleets merge <fleet> --into <into> [--quiet]'),  # one command past it: its usage
+            ('fleets merge', 'fleets merge <fleet> --into <into> [--quiet] [--yes]'),  # one command past it: its usage
             ('ships make s1 add', 'ships make s1 add <part>'),
             ('fleet f1 sell', 'fleet f1 sell <goods> …'),
             (

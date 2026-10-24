@@ -475,7 +475,7 @@ class _Walker:
             start = next(at for at, part in enumerate(parts) if isinstance(part, Slot) and part.name == name)
             fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
             flags = self.tree.flags_of(end.declaration.cls).values()
-            rest = [usage(end.bound, flags, fields, start=start)]
+            rest = [usage(end.bound, flags, fields, start=start, asks=end.declaration.asks)]
         else:
             rest = [f'<{edge.slot}>', *([] if edge.node.end else ['…'])]
         hint = ' '.join([*(token.raw for token in said), *rest])

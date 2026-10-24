@@ -56,7 +56,8 @@ def buy(command: FleetBuyShip, ctx: parsed.Context[Hangar]) -> parsed.Ask:
 - **`then`** is a callable of nothing, sync or async, returning what a handler returns: its `REPLY`, text, nothing,
   or another `Ask`, asked in turn.
 - **`--yes`** on the line answers every question yes, on any command, whether or not it declares `ASKS`; `yes=True`
-  to `run`, `call` or `app.run` does the same. `ASKS` only says ahead of time that a command may ask.
+  to `run`, `call` or `app.run` does the same. `ASKS` only says ahead of time that a command may ask, and its usage
+  ends with `[--yes]`.
 - **Else the session's `answer`** is asked, if it has one: yes or no from the question, sync or async.
   `parsed.reply.terminal(question)` is one for a person at a terminal: `question [y/N]`, yes for `y` or `yes`, case
   aside, and no for anything else, or the end of input.

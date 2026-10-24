@@ -29,13 +29,14 @@ It is a step: then joins another after it.
 - **its docstring;**
 - **a row for each argument:** each slot of the phrase (`<fleet>`), then each flag, a short form first where it has
   one (`-c, --config <config>`), each with its field's `doc=`, or else what its kind's words are
-  ([`kinds.md`](kinds.md#describing-its-words)): `a whole number`, `on when given` for a switch;
+  ([`kinds.md`](kinds.md#describing-its-words)): `a whole number`, `on when given` for a switch; last, for a command
+  that may ask first, `--yes` (`answer each question it asks yes`), which its usage ends with too;
 - **the other phrases** that say it (`Also said:`), and its `EXAMPLES`;
 - **what it asks of the line,** a note each:
 
 | Where | The note |
 |---|---|
-| it may ask first (`ASKS`) | `It asks before it acts: --yes answers yes.` |
+| it may ask first (`ASKS`) | `It asks before it acts, and --yes answers it.` |
 | it can wait (a read with a `REPLY`) | `It can wait on its reply: --until <path=value>, --timeout <span>, --watch, --count <n>; 30s at most by default.` |
 | it's a chain's step | `It is a step: then joins another after it.` |
 | it's for a person at a terminal (`INTERACTIVE`) | ``It is for a person at a terminal: say `ships make <ship> add <part>` instead.``, with its `INSTEAD`'s usage where an app gives it |

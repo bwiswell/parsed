@@ -67,7 +67,7 @@ class TestACommand:
     @pytest.mark.parametrize(
         ('cls', 'note'),
         [
-            (farlandia.FleetBuyShip, 'It asks before it acts: --yes answers yes.'),
+            (farlandia.FleetBuyShip, 'It asks before it acts, and --yes answers it.'),
             (
                 farlandia.FleetsShow,
                 (
@@ -80,6 +80,11 @@ class TestACommand:
     )
     def test_what_it_asks_of_the_line(self, tree, cls, note):
         assert command(tree, cls).endswith(note)
+
+    def test_one_that_asks_ends_its_usage_with_yes_and_says_what_it_does(self, tree):
+        said = command(tree, farlandia.FleetsMerge).split('\n\n')
+        assert said[0] == 'fleets merge <fleet> --into <into> [--quiet] [--yes]'
+        assert said[2].splitlines()[-1] == '  --yes          answer each question it asks yes'
 
     def test_what_s_said_in_an_interactive_one_s_place(self, tree):
         said = command(tree, farlandia.ShipFit, instead='ships make <ship> add <part>')

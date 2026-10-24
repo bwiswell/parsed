@@ -4,7 +4,8 @@
 
 - its docstring;
 - a row for each of its arguments, a slot (``<fleet>``) or a flag (``-c, --config <config>``), with its field's
-  ``doc=``, or else what its kind's words are (:meth:`parsed.kinds.Kind.describe`);
+  ``doc=``, or else what its kind's words are (:meth:`parsed.kinds.Kind.describe`), and ``--yes`` last for one that
+  asks first, which its usage ends with too;
 - the other phrases that say it, and its ``EXAMPLES``;
 - what it asks of the line: ``--yes`` for one that asks first, a wait's flags for one that can wait, ``then`` for a
   step, and a person at a terminal for an interactive one, with what's said in its place.
@@ -102,6 +103,8 @@ def command(tree: Tree, cls: type, *, phrase: int = 0, instead: str | None = Non
         (_flag(flag, found.shorts.get(flag.field), many=fields[flag.field].many), _flag_what(flag, found, fields))
         for flag in tree.flags_of(cls).values()
     ]
+    if found.asks:
+        arguments.append(('--yes', 'answer each question it asks yes'))
     if arguments:
         parts.append('\n'.join(rows(arguments)))
     others = [tree.usage_of(cls, at) for at in range(len(found.phrases)) if at != phrase]
@@ -158,7 +161,7 @@ def _notes(found: Declaration, instead: str | None) -> list[str]:
     """What a command asks of the line, beyond its arguments."""
     notes: list[str] = []
     if found.asks:
-        notes.append('It asks before it acts: --yes answers yes.')
+        notes.append('It asks before it acts, and --yes answers it.')
     if found.can_wait:
         flags = ', '.join(_WAITS[name] for name in WAIT_FLAGS)
         notes.append(f'It can wait on its reply: {flags}; {TIMEOUT:g}s at most by default.')
