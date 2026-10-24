@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, cast
 from seared import ValidationError
 from seared.doc import is_seared_class
 
-from ._walk._hints import close
+from ._walk._hints import close, label
 from ._walk._terms import RESERVED, Arity
 from ._walk._walker import _flag, _given, _is_short, _text
 from ._walk._words import Token
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from .kinds import Kind
 
 #: The flag that asks for the program's version, with ``App(version=…)``.
-VERSION = 'version'
+_VERSION = 'version'
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,11 +70,11 @@ class Options:
         return None if self.cls is None else self.cls.load({})
 
     def usage(self) -> str:
-        """How the program is said: ``farlandia [--config <config>] [--version] <command> …``."""
+        """How the program is said: ``farlandia [--config <path>] [--version] <command> …``."""
         fields = {spec.attr: spec.field for spec in self.cls.__seared_fields__} if self.cls is not None else {}
         said = [self.prog, *(_usage(flag, fields[flag.field]) for flag in self.flags.values())]
         if self.version is not None:
-            said.append(f'[--{VERSION}]')
+            said.append(f'[--{_VERSION}]')
         return ' '.join([*said, '<command> …'])
 
     def help(self) -> str:
@@ -86,7 +86,7 @@ class Options:
             for flag in self.flags.values()
         ]
         if self.version is not None:
-            said.append((f'--{VERSION}', "the program's version"))
+            said.append((f'--{_VERSION}', "the program's version"))
         return '\n\n'.join([self.usage(), '\n'.join(rows(said))]) if said else self.usage()
 
 
@@ -145,10 +145,12 @@ def options_of(prog: str, cls: type | None, version: str | None) -> Options:
         if not _FLAG.fullmatch(flag):
             msg = f'{name}.{spec.attr}: its flag would be --{flag}; a flag is lowercase words, so give it a data_key'
             raise DeclarationError(msg)
-        if flag in (*RESERVED, VERSION):
+        if flag in (*RESERVED, _VERSION):
             msg = f"{name}.{spec.attr}: --{flag} is parsed's, before any command; give the field another name"
             raise DeclarationError(msg)
-        flags[flag] = Flag(name=flag, field=spec.attr, arity=Arity.SWITCH if switch else Arity.VALUE, negated=negated)
+        said = flag if switch else label(kinds[spec.attr], spec.field, flag)
+        arity = Arity.SWITCH if switch else Arity.VALUE
+        flags[flag] = Flag(name=flag, field=spec.attr, arity=arity, negated=negated, label=said)
     names = {flag.field: flag.name for flag in flags.values()}
     shorts = {short: names[attr] for attr, short in _shorts(declared, name, attrs).items()}
     return Options(
@@ -193,7 +195,7 @@ def read(args: Sequence[str], options: Options) -> Said:
         at += 1
         found = _flag(token, options.shorts)
         name, value = found if found is not None else (token.raw[1:], None)
-        if found is not None and (name in RESERVED or (name == VERSION and options.version is not None)):
+        if found is not None and (name in RESERVED or (name == _VERSION and options.version is not None)):
             _own(token, name, value, own, shown)
             continue
         flag = options.flags.get(name) if found is not None else None
@@ -203,14 +205,14 @@ def read(args: Sequence[str], options: Options) -> Said:
         if flag.arity is Arity.VALUE and value is None:
             if at == len(tokens) or _flag(tokens[at], options.shorts) is not None:
                 said = _given(token, name)
-                raise _refused(shown, f'{said} needs a value', token, hint=f'{said} <{name}>')
+                raise _refused(shown, f'{said} needs a value', token, hint=f'{said} <{flag.label}>')
             value = tokens[at]
             at += 1
         elif flag.arity is Arity.SWITCH and value is not None:
             raise _refused(shown, f'{_given(token, name)} takes nothing after it', token)
         given.setdefault(name, []).append(value)
     loaded = _load(options, given, tokens, shown) if options.cls is not None else None
-    return Said(options=loaded, own=frozenset(own - {VERSION}), version=VERSION in own, line=line_of(args[at:]))
+    return Said(options=loaded, own=frozenset(own - {_VERSION}), version=_VERSION in own, line=line_of(args[at:]))
 
 
 def _own(token: Token, name: str, value: Token | None, own: set[str], shown: str) -> None:
@@ -294,7 +296,7 @@ def _second(tokens: list[Token], name: str, options: Options) -> Token:
 
 
 def _row(flag: Flag, short: str | None) -> str:
-    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.name}>'
+    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.label}>'
     return f'-{short}, {said}' if short else said
 
 
@@ -309,7 +311,7 @@ def _what(flag: Flag, field: Field, kind: Kind) -> str:
 def _usage(flag: Flag, field: Field) -> str:
     if flag.arity is Arity.SWITCH:
         return f'[--{flag.name}]'
-    said = f'--{flag.name} <{flag.name}>'
+    said = f'--{flag.name} <{flag.label}>'
     return f'[{said} …]' if field.many else f'[{said}]'
 
 

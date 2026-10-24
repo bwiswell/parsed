@@ -22,12 +22,12 @@ class TestACommand:
     def test_its_usage_doc_arguments_phrases_examples_and_notes(self, tree):
         assert command(tree, farlandia.FleetMine) == '\n\n'.join(
             [
-                'fleet <fleet> mine [--for <for>]',
+                'fleet <fleet> mine [--for <span>]',
                 'Mine until the hold is full.',
-                '  <fleet>      the fleet\n  --for <for>  stop after this long',
-                'Also said:\n  detachment <detachment> mine [--for <for>]',
+                '  <fleet>       the fleet\n  --for <span>  stop after this long',
+                'Also said:\n  detachment <detachment> mine [--for <span>]',
                 (
-                    'Examples:\n  fleet <fleet> mine\n  fleet <fleet> mine --for <for>\n'
+                    'Examples:\n  fleet <fleet> mine\n  fleet <fleet> mine --for <span>\n'
                     '  fleet prospector mine --for 1h30m'
                 ),
                 'It is a step: then joins another after it.',
@@ -36,14 +36,14 @@ class TestACommand:
 
     def test_by_the_phrase_a_line_said(self, tree):
         said = command(tree, farlandia.FleetMine, phrase=1)
-        assert said.splitlines()[0] == 'detachment <detachment> mine [--for <for>]'
+        assert said.splitlines()[0] == 'detachment <detachment> mine [--for <span>]'
         assert '  <detachment>  the fleet' in said.splitlines()  # the slot as the phrase says it
-        assert 'Also said:\n  fleet <fleet> mine [--for <for>]' in said
+        assert 'Also said:\n  fleet <fleet> mine [--for <span>]' in said
 
     def test_a_short_form_beside_its_flag(self):
         run = Tree.collect('_support_service', under='relay')
         assert command(run, service.Run).splitlines()[-1] == (
-            '  -c, --config <config>  the config file; left out, the service default'
+            '  -c, --config <path>  the config file; left out, the service default'
         )
 
     def test_with_no_doc_what_its_words_are(self):
@@ -58,16 +58,16 @@ class TestACommand:
             hush: bool = parsed.Bool(default=True)
 
         assert command(Tree([Tune]), Tune).split('\n\n')[1].splitlines() == [
-            '  <band>             a whole number',
-            '  -g, --gain <gain>  a number',
-            '  --loud             on when given',
-            '  --no-hush          off when given',
+            '  <band>          a whole number',
+            '  -g, --gain <n>  a number',
+            '  --loud          on when given',
+            '  --no-hush       off when given',
         ]
 
     @pytest.mark.parametrize(
         ('cls', 'note'),
         [
-            (farlandia.FleetBuyShip, 'It asks before it acts: --yes answers yes.'),
+            (farlandia.FleetBuyShip, 'It asks before it acts, and --yes answers it.'),
             (
                 farlandia.FleetsShow,
                 (
@@ -80,6 +80,11 @@ class TestACommand:
     )
     def test_what_it_asks_of_the_line(self, tree, cls, note):
         assert command(tree, cls).endswith(note)
+
+    def test_one_that_asks_ends_its_usage_with_yes_and_says_what_it_does(self, tree):
+        said = command(tree, farlandia.FleetsMerge).split('\n\n')
+        assert said[0] == 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'
+        assert said[2].splitlines()[-1] == '  --yes           answer each question it asks yes'
 
     def test_what_s_said_in_an_interactive_one_s_place(self, tree):
         said = command(tree, farlandia.ShipFit, instead='ships make <ship> add <part>')

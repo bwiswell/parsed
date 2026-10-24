@@ -9,9 +9,8 @@ A private subpackage, gathered by its `__init__.py`:
 - [`_render.py`](_render.md) writes an instance back to the line that says it;
 - [`_hints.py`](_hints.md) writes a refusal's hint and did-you-mean;
 - [`_route.py`](_route.md) sends a line to the mount whose tree reads it, for an [app](../app.md);
-- `_terms.py` holds the walk's terms, which the tree builds by too: `RESERVED`, parsed's own flags, `HELP` and
-  `HELP_SHORT` (`-h`) and `JSON` among them; `SlotKind`, what a slot takes; and `Arity`, whether a flag takes a
-  value.
+- [`_terms.py`](_terms.md) holds the walk's terms, which the tree builds by too: `RESERVED`, parsed's own flags;
+  `THEN`; `SlotKind`, what a slot takes; and `Arity`, whether a flag takes a value.
 
 [`Tree.walk`, `Tree.read`](../tree.md#reading-a-line), [`Tree.complete`](../tree.md#completing-a-line) and
 [`Tree.render`](../tree.md#writing-a-line-back) use them.

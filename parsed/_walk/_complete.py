@@ -32,6 +32,7 @@ from ._walker import (
     _ends,
     _flag,
     _head,
+    _key,
     _Later,
     _literal,
     _Moved,
@@ -113,7 +114,7 @@ def beneath(tree: Tree, tokens: list[Token]) -> list[End] | None:
     """
     completer = _Completer(tree, {}, flagging=False)
     words, _, _ = completer._flags(tokens)  # noqa: SLF001 -- the walk is this module's
-    walked = completer._walk(words)  # noqa: SLF001
+    walked = completer._walk(words)  # noqa: SLF001 -- the walk is this module's
     return None if walked is None else _ends(walked[0])
 
 
@@ -278,7 +279,7 @@ class _Completer:
                 keys = {word.text.lower() for word in taken[0::2]}
                 found += [(key, False) for key in resolver.options(scope) if key.lower() not in keys]
                 continue
-            key = resolver.lookup(taken[-1].text, scope) or taken[-1].text
+            key = _key(resolver, taken[-1].text, scope) or taken[-1].text
             values = cast('PairsResolver', resolver).values(key, scope) if hasattr(resolver, 'values') else None
             found += [] if values is None else [(value, False) for value in values.options(None)]
         return found
@@ -347,7 +348,7 @@ class _Completer:
                 return None
             text, scope_kind = cast('Token', given[flag.name]).text, found.field_kinds[flag.field]
         resolver = self.names.get(scope_kind.category) if isinstance(scope_kind, Name) else None
-        return text if resolver is None else resolver.lookup(text, None) or text
+        return text if resolver is None else _key(resolver, text, None) or text
 
 
 def _waits(end: End, name: str) -> list[_Offer]:

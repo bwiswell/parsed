@@ -45,11 +45,12 @@ say ([`names.md`](../names.md#a-chains-place)). A placeholder is a place the lin
 
 ## Placeholders
 
-`walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes
-for a command (`fleet <fleet> mine --for <for>`), read by no kind and no resolver, so `data()` holds `'<fleet>'` as
-typed. A literal word still reads as one, and a quoted `"<fleet>"` is a value, as any quoted word is. Such a reading
-isn't one to load: [`parsed check`](../doc/check.md) walks a command's `EXAMPLES` so, to see that each ends at its
-command. Without `placeholders`, a `<name>` is a word like any other.
+`walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes for
+a command (`fleet <fleet> mine --for <span>`), read by no kind and no resolver, so `data()` holds `'<fleet>'` as
+typed. A number's suffix may follow one, where its kind has one: `fleet <fleet> retreat <share>%` reads, its share
+`'<share>%'`, and `log <n>%` doesn't. A literal word still reads as one, and a quoted `"<fleet>"` is a value, as any
+quoted word is. Such a reading isn't one to load: [`parsed check`](../doc/check.md) walks a command's `EXAMPLES` so,
+to see that each ends at its command. Without `placeholders`, a `<name>` is a word like any other.
 
 ## `Reading`
 
@@ -61,13 +62,15 @@ command. Without `placeholders`, a `<name>` is a word like any other.
 | `line` | the line read |
 | `wait` | its wait, when it gives `--until` on a command that can wait: its conditions and its bound ([`wait.md`](../wait.md)) |
 | `then` | a chain's steps after this one, each a reading of its own holding the chain's shared fields; none for a line of one command |
+| `said` | the command as the line says it, its flags aside, for a message to name it: `fleets show f1`; a chain's later step with the line before it |
 | `command` | the command class (a property): a chain's first step's |
 | `chain`, `steps`, `phrase` | the chain's base for a step, else `None`; every step, this one first; the phrase that says the line, a chain's joined by `then` (properties) |
 
 Each of `given` is a `Given`: `by`, the slot (a `Place`) or the flag (a `Flag`) that took the words; `words`, every
-`Token` that went into the field, flags and all, in the line's order; and `value`, what seared loads for it: each
-word read by the field's kind, a list of them for a list's field, or a switch's `True` (`False` for a `--no-…`
-switch).
+`Token` that went into the field, flags and all, in the line's order; `value`, what seared loads for it: each word
+read by the field's kind, a list of them for a list's field, or a switch's `True` (`False` for a `--no-…` switch);
+and `said`, how a refusal names it: the line's words up to a slot, as typed, then the slot as a usage writes it
+(`fleets merge <fleet>`), or a flag (`--into`).
 
 `reading.data()` is the values by wire name, as seared's `load` takes them and a tool call would send them:
 `{'fleet': 'f1', 'for': 5400.0}`. `reading.load()` loads the command from them, refusing any key the command
@@ -86,24 +89,25 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | begins with a flag, not one of parsed's own | `--into comes before a command: a flag follows the first word` | |
 | gives a flag no command takes | `no command takes --fro; did you mean --for?` | flags close to it |
 | gives a value to a switch | `--quiet takes nothing after it` | |
-| ends at a flag that takes a value, or gives it a flag | ``--for needs a value `--for <for>` `` | |
+| ends at a flag that takes a value, or gives it a flag | ``--for needs a value `--for <span>` `` | |
 | gives a flag twice | `--for is given twice`; a short as given, `-c is given twice` | |
 | says a word no command says | `no command 'fleet f1 mien'; did you mean mine?` | words close to it |
 | … with no word close to it | `no command 'fleet f1 xyz': buy \| dock \| jump \| mine \| sell` | the words that may come |
 | goes on after a command's last word | ``log 40: '50' is left over `log [<n>]` `` | |
 | stops at a slot | ``fleet f1 jump: which system? `fleet f1 jump <system>` `` | |
 | stops at a word that isn't a command | `fleet f1: then what? buy \| dock \| jump \| mine \| sell` | the words that may come |
-| gives a flag its command doesn't take | ``fleet f1 mine takes no --into `fleet <fleet> mine [--for <for>]` `` | its flags close to it |
+| gives a flag its command doesn't take | ``fleet f1 mine takes no --into `fleet <fleet> mine [--for <span>]` `` | its flags close to it |
 | gives a short its command doesn't declare | ``load takes no -c `load [--config <config>]` `` | |
-| leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <into>` `` | |
-| gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
+| leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <fleet>` `` | |
+| gives a slot a word its kind can't read | `log <n>: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
-| gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]` `` | the resolver's |
-| gives a later step a name not where the chain will be | ``fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> dock [<station>]` `` | the resolver's |
-| gives a pair's key no key answers to | `… {variables**}: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
-| gives a pair's value no name answers to | `… {variables**}: no home 'mars'` | the key's resolver's |
-| leaves a key without its value | `… {variables**}: 'home' and its value? pairs come in twos` | |
-| gives a key twice | `… {variables**}: ore is given twice` | |
+| gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <fleet> [--quiet] [--yes]` `` | the resolver's |
+| … whose resolver says why | ``fleet f1 acquire <blueprint>: no blueprint 'shield-9' here: inquire blueprints, docked `fleet <fleet> acquire <blueprint>` `` | |
+| gives a later step a name not where the chain will be | ``fleet Prospector jump sol then dock <station>: no station 'vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> dock [<station>]` `` | the resolver's |
+| gives a pair's key no key answers to | `fleet f1 run mining <variables …>: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
+| gives a pair's value no name answers to | `… <variables …>: no home 'mars'` | the key's resolver's |
+| leaves a key without its value | `… <variables …>: 'home' and its value? pairs come in twos` | |
+| gives a key twice | `… <variables …>: ore is given twice` | |
 | joins nothing with `then` | `` `then` needs a step on each side: dock then sell `` | |
 | joins what isn't a step | `` `then` joins steps: 'retreat 30%' is not one of FleetCommand's `` | |
 | waits in a chain | `a chain doesn't wait: --until and --watch are a read's, on a line of its own` | |
@@ -112,13 +116,25 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | bounds a wait it doesn't give | `--timeout bounds a wait or a watch: give --until or --watch too` | |
 | counts a watch it doesn't give | `--count is how many replies a watch gives: give --watch too` | |
 | counts nothing | `--count: '0' is not a number of replies: say 1 or more` | |
-| waits on a command that can't | ``fleet f1 mine can't wait: --until is for a read, … `fleet <fleet> mine [--for <for>]` `` | |
+| waits on a command that can't | ``fleet f1 mine can't wait: --until is for a read, … `fleet <fleet> mine [--for <span>]` `` | |
+
+A refusal at a slot says the line's words up to it, as typed (a tree's prefix among them, its flags aside; for a
+chain's later step, the line before it too), then the slot as a usage writes it, an optional one without its
+brackets: `log <n>`, `fleet f1 sell <goods> …`. A name in a scope is quoted by its text, a quoted one's quotes left
+off: `for fleet 'Hauler'`.
+
+A name no name answers to is refused by its kind's term, its label or else its category
+([`kinds.md`](../kinds.md#name)): `no ore 'lab'`, where its category is `good_in_deposit`. Its did-you-mean is the
+resolver's suggestions, never the word itself, case aside: a resolver may suggest across scopes, where the word is a
+name out of this one's reach. A resolver that says why, by a `ValueError` from its `lookup`
+([`names.md`](../names.md#saying-why)), is refused with its reason, the usage as its hint and no suggestions.
 
 A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the
 rest of the one command's usage past it (flags and all), or the slot's `<…>` where several lie past it.
 Since a switch takes no value, `--quiet yes` reads `yes` as a word, which the command may not take.
 
 **seared's refusals** of a value, once read (its bounds, lengths or pattern), come back from `load` as a
-`ReadError` whose `kind` is `'validation'`, at the word that gave the value: `log {n}: must be >= 1, got 0`, or
+`ReadError` whose `kind` is `'validation'`, at the word that gave the value: `log <n>: must be >= 1, got 0`, or
 `--port: must be <= 65535, got 70000`. For a list, it's the word at the refused index; for the rest of the line, the
-whole of it. seared's `ValidationError` is its `__cause__`.
+whole of it; for no word (the instance as a whole), the line as read. seared's `ValidationError` is its
+`__cause__`.

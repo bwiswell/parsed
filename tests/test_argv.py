@@ -46,7 +46,7 @@ class TestDeclaring:
 
     def test_the_program_s_usage(self, options):
         assert options.usage() == (
-            'servicectl [--config <config>] [--quiet] [--no-color] [--workers <workers>] [--tags <tags> …] [--version] '
+            'servicectl [--config <path>] [--quiet] [--no-color] [--workers <n>] [--tags <tags> …] [--version] '
             '<command> …'
         )
         assert options_of('farlandia', None, None).usage() == 'farlandia <command> …'
@@ -55,12 +55,12 @@ class TestDeclaring:
         usage, rows = options.help().split('\n\n')
         assert usage == options.usage()
         assert rows.splitlines() == [
-            '  -c, --config <config>  a path',
-            '  -q, --quiet            on when given',
-            '  --no-color             off when given',
-            '  --workers <workers>    a whole number',
-            '  --tags <tags>          a word',
-            "  --version              the program's version",
+            '  -c, --config <path>  a path',
+            '  -q, --quiet          on when given',
+            '  --no-color           off when given',
+            '  --workers <n>        a whole number',
+            '  --tags <tags>        a word',
+            "  --version            the program's version",
         ]
         assert options_of('farlandia', None, None).help() == 'farlandia <command> …'
 
@@ -140,8 +140,8 @@ class TestReading:
         [
             (['--confg', 'a', 'run'], r'servicectl takes no --confg; did you mean --config\?', 'usage'),
             (['-x', 'run'], r'servicectl takes no -x', 'usage'),
-            (['--config'], r'--config needs a value `--config <config>`', 'usage'),
-            (['-c', '-q', 'run'], r'-c needs a value `-c <config>`', 'usage'),
+            (['--config'], r'--config needs a value `--config <path>`', 'usage'),
+            (['-c', '-q', 'run'], r'-c needs a value `-c <path>`', 'usage'),
             (['--quiet=yes', 'run'], r'--quiet takes nothing after it', 'usage'),
             (['--help=yes'], r'--help takes nothing after it', 'usage'),
             (['--yes', '--yes', 'run'], r'--yes is given twice', 'usage'),

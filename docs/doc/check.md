@@ -26,10 +26,11 @@ A field read by a kind with a form of its own takes the kind's example instead, 
 fit. A command whose required field takes none of them (a pattern no word fits) has no round trips, and is listed
 under `skipped` with that field. Its examples and its schema are still checked, so an `EXAMPLES` line covers it.
 
-**An example's `<name>` stands for any value,** as help writes one (`fleet <fleet> mine --for <for>`): the walk
-reads it by no kind and no resolver ([`_walk/_walker.md`](../_walk/_walker.md#placeholders)), and the line must end
-at the command whose example it is. A line with no placeholder is loaded too, so its values keep their bounds:
-`log 0` is refused where `log {n}` has `ge=1`.
+**An example's `<name>` stands for any value,** as help writes one (`fleet <fleet> mine --for <span>`), a number's
+suffix after it too (`<share>%`): the walk reads it by no kind and no resolver
+([`_walk/_walker.md`](../_walk/_walker.md#placeholders)), and the line must end at the command whose example it is.
+A line with no placeholder is loaded too, so its values keep their bounds: `log 0` is refused where `log {n}` has
+`ge=1`.
 
 **A schema holds as a constrained decoder needs it to** for filling a tool call's arguments:
 
@@ -79,4 +80,6 @@ own), the `line` at fault where there's one, and a `message`. `chains` counts th
 
 **From Python,** `parsed.doc.check(targets, max_schema_bytes=2048, max_chain_bytes=8192)` gives the same as a
 `CheckReport`: `ok`, the counts, `skipped`, `problems` and `to_json()`. It raises `ImportError` for a target that
-doesn't import. Each problem is a `Problem`: `check`, `message`, `command` and `line`.
+doesn't import. Each problem is a `Problem`: `check`, `message`, `command` and `line`. The defaults are the module's
+`MAX_SCHEMA_BYTES` and `MAX_CHAIN_BYTES` (`from parsed.doc.check import MAX_SCHEMA_BYTES`: the package's `check` is
+the function).

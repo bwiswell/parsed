@@ -73,6 +73,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast, overload
 # At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), and `Routed`'s name a `Reading`.
 from ._walk import RESERVED, Completion, Reading, Routes, beneath, goes, split
 from ._walk._complete import being_typed
+from ._walk._hints import usage
 from ._walk._terms import HELP, JSON
 from ._walk._walker import _flag
 from .argv import options_of
@@ -1031,12 +1032,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError as e:
-            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
-            said = self.app._said(line, self._subjects)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001 -- the app's
+            said = self.app._said(line, self._subjects)  # noqa: SLF001 -- the app's
             yield _refused(line, None, e) if listed is None else Result(said, text=listed)
             return
         if 'help' in routed.reading.own:
-            yield Result(routed.reading.line, routed.said, text=self.app._help(routed))  # noqa: SLF001
+            yield Result(routed.reading.line, routed.said, text=self.app._help(routed))  # noqa: SLF001 -- the app's
             return
         try:
             self._check_terminal(routed)
@@ -1081,12 +1082,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError:
-            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001 -- the app's
             if listed is None:
                 raise
             return listed
         if 'help' in routed.reading.own:
-            return self.app._help(routed)  # noqa: SLF001
+            return self.app._help(routed)  # noqa: SLF001 -- the app's
         self._check_terminal(routed)
         found: Seared | str | Ask | None = None
         steps = [step.load() for step in routed.reading.steps]
@@ -1123,7 +1124,7 @@ class Session[S]:
             if wait is None:
                 yield found, None
             else:
-                waiting = _Waiting(self, wait, read, cls, routed.said, started)
+                waiting = _Waiting(self, wait, read, cls, routed.reading.said, started)
                 async with contextlib.aclosing(waiting.replies(found, change)) as replies:
                     async for found in replies:
                         yield found, round(clock.time() - started, 3)
@@ -1152,7 +1153,7 @@ class Session[S]:
             return
         for step in routed.reading.steps:
             if step.end.declaration.interactive:
-                raise _for_a_person(routed.mount, step.end, routed.reading.line)
+                raise _for_a_person(routed.mount, step.end, routed.reading.line, step.said)
 
     def _check_open(self) -> None:
         if self._stack is None:
@@ -1370,15 +1371,25 @@ def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | N
     return Result(line, said, done=done, met=met, waited=waited, reply=found, text=str(found))
 
 
-def _for_a_person(mount: Mount, end: End, line: str) -> RefusedError:
-    """The refusal of a command for a person at a terminal: its phrase, and what's said in its place, if anything."""
-    message = f'{_under(mount.tree, end.bound.phrase.text)} is for a person at a terminal'
+def _for_a_person(mount: Mount, end: End, line: str, said: str | None = None) -> RefusedError:
+    """The refusal of a command for a person at a terminal, and what's said in its place, if anything.
+
+    It names the command by ``said``, as the line says it; with none (a listing's, short of a command), as a usage
+    writes it.
+    """
+    message = f'{said or _phrase_said(mount.tree, end)} is for a person at a terminal'
     instead = end.declaration.instead
     if instead is None:
         return RefusedError(message, line=line)
     tree = _saying(mount, instead)
     said = _under(tree, cast('str', declaration(instead).phrase))
     return RefusedError(f'{message}: say `{tree.usage_of(instead)}` instead', line=line, instead=said)
+
+
+def _phrase_said(tree: Tree, end: End) -> str:
+    """A command's phrase as a usage writes it, its flags aside: ``ship <ship> fit``, its tree's prefix first."""
+    fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
+    return _under(tree, usage(end.bound, (), fields))
 
 
 def _saying(mount: Mount, cls: type[Command]) -> Tree:

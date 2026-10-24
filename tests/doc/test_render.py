@@ -44,13 +44,17 @@ class TestAPage:
 
     def test_its_usage_by_each_phrase(self):
         usage = _sections(render_command(farlandia.FleetMine))['Usage']
-        assert usage == '```\nfleet <fleet> mine [--for <for>]\ndetachment <detachment> mine [--for <for>]\n```'
+        assert usage == '```\nfleet <fleet> mine [--for <span>]\ndetachment <detachment> mine [--for <span>]\n```'
+
+    def test_its_usage_ends_with_yes_when_it_asks(self):
+        usage = _sections(render_command(farlandia.FleetsMerge))['Usage']
+        assert usage == '```\nfleets merge <fleet> --into <fleet> [--quiet] [--yes]\n```'
 
     def test_its_arguments_and_what_their_words_are(self):
         arguments = _sections(render_command(service.Run))['Arguments']
-        assert arguments.splitlines()[-1] == '| `-c`, `--config <config>` | `config` | a path |'
+        assert arguments.splitlines()[-1] == '| `-c`, `--config <path>` | `config` | a path |'
         merge = _sections(render_command(farlandia.FleetsMerge))['Arguments'].splitlines()
-        assert merge[-1] == '| `--quiet` | `quiet` | on when given |'
+        assert merge[-2:] == ['| `--into <fleet>` | `into` | a fleet |', '| `--quiet` | `quiet` | on when given |']
 
     def test_its_examples(self):
         assert _sections(render_command(farlandia.FleetMine))['Examples'].splitlines()[-2] == (

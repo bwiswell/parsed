@@ -7,6 +7,64 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.2.0 — 2026-10-24
+
+**The first real version.** Its public surface is settled: a breaking change waits for a minor version from here.
+It was tried against a port of farlandia's whole command tree, read, checked, completed and run beside farlandia's
+own, and what that showed is in: a refusal says the line's words, never a phrase with braces; a usage writes each
+flag's value by its kind, and ends an asking command's with `[--yes]`; a name is said by its label, what a person
+calls it; a resolver may say why a word names nothing; and a did-you-mean never offers the word typed.
+
+### Added
+
+- **A name's label:** `Name(category, scope=None, *, follows=False, label=None)`, and `Pairs` alike: `label` is what
+  a person calls one where the category isn't (`Name('good_in_deposit', scope='fleet', label='ore')`). `kind.term`,
+  the label or else the category, is what refusals, usages and help say: `no ore 'lab'`, `--ore <ore>`, `an ore`.
+  The category stays the key resolvers are given by, and the schema's `x-kind`.
+- **`Kind.usage_label(field)`:** what a usage writes a flag's value as, which a kind of an app's own may override;
+  `Flag.label`, each flag's, set as the tree is built (a `Flag` made without one takes its name); `Tree.labels`, the
+  tree-wide table, for a refusal before the command is known; and `parsed.wait.LABELS`, a wait's.
+- **A resolver may say why:** a `lookup` that raises a `ValueError` is refused with its message as the reason, at
+  the word, with the usage and no suggestions:
+  `fleet f1 acquire <blueprint>: no blueprint 'shield-9' here: inquire blueprints, docked`. A `PairsResolver`'s keys
+  and values alike; completion and rendering take it as a word that names nothing. A resolver that never raises
+  reads as before.
+- **`Reading.words` and `Reading.said`:** the words the command is said in, its flags aside, and the command as the
+  line says it (`fleets show f1`), for a message to name it.
+
+### Changed
+
+- **A refusal says the line's words, never a phrase with braces:** a slot's refusal (a word its kind can't read, a
+  value seared refuses, a name no resolver answers to) says the line's words up to the slot, as typed, then the slot
+  as a usage writes it: `fleet f1 retreat <share>: must be <= 95, got 100.0`, where it said
+  `fleet {fleet} retreat {share}: …`. A wait past its bound and a command for a person at a terminal are named as
+  the line says them (`fleets show f1: docked=true not met within 30s`). A name's scope is quoted by its text, a
+  quoted name's quotes left off.
+- **A flag's value is written by its kind:** `--for <span>`, `--into <fleet>`, `--config <path>`, `[--port <n>]`, an
+  `Enum`'s `<visual|text|auto>`, a literal word after a `|` (`<n|off>`), where each was written by the flag's name
+  (`--for <for>`). A kind with no word for it keeps the name (`--label <label>`), and a slot keeps its own
+  (`<fleet>`). It's in every usage and hint, help's rows, the root options' usage and help, and a reference page's
+  Usage and Arguments.
+- **An asking command's usage ends with `[--yes]`:** a command that declares `ASKS` shows `[--yes]` last wherever
+  its usage is written (a refusal's hint, `tree.usage` and `usage_of`, help's first line, a reference page's Usage),
+  and help gives `--yes` a row of its own: `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`. Any other
+  command's usage leaves it out, though every command still takes it. Help's note for one now reads
+  `It asks before it acts, and --yes answers it.`
+- **A name is described by its term:** `an ore`, `an item`, with `an` before a vowel's sound (`a unit`), where it
+  said `a` before any category.
+- **Breaking: the public surface is settled.** Two names not meant for users are private, `parsed.argv.VERSION` and
+  `parsed.doc.chains.head_text`; every other name the public modules give is documented, and stays until a minor
+  version. A `Flag`'s equality holds its label, so one made by hand equals a tree's only with the label the tree
+  gave it.
+
+### Fixed
+
+- **A placeholder before a number's suffix** is one: `fleet <fleet> retreat <share>%`, in an example or a line read
+  with placeholders, reads, where `<share>%` was refused as no number.
+- **A did-you-mean is never the word typed:** a resolver's suggestion equal to the word, case aside, is left out
+  (`no station 'vesta' for fleet 'Hauler'`, where it went on `did you mean Vesta?`), as a resolver that suggests
+  across scopes may give it.
+
 ## 0.1.8 — 2026-10-23
 
 **The command line and help.** `app.main(argv)` runs a program's arguments as its command line: its root options

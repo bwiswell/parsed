@@ -31,7 +31,7 @@ app's state (a width, a mirror) returns the text itself.
 | `usage` | the line doesn't read: the `ReadError`'s own data, with its line, column, word, hint and suggestions | `2` |
 | `refused` | a command for a person at a terminal, run with none ([`app.md`](app.md#a-person-at-a-terminal)): the `RefusedError`'s own data, with its line, and `instead` (what's said in its place) where the command declares one | `3` |
 | `validation` | a value its field refuses: the `ReadError`'s own data, with the field | `4` |
-| `timeout` | a wait whose bound passed before its reply met every condition: `{'error': 'timeout', 'message': 'fleets show {fleet}: docked=true not met within 30s'}`, its reply the last read | `7` |
+| `timeout` | a wait whose bound passed before its reply met every condition: `{'error': 'timeout', 'message': 'fleets show f1: docked=true not met within 30s'}`, its reply the last read | `7` |
 | `handler` | its handler raised, has no binding, or returned something besides its `REPLY`, text or nothing (a waited-on one, besides its `REPLY`): `{'error': 'handler', 'message': "KeyError: 'nope'"}` | `1` |
 
 The codes are `tooled`'s where the meanings match. A handler's failure is never silent: its message names the
@@ -56,7 +56,8 @@ def buy(command: FleetBuyShip, ctx: parsed.Context[Hangar]) -> parsed.Ask:
 - **`then`** is a callable of nothing, sync or async, returning what a handler returns: its `REPLY`, text, nothing,
   or another `Ask`, asked in turn.
 - **`--yes`** on the line answers every question yes, on any command, whether or not it declares `ASKS`; `yes=True`
-  to `run`, `call` or `app.run` does the same. `ASKS` only says ahead of time that a command may ask.
+  to `run`, `call` or `app.run` does the same. `ASKS` only says ahead of time that a command may ask, and its usage
+  ends with `[--yes]`.
 - **Else the session's `answer`** is asked, if it has one: yes or no from the question, sync or async.
   `parsed.reply.terminal(question)` is one for a person at a terminal: `question [y/N]`, yes for `y` or `yes`, case
   aside, and no for anything else, or the end of input.

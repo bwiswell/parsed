@@ -3,8 +3,9 @@
 **A command's help** (``<line> --help``, :func:`command`) is its usage by the phrase the line said, then:
 
 - its docstring;
-- a row for each of its arguments, a slot (``<fleet>``) or a flag (``-c, --config <config>``), with its field's
-  ``doc=``, or else what its kind's words are (:meth:`parsed.kinds.Kind.describe`);
+- a row for each of its arguments, a slot (``<fleet>``) or a flag (``-c, --config <path>``), with its field's
+  ``doc=``, or else what its kind's words are (:meth:`parsed.kinds.Kind.describe`), and ``--yes`` last for one that
+  asks first, which its usage ends with too;
 - the other phrases that say it, and its ``EXAMPLES``;
 - what it asks of the line: ``--yes`` for one that asks first, a wait's flags for one that can wait, ``then`` for a
   step, and a person at a terminal for an interactive one, with what's said in its place.
@@ -26,10 +27,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._walk import THEN
-from ._walk._hints import slot
+from ._walk._hints import plain_slot
 from .command import declaration
 from .tree import Arity
 from .wait import FLAGS as WAIT_FLAGS
+from .wait import LABELS as WAIT_LABELS
 from .wait import TIMEOUT
 
 if TYPE_CHECKING:
@@ -37,12 +39,11 @@ if TYPE_CHECKING:
 
     from seared import Field
 
-    from ._phrase import Place
     from .command import Declaration
     from .tree import Flag, Tree
 
 #: A wait's flags, as a note says them.
-_WAITS = {'until': '--until <path=value>', 'timeout': '--timeout <span>', 'watch': '--watch', 'count': '--count <n>'}
+_WAITS = {name: f'--{name} <{WAIT_LABELS[name]}>' if name in WAIT_LABELS else f'--{name}' for name in WAIT_FLAGS}
 
 #: An RST role's mark before a literal: ``:class:`Tree``` is written ```Tree```.
 _ROLE = re.compile(r':[a-z]+:`~?([^`]+)`')
@@ -96,13 +97,15 @@ def command(tree: Tree, cls: type, *, phrase: int = 0, instead: str | None = Non
     if said:
         parts.append(said)
     arguments = [
-        (_slot(place), _what(fields[place.field].doc, found.kind_of(place).describe(fields[place.field])))
+        (plain_slot(place), _what(fields[place.field].doc, found.kind_of(place).describe(fields[place.field])))
         for place in bound.places
     ]
     arguments += [
         (_flag(flag, found.shorts.get(flag.field), many=fields[flag.field].many), _flag_what(flag, found, fields))
         for flag in tree.flags_of(cls).values()
     ]
+    if found.asks:
+        arguments.append(('--yes', 'answer each question it asks yes'))
     if arguments:
         parts.append('\n'.join(rows(arguments)))
     others = [tree.usage_of(cls, at) for at in range(len(found.phrases)) if at != phrase]
@@ -139,14 +142,9 @@ def _what(given: str | None, described: str) -> str:
     return given.strip() if given and given.strip() else described
 
 
-def _slot(place: Place) -> str:
-    """A slot as an argument's row says it: as a usage does, without the brackets of an optional one."""
-    return slot(place).removeprefix('[').removesuffix(']')
-
-
 def _flag(flag: Flag, short: str | None, *, many: bool) -> str:
     """A flag as an argument's row says it: its short form first, then its name, and its value."""
-    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.name}>'
+    said = f'--{flag.name}' if flag.arity is Arity.SWITCH else f'--{flag.name} <{flag.label}>'
     if many and flag.arity is Arity.VALUE:
         said += ' …'
     return f'-{short}, {said}' if short else said
@@ -164,7 +162,7 @@ def _notes(found: Declaration, instead: str | None) -> list[str]:
     """What a command asks of the line, beyond its arguments."""
     notes: list[str] = []
     if found.asks:
-        notes.append('It asks before it acts: --yes answers yes.')
+        notes.append('It asks before it acts, and --yes answers it.')
     if found.can_wait:
         flags = ', '.join(_WAITS[name] for name in WAIT_FLAGS)
         notes.append(f'It can wait on its reply: {flags}; {TIMEOUT:g}s at most by default.')

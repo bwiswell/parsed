@@ -6,16 +6,22 @@ and change while it runs. So an app passes its resolvers with each line it reads
     tree.read('fleet Prospector dock vesta', names={'fleet': fleets, 'station': stations})
 
 **A resolver** is any object with :class:`Resolver`'s three methods. ``lookup`` reads a word to its key, or ``None``
-for a word that names nothing; ``suggest`` gives the names close to a word, for a did-you-mean; ``options`` gives
-every name it may be, for completion. Each takes the scope: the value of the field the ``Name`` is scoped by, once
-that field is read (``Name('station', scope='fleet')`` looks for a station given the fleet's key), or ``None`` when
-the ``Name`` has no scope or the line leaves its scope out. A scope that follows its chain (``follows=True``) is, in
-a later step, where the steps before it have moved the chain: a place's key, or ``None`` where it's somewhere the
-line doesn't say.
+for a word that names nothing, or raises a ``ValueError`` saying why it names nothing; ``suggest`` gives the names
+close to a word, for a did-you-mean; ``options`` gives every name it may be, for completion. Each takes the scope:
+the value of the field the ``Name`` is scoped by, once that field is read (``Name('station', scope='fleet')`` looks
+for a station given the fleet's key), or ``None`` when the ``Name`` has no scope or the line leaves its scope out. A
+scope that follows its chain (``follows=True``) is, in a later step, where the steps before it have moved the chain:
+a place's key, or ``None`` where it's somewhere the line doesn't say.
 
 **Pairs** (:class:`~parsed.kinds.Pairs`, a keyed field's ``key value`` words, as a routine's variables) take a
 :class:`PairsResolver`: a resolver for the keys, which gives each key's values a resolver of their own, since which
 names a value may be depends on its key, and on the scope (the routine named).
+
+**Why a word names nothing** is the resolver's to say, where it knows more than parsed: where to look, or every
+name there is. ``lookup`` raises a ``ValueError`` whose message is the reason, and parsed refuses the word with it, as
+it refuses a word its kind can't read: ``fleet f1 acquire <blueprint>: no blueprint 'shield-9' here: inquire
+blueprints, docked``, with the usage and no did-you-mean. ``None`` says ``no blueprint 'shield-9'``, with the
+resolver's suggestions. Completion and rendering take either as a word that names nothing.
 
 **A category with no resolver reads as typed:** parsed never invents a key, since a normalization it guessed would
 drift from the app's. So a line read with no names at all (a loose read, for a check or a render) keeps every name as
@@ -37,7 +43,11 @@ class Resolver(Protocol):
     """
 
     def lookup(self, word: str, scope: str | None) -> str | None:
-        """The key ``word`` names, or ``None`` when it names nothing."""
+        """The key ``word`` names, or ``None`` when it names nothing.
+
+        Raises:
+            ValueError: ``word`` names nothing, and the resolver says why: its message is the refusal's reason.
+        """
         ...
 
     def suggest(self, word: str, scope: str | None) -> Sequence[str]:

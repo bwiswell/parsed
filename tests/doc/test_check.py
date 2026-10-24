@@ -27,7 +27,7 @@ class TestTheFixtures:
         report = check(['_support_farlandia', '_support_protocol'])
         assert report.ok, report.problems
         assert (report.commands, report.schemas) == (17, 17)
-        assert report.examples == 11
+        assert report.examples == 13  # a placeholder before a suffix among them: `<share>%`
         assert report.round_trips > report.commands  # an instance with every field, where it isn't the other
         assert report.chains == 1  # the fleet's orders
         assert report.skipped == {}
@@ -52,7 +52,7 @@ class TestSeededFaults:
         assert found == [
             ('example', '_support_check.examples.Mine', 'mien <fleet>', "no command 'mien'; did you mean mine?"),
             ('example', '_support_check.examples.Mine', 'dig <site>', 'it reads as Dig, not Mine'),
-            ('example', '_support_check.examples.Log', 'log 0', 'log {n}: must be >= 1, got 0'),
+            ('example', '_support_check.examples.Log', 'log 0', 'log <n>: must be >= 1, got 0'),
             (
                 'example',
                 '_support_check.examples.Look',

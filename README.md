@@ -2,14 +2,14 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.1.8 runs a command line:** `app.main(argv)` runs a program's arguments (`servicectl -c service.toml run`), its
-> root options before the first word and every flag after it the line's, short flags where a command gives them,
-> and `--json` for the envelope. Help says each command in its own words, a listing what a line may still say, and
-> a package's commands get reference pages. A line says a chain of steps, joined by `then`, run as one order and
-> called as one tool; an app mounts trees of commands under prefixes of words and runs each line by its handler,
-> giving one envelope with an exit code; a read waits on its reply; lines are read with an app's names, completed as
-> they're typed, written back from an instance, and described as data for the tools that read commands. 0.2.0 is
-> the first version to build on, its API settled.
+> **0.2.0 is the first version to build on,** its public surface settled. `app.main(argv)` runs a program's
+> arguments as its command line, and a refusal says the line's own words, each flag's value by its kind and each
+> name by what a person calls it (`--into <fleet>`, `no ore 'lab'`); an app's resolvers may say why a word names
+> nothing. Help says each command in its own words, and a package's commands get reference pages. A line says a
+> chain of steps, joined by `then`, run as one order and called as one tool; an app mounts trees of commands under
+> prefixes of words and runs each line by its handler, giving one envelope with an exit code; a read waits on its
+> reply; lines are completed as they're typed, written back from an instance, and described as data for the tools
+> that read commands.
 
 ## Why parsed
 
@@ -27,14 +27,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.1.8
+uv add git+https://github.com/bwiswell/parsed --tag v0.2.0
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.1.8" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.2.0" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving
@@ -43,23 +43,73 @@ must pin the same seared tag: uv refuses two sources for one package.
 
 ## Quick start
 
-`import parsed` is enough to declare a seared class: every field type, the errors, the base class as
-`parsed.Parsed` and the decorator as `parsed.parsed`.
+A command is a seared class: its `PHRASE` says how a line says it, and its fields are the values the line gives. An
+app mounts the commands, binds each one's handler, and runs a program's arguments as its command line:
 
 ```python
+import sys
+from datetime import timedelta
+
 import parsed
 
 
 @parsed.parsed
-class Mined(parsed.Parsed):
-    fleet: str = parsed.Str(required=True, doc='the fleet that mined')
-    tonnes: float = parsed.Float(ge=0, default=0.0, doc='what it brought up')
+class FleetMine(parsed.Command):
+    """Mine until the hold is full, or for as long as it's told."""
+
+    PHRASE = 'fleet {fleet} mine'
+    EFFECT = parsed.Effect.ACTION
+    EXAMPLES = ('fleet prospector mine --for 1h30m',)
+
+    fleet: str = parsed.Str(required=True, doc='the fleet that mines')
+    for_: timedelta | None = parsed.TimeDelta(data_key='for', default=None, doc='stop after this long')
 
 
-Mined.load({'fleet': 'prospector', 'tonnes': 12.5})
+def mine(command: FleetMine, ctx: parsed.Context) -> str:
+    return f'{command.fleet} mines' + (f' for {command.for_}' if command.for_ else '')
+
+
+app = parsed.App('fleets')
+app.mount(parsed.Tree([FleetMine]))
+app.on(FleetMine, mine)
+
+if __name__ == '__main__':
+    sys.exit(app.main())
 ```
 
-Command modules keep to `import parsed`, unaliased, so a field can be named anything without shadowing the module.
+```
+$ fleets fleet prospector mine --for 1h30m
+prospector mines for 1:30:00
+$ fleets fleet prospector mine --for soon
+--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m
+$ fleets fleet prospector mien
+no command 'fleet prospector mien'; did you mean mine?
+$ fleets fleet prospector mine --help
+fleet <fleet> mine [--for <span>]
+
+Mine until the hold is full, or for as long as it's told.
+
+  <fleet>       the fleet that mines
+  --for <span>  stop after this long
+
+Examples:
+  fleet prospector mine --for 1h30m
+```
+
+A refusal exits `2`. The same declaration reads a line to its instance, writes one back, and describes itself for a
+tool:
+
+```python
+import parsed.doc
+
+app.read('fleet prospector mine --for 1h30m')    # FleetMine(fleet='prospector', for_=timedelta(seconds=5400))
+app.render(FleetMine(fleet='prospector', for_=timedelta(minutes=90)))    # 'fleet prospector mine --for 1h30m'
+parsed.doc.json_schema(FleetMine)                # a closed JSON Schema, its x-phrase and x-effect beside
+```
+
+`import parsed` is enough to declare commands: every seared field type, the errors, `parsed.Parsed` and
+`parsed.parsed` for a plain seared class, and parsed's own. Command modules keep to `import parsed`, unaliased, so a
+field can be named anything without shadowing the module.
 
 ## Docs
 

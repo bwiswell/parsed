@@ -126,10 +126,10 @@ class TestWordForms:
     @pytest.mark.parametrize(
         ('line', 'says'),
         [
-            ('log many', r"log \{n\}: 'many' is not a whole number"),
+            ('log many', r"log <n>: 'many' is not a whole number"),
             ('fleet f1 mine --for soon', r"--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m"),
             ('fleet f1 mine --for 90', r"--for: '90' is not a span of time"),
-            ('fleets start maybe', r"fleets start \{on\}: 'maybe' is not true or false"),
+            ('fleets start maybe', r"fleets start <on>: 'maybe' is not true or false"),
             ('handheld connect dock r7 --host h --port 1,00', r"--port: '1,00' is not a whole number"),
         ],
     )
@@ -140,13 +140,13 @@ class TestWordForms:
     def test_a_kind_s_bounds_are_seared_s_to_check(self, tree):
         reading = tree.walk('log 0')
         assert reading.data() == {'n': 0}
-        with pytest.raises(ReadError, match=r'log \{n\}: must be >= 1, got 0'):
+        with pytest.raises(ReadError, match=r'log <n>: must be >= 1, got 0'):
             reading.load()
 
     def test_load_refuses_a_key_the_command_doesn_t_know(self, tree, monkeypatch):
         reading = tree.walk('log 40')
         monkeypatch.setattr(type(reading), 'data', lambda _: {'n': 40, 'lines': 3})
-        with pytest.raises(ReadError, match=r'log \{n\}: unknown key') as caught:
+        with pytest.raises(ReadError, match=r'log 40: unknown key') as caught:  # no word gave it: the line as read
             reading.load()
         assert (caught.value.kind, caught.value.field) == ('validation', None)
 
@@ -169,6 +169,20 @@ class _Recording:
 
     def values(self, key, scope):
         return self.inner.values(key, scope)
+
+
+@parsed.parsed
+class Dig(Command):
+    """A fleet's dig, its ore a name of a category whose label says what a person calls it."""
+
+    PHRASE = 'fleet {fleet} dig'
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {
+        'fleet': farlandia.FLEET,
+        'ore': parsed.Name('good_in_deposit', scope='fleet', label='ore'),
+    }
+
+    fleet: str = parsed.Str(required=True)
+    ore: str | None = parsed.Str(default=None)
 
 
 @parsed.parsed
@@ -212,7 +226,7 @@ class TestNames:
 
     def test_a_renamed_slot_reads_by_its_own_category(self, tree):
         assert tree.read('detachment Scouts mine', names=farlandia.NAMES) == farlandia.FleetMine(fleet='d2')
-        with pytest.raises(ReadError, match=r"detachment \{detachment\} mine: no detachment 'Prospector'"):
+        with pytest.raises(ReadError, match=r"detachment <detachment>: no detachment 'Prospector'"):
             tree.read('detachment Prospector mine', names=farlandia.NAMES)
 
     def test_each_of_a_list_s_names(self, tree):
@@ -229,16 +243,58 @@ class TestNames:
     def test_a_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleets merge Prospector --into Haulr', names=farlandia.NAMES)
         assert str(found) == (
-            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]`"
+            "--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`"
         )
         assert (found.kind, found.column, found.word, found.field) == ('usage', 31, 'Haulr', 'into')
         assert found.suggestions == ('Hauler',)
-        assert found.hint == 'fleets merge <fleet> --into <into> [--quiet]'
+        assert found.hint == 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'
 
     def test_a_list_s_word_no_name_answers_to(self, tree):
         found = _refusal(tree, 'fleet f1 sell iron gold', names=farlandia.NAMES)
         assert (found.word, found.column, found.field) == ('gold', 19, 'goods')
-        assert found.message.startswith("fleet {fleet} sell {goods}: no good 'gold'")
+        assert found.message.startswith("fleet f1 sell <goods> …: no good 'gold'")
+
+    def test_a_resolver_that_says_why(self, tree):
+        reason = 'no station {word!r} in reach of {scope}: fleet <fleet> scan lists them'
+        stations = farlandia.Saying(farlandia.STATIONS, reason)
+        found = _refusal(tree, 'fleet Hauler dock vesta', names={**farlandia.NAMES, 'station': stations})
+        assert str(found) == (
+            "fleet Hauler dock <station>: no station 'vesta' in reach of f2: fleet <fleet> scan lists them "
+            '`fleet <fleet> dock [<station>]`'
+        )
+        assert (found.kind, found.word, found.field) == ('usage', 'vesta', 'station')
+        assert found.suggestions == ()  # the reason says what's near
+        assert found.hint == 'fleet <fleet> dock [<station>]'
+        assert tree.read('fleet Hauler dock ceres', names={**farlandia.NAMES, 'station': stations}).station == 'ceres'
+
+    def test_a_did_you_mean_never_the_word_itself(self, tree):
+        class Across(_Recording):  # suggests from every scope, as an app's may
+            def suggest(self, word, scope):
+                return self.inner.suggest(word, None)
+
+        names = {**farlandia.NAMES, 'station': Across(farlandia.STATIONS)}
+        found = _refusal(tree, 'fleet Hauler dock vesta', names=names)
+        assert found.suggestions == ()  # Vesta, the word itself case aside, is out of Hauler's reach
+        assert str(found) == (
+            "fleet Hauler dock <station>: no station 'vesta' for fleet 'Hauler' `fleet <fleet> dock [<station>]`"
+        )
+        assert _refusal(tree, 'fleet Hauler dock vest', names=names).suggestions == ('Vesta',)  # another word
+
+    def test_a_flag_s_resolver_that_says_why(self, tree):
+        fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}: fleets list names them')
+        found = _refusal(tree, 'fleets merge Prospector --into Haulr', names={**farlandia.NAMES, 'fleet': fleets})
+        assert found.message == (
+            "--into: no fleet 'Haulr': fleets list names them `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`"
+        )
+        assert (found.word, found.field, found.suggestions) == ('Haulr', 'into', ())
+
+    def test_a_name_said_by_its_label(self):
+        names = {**farlandia.NAMES, 'good_in_deposit': farlandia.GOODS}
+        digs = Tree([Dig])
+        assert digs.read('fleet f1 dig --ore Iron', names=names).ore == 'iron'
+        found = _refusal(digs, 'fleet f1 dig --ore lab', names=names)
+        assert found.message.startswith("--ore: no ore 'lab' for fleet 'f1' `")  # not good_in_deposit, its category
+        assert found.hint == 'fleet <fleet> dig [--ore <ore>]'
 
 
 class TestLiteralWords:
@@ -249,11 +305,11 @@ class TestLiteralWords:
         assert tree.walk('fleet f1 retreat off').data() == {'fleet': 'f1', 'share': None}
 
     def test_a_quoted_word_is_never_a_literal(self, tree):
-        with pytest.raises(ReadError, match=r"retreat \{share\}: 'off' is not a number"):
+        with pytest.raises(ReadError, match=r"fleet f1 retreat <share>: 'off' is not a number"):
             tree.walk('fleet f1 retreat "off"')
 
     def test_the_share_s_bounds_are_seared_s(self, tree):
-        with pytest.raises(ReadError, match=r'retreat \{share\}: must be >= 5, got 2\.0'):
+        with pytest.raises(ReadError, match=r'fleet f1 retreat <share>: must be >= 5, got 2\.0'):
             tree.read('fleet f1 retreat 2%')
 
     def test_a_name_s_literal_comes_before_its_resolver(self):
@@ -301,7 +357,7 @@ class TestPairs:
                 r"no variable 'hme' for routine 'mining'; did you mean home\? `fleet <fleet> run <routine>",
                 'hme',
             ),
-            ('fleet f1 run mining home mars', r"run \{routine\} \{variables\*\*\}: no home 'mars'", 'mars'),
+            ('fleet f1 run mining home mars', r"fleet f1 run mining <variables …>: no home 'mars'", 'mars'),
             ('fleet f1 run mining ore iron home', r"'home' and its value\? pairs come in twos", 'home'),
             ('fleet f1 run mining ore iron ore coal', r'ore is given twice', 'ore'),
         ],
@@ -310,6 +366,39 @@ class TestPairs:
         found = _refusal(tree, line, names=farlandia.NAMES)
         assert re.search(says, str(found))
         assert (found.word, found.field) == (word, 'variables')
+
+    def test_a_key_s_resolver_and_a_value_s_that_say_why(self, tree):
+        variables = farlandia.Variables(
+            {'mining': {'ore': farlandia.Saying(farlandia.GOODS, 'no ore {word!r}: the deposit holds iron and coal')}}
+        )
+        keys = farlandia.Saying(variables, 'no variable {word!r} for {scope}: routines show {scope} lists them')
+        names = {**farlandia.NAMES, 'variable': keys}
+        hint = ' `fleet <fleet> run <routine> [<variables …>]`'
+        found = _refusal(tree, 'fleet f1 run mining hme iron', names=names)
+        assert found.message == (
+            f"fleet f1 run mining <variables …>: no variable 'hme' for mining: routines show mining lists them{hint}"
+        )
+        found = _refusal(tree, 'fleet f1 run mining ore gold', names=names)
+        assert found.message == (
+            f"fleet f1 run mining <variables …>: no ore 'gold': the deposit holds iron and coal{hint}"
+        )
+        assert (found.word, found.suggestions) == ('gold', ())
+
+    def test_a_key_said_by_its_label(self):
+        @parsed.parsed
+        class Run(Command):
+            PHRASE = 'run {routine} {variables**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {
+                'routine': parsed.Name('routine'),
+                'variables': parsed.kinds.Pairs('routine_variable', scope='routine', label='variable'),
+            }
+
+            routine: str = parsed.Str(required=True)
+            variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
+
+        names = {**farlandia.NAMES, 'routine_variable': farlandia.NAMES['variable']}
+        found = _refusal(Tree([Run]), 'run mining hme vesta', names=names)
+        assert found.message.startswith("run mining <variables …>: no variable 'hme' for routine 'mining';")
 
     def test_a_plain_resolver_for_pairs_is_a_mistake_in_the_app(self, tree):
         names = {**farlandia.NAMES, 'variable': farlandia.Table({'ore': 'ore'})}
@@ -338,16 +427,26 @@ class TestPlaceholders:
     def test_a_literal_still_reads_as_one(self, tree):
         assert tree.walk('fleet <fleet> dock nearest', placeholders=True).data() == {'fleet': '<fleet>'}
 
+    def test_one_before_its_number_s_suffix(self, tree):
+        reading = tree.walk('fleet <fleet> retreat <share>%', placeholders=True)
+        assert reading.data() == {'fleet': '<fleet>', 'share': '<share>%'}
+
+    def test_a_suffix_only_its_kind_s(self, tree):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>%' is not a whole number"):
+            tree.walk('log <n>%', placeholders=True)  # no suffix of its own
+        with pytest.raises(ReadError, match=r"fleet <fleet> retreat <share>: '<share>x' is not a number"):
+            tree.walk('fleet <fleet> retreat <share>x', placeholders=True)
+
     def test_never_a_literal_word(self, tree):
         with pytest.raises(ReadError, match=r"no command 'fleet <fleet> <verb>'"):
             tree.walk('fleet <fleet> <verb>', placeholders=True)
 
     def test_only_when_asked(self, tree):
-        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>' is not a whole number"):
             tree.walk('log <n>')
 
     def test_a_quoted_one_is_a_value(self, tree):
-        with pytest.raises(ReadError, match=r"log \{n\}: '<n>' is not a whole number"):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>' is not a whole number"):
             tree.walk('log "<n>"', placeholders=True)
 
     def test_its_reading_doesn_t_load(self, tree):
@@ -411,7 +510,7 @@ class TestWaits:
                 'fleet f1 mine --until docked=true',
                 (
                     "fleet f1 mine can't wait: --until is for a read, a command that declares EFFECT = READ and a "
-                    'REPLY `fleet <fleet> mine [--for <for>]`'
+                    'REPLY `fleet <fleet> mine [--for <span>]`'
                 ),
                 '--until',
             ),
@@ -586,7 +685,7 @@ class TestChainPlace:
         assert found.steps[1].data()['station'] == 'vesta'
         refused = _refusal(tree, 'fleet Prospector jump sol then dock vesta', names=farlandia.NAMES)
         assert str(refused) == (
-            "fleet {fleet} dock {station}: no station 'vesta' for fleet 'Prospector', once at 'sol' "
+            "fleet Prospector jump sol then dock <station>: no station 'vesta' for fleet 'Prospector', once at 'sol' "
             '`fleet <fleet> dock [<station>]`'
         )
         assert (refused.word, refused.field) == ('vesta', 'station')
@@ -614,7 +713,7 @@ class TestChainPlace:
             Tree([_ShipWarp, _ShipLoad]), 'ship s1 warp --to sol then load iron at vesta', names=_SHIP_NAMES
         )
         assert str(refused).startswith(
-            "ship {ship} load {good} at {site}: no site 'vesta' for ship 's1', once at 'sol'"
+            "ship s1 warp --to sol then load iron at <site>: no site 'vesta' for ship 's1', once at 'sol'"
         )
 
     def test_a_placeholder_says_no_place(self, tree):
@@ -678,7 +777,9 @@ def shorts() -> Tree:
 class TestShortFlags:
     def test_a_short_says_its_flag(self, shorts):
         assert shorts.read('run -c c.toml') == service.Run(config=Path('c.toml'))
-        assert shorts.walk('run -c c.toml').given['config'].by == Flag(name='config', field='config', arity='value')
+        assert shorts.walk('run -c c.toml').given['config'].by == Flag(
+            name='config', field='config', arity='value', label='path'
+        )
 
     def test_h_is_help_s(self, shorts):
         assert shorts.walk('run -h').own == {'help'}
@@ -725,7 +826,7 @@ class TestReading:
         assert list(reading.given) == ['fleet', 'into', 'quiet']
         fleet, into, quiet = reading.given.values()
         assert (fleet.by.slot, [w.text for w in fleet.words], fleet.value) == ('fleet', ['f1'], 'f1')
-        assert into.by == Flag(name='into', field='into', arity=parsed.tree.Arity.VALUE)
+        assert into.by == Flag(name='into', field='into', arity=parsed.tree.Arity.VALUE, label='fleet')
         assert ([w.raw for w in into.words], into.value) == (['--into', 'f2'], 'f2')
         assert ([w.start for w in quiet.words], quiet.value) == ([26], True)
 
@@ -757,14 +858,15 @@ class TestRefusals:
             ('fleet f1 jump', r'fleet f1 jump: which system\?'),
             ('fleet f1 jump nearest', r'fleet f1 jump nearest: which ore\?'),
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
+            ('fleet f1 "mine"', r'no command \'fleet f1 "mine"\'; did you mean mine\?'),  # quoted, so not the word
             ('log 40 50', r"log 40: '50' is left over"),
             ('fleet f1 dock nearest now', r"fleet f1 dock nearest: 'now' is left over"),
             ('--into f2 log', r'--into comes before a command: a flag follows the first word'),
             ('say "hello', r'the quote at column 5 is never closed'),
             ('log --n 3', r'no command takes --n'),
             ('log --into f2', r'log takes no --into `log \[<n>\]`'),
-            ('fleet f1 mine --into f2', r'fleet f1 mine takes no --into `fleet <fleet> mine \[--for <for>\]`'),
-            ('fleets merge f1', r'fleets merge f1 needs --into `fleets merge f1 --into <into>`'),
+            ('fleet f1 mine --into f2', r'fleet f1 mine takes no --into `fleet <fleet> mine \[--for <span>\]`'),
+            ('fleets merge f1', r'fleets merge f1 needs --into `fleets merge f1 --into <fleet>`'),
             ('fleet f1 mine --for', r'--for needs a value'),
             ('fleet f1 mine --for --yes', r'--for needs a value'),
             ('fleet f1 mine --for -- 90', r'--for needs a value'),
@@ -821,14 +923,14 @@ class TestRefusalsAsData:
             ('fleet f1 jump nearest', 'fleet f1 jump nearest <ore>'),
             ('log 40 50', 'log [<n>]'),
             ('log --into f2', 'log [<n>]'),
-            ('fleet f1 mine --for', '--for <for>'),
-            ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <into>'),
-            ('fleets merge', 'fleets merge <fleet> --into <into> [--quiet]'),  # one command past it: its usage
+            ('fleet f1 mine --for', '--for <span>'),
+            ('fleets merge f1 --quiet', 'fleets merge f1 --quiet --into <fleet>'),
+            ('fleets merge', 'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'),  # one command past it: its usage
             ('ships make s1 add', 'ships make s1 add <part>'),
             ('fleet f1 sell', 'fleet f1 sell <goods> …'),
             (
                 'handheld connect',
-                'handheld connect <source> <reader_id> --host <host> [--port <port>] [--label <label>]',
+                'handheld connect <source> <reader_id> --host <host> [--port <n>] [--label <label>]',
             ),
         ],
     )
@@ -882,11 +984,42 @@ class TestRefusalsAsData:
         }
 
 
+class TestARefusalSaysTheWords:
+    # A slot's refusal says the line's words up to it, as typed, then the slot as a usage writes it; a command's
+    # message, the command as the line says it.
+    def test_an_optional_slot_without_its_brackets(self, tree):
+        with pytest.raises(ReadError, match=r'^log <n>: '):
+            tree.read('log 0')
+
+    def test_a_tree_s_prefix_among_the_words(self):
+        farm = Tree.collect('_support_farlandia', under='farm')
+        with pytest.raises(ReadError, match=r'^farm log <n>: must be >= 1, got 0$'):
+            farm.read('farm log 0')
+
+    def test_a_flag_before_the_slot_left_out(self, tree):
+        with pytest.raises(ReadError, match=r"^fleets merge <fleet>: no fleet 'zed'"):
+            tree.read('fleets --into f2 merge zed', names=farlandia.NAMES)
+
+    def test_the_command_as_the_line_says_it(self, tree):
+        reading = tree.walk('fleets merge --into f2 f1 --quiet')
+        assert (reading.said, [word.raw for word in reading.words]) == ('fleets merge f1', ['fleets', 'merge', 'f1'])
+        chain = tree.walk('fleet f1 jump sol --yes then move belt then mine')
+        assert [step.said for step in chain.steps] == [
+            'fleet f1 jump sol',
+            'fleet f1 jump sol --yes then move belt',  # a later step with the line before it
+            'fleet f1 jump sol --yes then move belt then mine',
+        ]
+
+    def test_a_quoted_scope_by_its_text(self, tree):
+        with pytest.raises(ReadError, match=r"no station 'zed' for fleet 'Hauler'"):
+            tree.read('fleet "Hauler" dock zed', names=farlandia.NAMES)
+
+
 class TestSearedsRefusals:
     # A value seared refuses comes back as the word that gave it.
     def test_a_slot_s_value(self, tree):
         found = _refusal(tree, 'log 0', load=True)
-        assert str(found) == 'log {n}: must be >= 1, got 0'
+        assert str(found) == 'log <n>: must be >= 1, got 0'
         assert (found.kind, found.column, found.word, found.field) == ('validation', 4, '0', 'n')
         assert isinstance(found.__cause__, parsed.ValidationError)
 
@@ -909,7 +1042,7 @@ class TestSearedsRefusals:
         note = _one('note {text**}', text=parsed.Str(required=True, max_length=5))
         found = _refusal(note, 'note far too long', load=True)
         assert (found.column, found.word, found.field) == (5, 'far too long', 'text')
-        assert found.message.startswith('note {text**}: ')
+        assert found.message.startswith('note <text …>: ')
 
     def test_a_pattern(self):
         code = _one('code {c}', c=parsed.Str(required=True, pattern='[a-z]+'))
@@ -923,7 +1056,7 @@ class TestFarlandiasCases:
     Lifted: words, slots and flags anywhere after the first word; a slot of several words; a span of time and true or
     false; the refusals that are the walk's, with did-you-mean and a usage for a hint. Changed on purpose: ``--quiet
     yes`` reads ``yes`` as a word, since the tree knows ``--quiet`` is a switch; a flag the command doesn't take says
-    so with the command's usage (``takes no --into `fleet <fleet> mine [--for <for>]```), and a required flag left out
+    so with the command's usage (``takes no --into `fleet <fleet> mine [--for <span>]```), and a required flag left out
     with the line it's missing from. Later: a share's ``off`` or percent (a kind of its own), names alone (names),
     chains and subjects, ``--help``, completion, schemas and ``render``.
     """
@@ -943,7 +1076,7 @@ class TestFarlandiasCases:
             ('fleet', 'which fleet'),
             ('fleet f1 progrms', "no command 'fleet f1 progrms'"),
             ('fleet f1 jump', 'which system'),
-            ('fleet f1 mine --into f2', 'takes no --into `fleet <fleet> mine \\[--for <for>\\]`'),
+            ('fleet f1 mine --into f2', 'takes no --into `fleet <fleet> mine \\[--for <span>\\]`'),
             ('fleets merge f1', '--into'),
             ('fleet f1 mine --for 1h --for 2h', 'given twice'),
             ('fleet f1 mine --for', 'needs a value'),

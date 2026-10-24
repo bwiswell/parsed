@@ -9,7 +9,7 @@ docs among it. Its values are the wire's, not the line's words: a span of time i
 
 | Key | Holds |
 |---|---|
-| `x-kind` | its category: `fleet`, `station` |
+| `x-kind` | its category: `fleet`, `station`; never its label, since a tool looks resolvers up by the category |
 | `x-scope` | the wire name of the field that narrows it, when it has one |
 
 **The command's own**, after its `title` and `description`, each only when the command declares it:

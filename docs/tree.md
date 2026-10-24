@@ -37,10 +37,11 @@ holds under one.
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
-`tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all:
-`fleets merge <fleet> --into <into> [--quiet]`. `tree.usage_of(cls, phrase=0)` says one of its commands by a phrase
-alike: `0`, its `PHRASE` (`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a
-`KeyError` for a class that isn't one of them, and an `IndexError` for a phrase it hasn't.
+`tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all, and
+`[--yes]` last for one that may ask first: `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`.
+`tree.usage_of(cls, phrase=0)` says one of its commands by a phrase alike: `0`, its `PHRASE`
+(`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a `KeyError` for a class that
+isn't one of them, and an `IndexError` for a phrase it hasn't.
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:
@@ -70,7 +71,7 @@ read up to it, then any did-you-mean and a hint; the same parts are there as dat
 ```
 fleet f1 jump: which system? `fleet f1 jump <system>`
 no command 'fleet f1 mien'; did you mean mine?
-log {n}: must be >= 1, got 0
+log <n>: must be >= 1, got 0
 ```
 
 [`_walk/_walker.md`](_walk/_walker.md#what-it-refuses) has each refusal.
@@ -151,8 +152,12 @@ value, and `--watch`, a switch ([`wait.md`](wait.md)). A field of another comman
 as the wait's does. `tree.waits` says whether any command can wait.
 
 `tree.flags` is the tree-wide table, name to arity; `tree.flags_of(cls)` is one command's flags, each with its name,
-its field, its arity and whether it's negated. parsed's own, `--help`, `--json`, `--yes` and `--dry-run`, are
-switches every command takes, kept apart from its fields (`Reading.own`).
+its field, its arity, whether it's negated, and its `label`: what a usage writes its value as, by its kind
+([`kinds.md`](kinds.md#labelling-a-value)), `span` for `--for <span>`. `tree.labels` is the tree-wide table, name to
+label, for a refusal before the command is known (`--for needs a value`): the label every command that takes the
+flag gives it, a wait's among them (`path=value`, `span`, `n`), or its name where they differ. parsed's own,
+`--help`, `--json`, `--yes` and `--dry-run`, are switches every command takes, kept apart from its fields
+(`Reading.own`).
 
 ## What the build refuses
 
@@ -172,3 +177,18 @@ Each is a `DeclarationError` naming the commands and the phrases:
 
 A command whose own declaration doesn't check is refused as `declaration` refuses it
 ([`command.md`](command.md#declarationcls)).
+
+## In this module
+
+- `Tree(commands, under='')` and `Tree.collect(*targets, under='')`, as above.
+- `Flag`, a command's flag, as `tree.flags_of(cls)` gives it and a reading's `given[...].by` holds one: its `name`,
+  its `field`, its `arity`, whether it's `negated`, and its `label`. One made without a label takes its name.
+- `End`, where a phrase ends, as `reading.end` holds it: its `declaration`, its `bound` phrase, and the `places` its
+  slots were read at on the way, an optional slot left out not among them.
+- `Node`, a point in the trie (`tree.root`, `tree.top`): its literal children by word (`words`), its `slot`, an
+  `Edge`, and the `end` of the phrase that ends there, if one does. An `Edge` is what the slot takes (its `kind`, a
+  `SlotKind`), the `node` after it, and the slot, phrase and command that made it, for messages.
+- `flag_name(wire, negated=False)` is a field's flag, from its wire name: `max_bytes` as `max-bytes`, and
+  `no-stop` for a negated `stop`.
+- The walk's terms, given here: `RESERVED`, `THEN`, `SlotKind` and `Arity` ([`_walk/_terms.md`](_walk/_terms.md)),
+  and `Reading` and `Completion`.

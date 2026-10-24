@@ -50,11 +50,12 @@ from seared.doc import collect
 from . import _walk
 from ._phrase import Word, parse
 from ._walk import RESERVED, THEN, Arity, Completion, Reading, SlotKind
-from ._walk._hints import usage
+from ._walk._hints import label, usage
 from .command import Command, Declaration, declaration
 from .errors import DeclarationError
 from .kinds import Switch
 from .wait import FLAGS as WAIT_FLAGS
+from .wait import LABELS as WAIT_LABELS
 from .wait import SWITCHES as WAIT_SWITCHES
 
 if TYPE_CHECKING:
@@ -77,12 +78,20 @@ class Flag:
         field: The field it sets, by attribute name.
         arity: Whether it takes a value.
         negated: Whether it's a ``--no-…`` switch, setting its ``Bool`` field ``False``.
+        label: What a usage writes its value as, between ``<`` and ``>``: by its kind (``span``), else its name, which
+            it is when left out. A switch's is its name.
     """
 
     name: str
     field: str
     arity: Arity
     negated: bool = False
+    label: str = ''
+
+    def __post_init__(self) -> None:
+        """A label left out is the flag's name."""
+        if not self.label:
+            object.__setattr__(self, 'label', self.name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +141,8 @@ class Tree:
         top: Where every phrase begins: the node after the prefix's words, or the root.
         flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until``,
             ``--timeout``, ``--watch``, ``--count``) among them when a command can wait.
+        labels: What a usage writes each flag's value as, by its name, for a refusal before the command is known:
+            the label every command that takes it gives it (``span``), or its name where they differ.
         shorts: Each short flag a command declares (``SHORTS``), to the flag it says: ``{'c': 'config'}``. A short
             says one flag throughout the tree, and only on the commands that declare it.
         waits: Whether any of its commands can wait (:mod:`parsed.wait`).
@@ -158,10 +169,12 @@ class Tree:
             self.top = self.top.words.setdefault(word, Node())
         self._flags: dict[type, Mapping[str, Flag]] = {}
         arities: dict[str, tuple[Arity, str]] = {}
+        labels: dict[str, set[str]] = {}
         shorts: dict[str, tuple[str, str]] = {}  # each short's flag, and the command that first said so
         self.waits = any(found_declaration.can_wait for found_declaration in self.commands)
         for name in WAIT_FLAGS if self.waits else ():
             _check_arity(name, Arity.SWITCH if name in WAIT_SWITCHES else Arity.VALUE, 'a wait', arities)
+            labels.setdefault(name, set()).add(WAIT_LABELS.get(name, name))
         for found_declaration in self.commands:
             for bound in found_declaration.phrases:
                 for places in _routes(bound):
@@ -177,8 +190,12 @@ class Tree:
             self._flags[found_declaration.cls] = flags
             for name, flag in flags.items():
                 _check_arity(name, flag.arity, found_declaration.cls.__qualname__, arities)
+                labels.setdefault(name, set()).add(flag.label)
             _check_shorts(found_declaration, flags, shorts)
         self.flags: Mapping[str, Arity] = MappingProxyType({name: arity for name, (arity, _) in arities.items()})
+        self.labels: Mapping[str, str] = MappingProxyType(
+            {name: next(iter(said)) if len(said) == 1 else name for name, said in labels.items()}
+        )
         self.shorts: Mapping[str, str] = MappingProxyType({short: name for short, (name, _) in shorts.items()})
         self.chains = _chains(self.commands)
 
@@ -210,7 +227,7 @@ class Tree:
         return self._flags[cls]
 
     def usage(self, end: End) -> str:
-        """How the command a walk ended at is said, by its phrase: ``relay run [--config <config>]``.
+        """How the command a walk ended at is said, by its phrase: ``relay run [--config <path>]``.
 
         The tree's prefix, the phrase's words with a ``<slot>`` for each slot, then the command's flags.
 
@@ -237,7 +254,7 @@ class Tree:
 
     def _usage(self, found: Declaration, bound: Bound) -> str:
         fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
-        said = usage(bound, self.flags_of(found.cls).values(), fields)
+        said = usage(bound, self.flags_of(found.cls).values(), fields, asks=found.asks)
         return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
@@ -406,7 +423,9 @@ def _flags_of(found: Declaration) -> Mapping[str, Flag]:
         if flag in flags:
             msg = f'{name}: {flags[flag].field} and {attr} are both --{flag}'
             raise DeclarationError(msg)
-        flags[flag] = Flag(name=flag, field=attr, arity=Arity.SWITCH if switch else Arity.VALUE, negated=negated)
+        said = flag if switch else label(found.field_kinds[attr], spec.field, flag)
+        arity = Arity.SWITCH if switch else Arity.VALUE
+        flags[flag] = Flag(name=flag, field=attr, arity=arity, negated=negated, label=said)
     return MappingProxyType(flags)
 
 

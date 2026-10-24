@@ -7,7 +7,7 @@ only a command says, then seared's own sections, so the two layers stay in step.
 |---|---|
 | the header | its name; a line of what it declares: its effect (`` `write` ``), `asks first`, `for a person at a terminal`, and the chain it's a step of, linked; its docstring |
 | Phrases | each phrase, an extra one marked, with its key template for policy ([`keys.md`](keys.md)) |
-| Usage | each phrase as a line says it, a `<slot>` for each slot, then its flags |
+| Usage | each phrase as a line says it, a `<slot>` for each slot, then its flags, each value by its kind (`--into <fleet>`) |
 | Arguments | each slot and flag, a flag's short form beside it, the field it fills, and what its words are ([`../kinds.md`](../kinds.md#describing-its-words)) |
 | Examples | its `EXAMPLES` |
 | links | its `REPLY`, its `INSTEAD`, and the seared classes it takes fields from |

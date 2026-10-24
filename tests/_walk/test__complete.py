@@ -111,6 +111,12 @@ class TestNames:
     def test_no_resolver_no_names(self, tree):
         assert _words(tree, 'fleet ') == []
 
+    def test_a_scope_whose_resolver_says_why_as_one_that_names_nothing(self, tree):
+        fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}')
+        names = {**farlandia.NAMES, 'fleet': fleets}
+        assert _words(tree, 'fleet Nobody dock ', names) == _words(tree, 'fleet Nobody dock ', farlandia.NAMES)
+        assert _words(tree, 'fleet Hauler dock ', names) == ['Ceres', 'nearest', 'then']
+
 
 class TestPairs:
     def test_the_keys_scoped_by_the_routine(self, tree):
@@ -126,6 +132,11 @@ class TestPairs:
 
     def test_a_key_whose_values_read_as_typed(self, tree):
         assert _words(tree, 'fleet f1 run patrol route ', farlandia.NAMES) == []
+
+    def test_a_key_whose_resolver_says_why_as_one_that_names_nothing(self, tree):
+        names = {**farlandia.NAMES, 'variable': farlandia.Saying(farlandia.NAMES['variable'], 'no variable {word!r}')}
+        assert _words(tree, 'fleet f1 run mining hme ', names) == []
+        assert _words(tree, 'fleet f1 run mining ore ', names) == ['Iron', 'Coal']
 
 
 @parsed.parsed
@@ -184,8 +195,8 @@ class TestFarlandiasCases:
     """farlandia's own completion cases (``tests/client/test_tree.py``), on this fixture's commands.
 
     Lifted: the first words, a node's words, a command's flags, a span's values, a literal beside a slot, ``--yes``
-    for a command asked first, and a flag being typed; and, from the first spike, a routine's flags after its pairs.
-    Later: ``then``, with chains.
+    for a command asked first, and a flag being typed; and, from a port of farlandia's tree, a routine's flags after
+    its pairs. ``then`` is :class:`TestChains`'.
     """
 
     def test_completion_offers_words_slots_and_flags(self, tree):

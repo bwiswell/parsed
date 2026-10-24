@@ -78,13 +78,13 @@ class TestAServicesCommandLine:
     def test_its_help(self, servicectl, capsys):
         code, out, _ = _main(servicectl, capsys, '--help')
         program, options, listed = out.split('\n\n')
-        assert (code, program) == (0, 'servicectl [--config <config>] [--version] <command> …')
-        assert options.splitlines()[0] == '  -c, --config <config>  the config file; left out, the service default'
+        assert (code, program) == (0, 'servicectl [--config <path>] [--version] <command> …')
+        assert options.splitlines()[0] == '  -c, --config <path>  the config file; left out, the service default'
         assert _column(listed) == [
-            'run [--config <config>]',
-            'validate-config [--config <config>]',
-            'status [--config <config>]',
-            'handheld connect <source> <reader_id> --host <host> [--port <port>] [--label <label>]',
+            'run [--config <path>]',
+            'validate-config [--config <path>]',
+            'status [--config <path>]',
+            'handheld connect <source> <reader_id> --host <host> [--port <n>] [--label <label>]',
         ]
 
     def test_its_envelope(self, servicectl, capsys):
@@ -95,7 +95,7 @@ class TestAServicesCommandLine:
         ('argv', 'code', 'says'),
         [
             (('rn',), 2, "no command 'rn'; did you mean run?"),
-            (('--config',), 2, '--config needs a value `--config <config>`'),
+            (('--config',), 2, '--config needs a value `--config <path>`'),
             (('handheld', 'connect', 'dock', 'r7'), 2, 'handheld connect dock r7 needs --host'),
         ],
     )
@@ -129,9 +129,9 @@ class TestAnAggregateCommandLine:
             ["relay …    The relay: a site's messages, onto the mesh.", "gateway …  The gateway: the mesh's boundary."],
         )
         assert _column(_main(meshctl, capsys, 'gateway', '--help')[1]) == [
-            'gateway run [--config <config>]',
-            'gateway validate-config [--config <config>]',
-            'gateway status [--config <config>]',
+            'gateway run [--config <path>]',
+            'gateway validate-config [--config <path>]',
+            'gateway status [--config <path>]',
         ]
 
     def test_a_mount_s_command_with_no_handler(self, meshctl, capsys):
@@ -198,7 +198,7 @@ class TestAnAgentsTooling:
             (
                 ('fetch', 'FleetState', 'fleet'),
                 2,
-                "fetch {operation} {slots}: 'fleet' is not slot=value, such as fleet=f1",
+                "fetch FleetState <slots> …: 'fleet' is not slot=value, such as fleet=f1",
             ),
             (('wait', 'FleetState'), 2, 'wait FleetState needs --until'),
             (('wait', 'X', '--until', 'docked'), 2, "--until: 'docked' is not path=value, such as docked=true"),
@@ -214,14 +214,14 @@ class TestAnAgentsTooling:
     def test_its_help_in_its_own_words(self, tooled, capsys):
         listed = _main(tooled, capsys, '--help')[1].split('\n\n')[-1]
         assert _column(listed)[:3] == [
-            'check [--policy <policy>] [--pretty] [--select <select>] [--connect] [--no-resolve]',
-            'operations [--policy <policy>] [--pretty] [--select <select>]',
-            'describe <operation> [--policy <policy>] [--pretty] [--select <select>] [--variant <variant>] [--reply]',
+            'check [--policy <path>] [--pretty] [--select <select>] [--connect] [--no-resolve]',
+            'operations [--policy <path>] [--pretty] [--select <select>]',
+            'describe <operation> [--policy <path>] [--pretty] [--select <select>] [--variant <variant>] [--reply]',
         ]
         said = _main(tooled, capsys, 'wait', '--help')[1]  # short of its operation, the one command beneath: its help
         assert said.startswith(
-            'wait <operation> [<slots> …] [--policy <policy>] [--pretty] [--select <select>] '
-            '--until <until> … [--timeout <timeout>] [--meta]\n\nWait for a retained contract'
+            'wait <operation> [<slots> …] [--policy <path>] [--pretty] [--select <select>] '
+            '--until <until> … [--timeout <span>] [--meta]\n\nWait for a retained contract'
         )
         assert re.search(
             r'^  --until <until> …\s+a path and the value it must equal; all must hold$', said, re.MULTILINE

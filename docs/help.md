@@ -9,15 +9,15 @@ declare: their phrases, their docstrings, their fields' `doc=` and their kinds.
 `command(tree, cls, phrase=0, instead=None)` is a command's help, by the phrase a line said:
 
 ```
-fleet <fleet> mine [--for <for>]
+fleet <fleet> mine [--for <span>]
 
 Mine until the hold is full.
 
-  <fleet>      the fleet
-  --for <for>  stop after this long
+  <fleet>       the fleet
+  --for <span>  stop after this long
 
 Also said:
-  detachment <detachment> mine [--for <for>]
+  detachment <detachment> mine [--for <span>]
 
 Examples:
   fleet prospector mine --for 1h30m
@@ -28,14 +28,16 @@ It is a step: then joins another after it.
 - **its usage,** by the phrase the line said ([`tree.usage_of`](tree.md#reading-a-line));
 - **its docstring;**
 - **a row for each argument:** each slot of the phrase (`<fleet>`), then each flag, a short form first where it has
-  one (`-c, --config <config>`), each with its field's `doc=`, or else what its kind's words are
-  ([`kinds.md`](kinds.md#describing-its-words)): `a whole number`, `on when given` for a switch;
+  one and its value by its kind (`-c, --config <path>`, [`kinds.md`](kinds.md#labelling-a-value)), each with its
+  field's `doc=`, or else what its kind's words are ([`kinds.md`](kinds.md#describing-its-words)):
+  `a whole number`, `on when given` for a switch; last, for a command that may ask first, `--yes`
+  (`answer each question it asks yes`), which its usage ends with too;
 - **the other phrases** that say it (`Also said:`), and its `EXAMPLES`;
 - **what it asks of the line,** a note each:
 
 | Where | The note |
 |---|---|
-| it may ask first (`ASKS`) | `It asks before it acts: --yes answers yes.` |
+| it may ask first (`ASKS`) | `It asks before it acts, and --yes answers it.` |
 | it can wait (a read with a `REPLY`) | `It can wait on its reply: --until <path=value>, --timeout <span>, --watch, --count <n>; 30s at most by default.` |
 | it's a chain's step | `It is a step: then joins another after it.` |
 | it's for a person at a terminal (`INTERACTIVE`) | ``It is for a person at a terminal: say `ships make <ship> add <part>` instead.``, with its `INSTEAD`'s usage where an app gives it |
@@ -46,9 +48,9 @@ It is a step: then joins another after it.
 widest:
 
 ```
-relay run [--config <config>]              Run the service until it's stopped.
-relay validate-config [--config <config>]  Check the config file, and say what's wrong with it.
-relay status [--config <config>]           Say whether the service is up.
+relay run [--config <path>]              Run the service until it's stopped.
+relay validate-config [--config <path>]  Check the config file, and say what's wrong with it.
+relay status [--config <path>]           Say whether the service is up.
 ```
 
 An app gives the entries ([`app.md`](app.md#sessions)): a mount whose prefix the line hasn't said yet as its

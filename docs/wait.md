@@ -78,8 +78,8 @@ it, so a wait pays the app's opening once.
 | past the bound | the last reply, `met` false, a `timeout` error, exit `7` | raises `TimedOutError`, its `reply` the last |
 
 Either way, the result's `waited` says how long it waited, in seconds ([`reply.md`](reply.md)). The error names the
-command and every condition: `fleets show {fleet}: docked=true not met within 30s`. A timeout is the line's
-failure, so the on-error hooks see it, and the after hooks don't run.
+command as the line says it, and every condition: `fleets show f1: docked=true not met within 30s`. A timeout is
+the line's failure, so the on-error hooks see it, and the after hooks don't run.
 
 ## Watching
 
@@ -105,5 +105,5 @@ condition is any condition, the bound is the default, and a count is none.
 | `Condition(path, value, text)` | one `--until`; `Condition.parse(text)`, `find(wire)`, `met(wire)` |
 | `Wait(until, timeout, watch, count)` | a read's wait, or its watch; `met(reply)` |
 | `problem(condition, reply)` | why a condition's path names nothing in a reply class's dump schema, and what may have been meant; `None` when it names a field |
-| `FLAGS` | `('until', 'timeout', 'watch', 'count')`; `SWITCHES`, `{'watch'}` |
+| `FLAGS` | `('until', 'timeout', 'watch', 'count')`; `SWITCHES`, `{'watch'}`; `LABELS`, what a usage writes each value as: `path=value`, `span`, `n` |
 | `TIMEOUT` | `30.0`, seconds |

@@ -87,7 +87,8 @@ class ReadError(ParsedError, ValueError):
 class TimedOutError(ParsedError, TimeoutError):
     """A wait whose bound passed before its reply met every condition: the last reply, and how long it waited.
 
-    Its message names the command and the conditions: ``fleets show {fleet}: docked=true not met within 30s``. It's
+    Its message names the command as the line says it, and the conditions: ``fleets show f1: docked=true not met
+    within 30s``. It's
     a ``TimeoutError`` too, as a wait that runs out is in Python.
 
     Args:
@@ -107,8 +108,8 @@ class TimedOutError(ParsedError, TimeoutError):
 class RefusedError(ParsedError):
     """A line refused before it runs: a command for a person at a terminal (``INTERACTIVE``), run with none.
 
-    Its message names the command, and what's said in its place where it declares that (``INSTEAD``):
-    ``ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead``.
+    Its message names the command as the line says it, and what's said in its place where it declares that
+    (``INSTEAD``): ``ship s1 fit is for a person at a terminal: say `ships make <ship> add <part>` instead``.
 
     Args:
         message: The text for people.

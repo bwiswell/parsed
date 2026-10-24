@@ -202,7 +202,7 @@ class TestAmbiguity:
 class TestFlags:
     def test_a_flag_is_its_wire_name(self, fixtures):
         assert fixtures.flags_of(farlandia.FleetMine) == {
-            'for': Flag(name='for', field='for_', arity=Arity.VALUE),
+            'for': Flag(name='for', field='for_', arity=Arity.VALUE, label='span'),
         }
         assert set(fixtures.flags_of(protocol.HandheldConnect)) == {'host', 'port', 'label'}
 
@@ -215,6 +215,22 @@ class TestFlags:
         flags = found.flags_of(found.commands[0].cls)
         assert flags['loud'] == Flag(name='loud', field='loud', arity=Arity.SWITCH)
         assert flags['no-stop'] == Flag(name='no-stop', field='stop', arity=Arity.SWITCH, negated=True)
+
+    def test_a_flag_s_label_by_its_kind(self, fixtures):
+        assert fixtures.flags_of(farlandia.FleetsMerge)['into'].label == 'fleet'
+        assert fixtures.flags_of(farlandia.FleetsMerge)['quiet'].label == 'quiet'  # a switch's: its name
+        assert Flag(name='at', field='at', arity=Arity.VALUE).label == 'at'  # left out: its name
+
+    def test_a_tree_wide_table_of_labels(self, fixtures):
+        assert fixtures.labels['for'] == 'span'
+        assert fixtures.labels['into'] == 'fleet'
+        assert (fixtures.labels['until'], fixtures.labels['timeout'], fixtures.labels['count']) == (
+            'path=value',  # a wait's
+            'span',
+            'n',
+        )
+        differ = Tree([_command('wait', at=parsed.Int(default=0)), _command('dock', at=parsed.Str(default=''))])
+        assert differ.labels['at'] == 'at'  # two commands' differ: its name
 
     def test_a_tree_wide_table(self, fixtures):
         assert fixtures.flags == {
@@ -288,7 +304,7 @@ class TestReading:
 
     def test_usage_says_the_command_by_the_phrase_it_ended_at(self, fixtures):
         assert fixtures.usage(fixtures.walk('fleets merge f1 --into f2').end) == (
-            'fleets merge <fleet> --into <into> [--quiet]'
+            'fleets merge <fleet> --into <fleet> [--quiet] [--yes]'
         )
         assert fixtures.usage(fixtures.walk('fleet f1 dock nearest').end) == 'fleet <fleet> dock nearest'
 
