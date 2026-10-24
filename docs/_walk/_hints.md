@@ -1,7 +1,7 @@
 # `_walk/_hints.py`: a refusal's hint and did-you-mean
 
-**`usage(bound, flags, fields)`** is how a command is said by one of its phrases: its words, a `<slot>` for each
-slot, then its flags. A refusal gives it as its hint.
+**`usage(bound, flags, fields, *, start=0, asks=False)`** is how a command is said by one of its phrases: its
+words, a `<slot>` for each slot, then its flags. A refusal gives it as its hint.
 
 | Part | Written |
 |---|---|
@@ -12,10 +12,12 @@ slot, then its flags. A refusal gives it as its hint.
 | a required flag | `--into <into>`; a list's `--until <until> …` |
 | any other flag | `[--for <for>]`; a list's `[--tags <tags> …]` |
 | a switch | `[--quiet]`, or `[--no-stop]` for one negated |
+| last, for a command that may ask first (`asks=True`, its `ASKS`) | `[--yes]`, which answers it |
 
-So `fleets merge {fleet}`, with a required `into` and a `quiet` switch, is
-`fleets merge <fleet> --into <into> [--quiet]`. `usage(…, start=n)` begins at the phrase's `n`th part, for the
-rest of a line that has said the parts before it.
+So `fleets merge {fleet}`, with a required `into` and a `quiet` switch, asked first, is
+`fleets merge <fleet> --into <into> [--quiet] [--yes]`. `usage(…, start=n)` begins at the phrase's `n`th part, for
+the rest of a line that has said the parts before it. Any other command's usage leaves `--yes` out, though every
+command takes it: a usage says what's worth knowing.
 
 Where a line stops at a slot, the hint is the line so far, then:
 

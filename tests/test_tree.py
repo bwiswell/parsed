@@ -288,7 +288,7 @@ class TestReading:
 
     def test_usage_says_the_command_by_the_phrase_it_ended_at(self, fixtures):
         assert fixtures.usage(fixtures.walk('fleets merge f1 --into f2').end) == (
-            'fleets merge <fleet> --into <into> [--quiet]'
+            'fleets merge <fleet> --into <into> [--quiet] [--yes]'
         )
         assert fixtures.usage(fixtures.walk('fleet f1 dock nearest').end) == 'fleet <fleet> dock nearest'
 

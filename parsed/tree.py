@@ -237,7 +237,7 @@ class Tree:
 
     def _usage(self, found: Declaration, bound: Bound) -> str:
         fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
-        said = usage(bound, self.flags_of(found.cls).values(), fields)
+        said = usage(bound, self.flags_of(found.cls).values(), fields, asks=found.asks)
         return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:

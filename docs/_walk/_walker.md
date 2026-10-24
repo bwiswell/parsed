@@ -100,7 +100,7 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 | leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <into>` `` | |
 | gives a slot a word its kind can't read | `log <n>: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |
-| gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]` `` | the resolver's |
+| gives a name no name answers to | ``--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet] [--yes]` `` | the resolver's |
 | gives a later step a name not where the chain will be | ``fleet Prospector jump sol then dock <station>: no station 'vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> dock [<station>]` `` | the resolver's |
 | gives a pair's key no key answers to | `fleet f1 run mining <variables …>: no variable 'hme' for routine 'mining'; did you mean home?` | the resolver's |
 | gives a pair's value no name answers to | `… <variables …>: no home 'mars'` | the key's resolver's |

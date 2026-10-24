@@ -76,7 +76,7 @@ A word no name answers to is a [`ReadError`](errors.md#readerror) at that word, 
 the command's usage:
 
 ```
---into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet]`
+--into: no fleet 'Haulr'; did you mean Hauler? `fleets merge <fleet> --into <into> [--quiet] [--yes]`
 fleet Hauler dock <station>: no station 'vesta' for fleet 'Hauler' `fleet <fleet> dock [<station>]`
 ```
 

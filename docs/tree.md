@@ -37,10 +37,11 @@ holds under one.
 `tree.read(line)` reads a line to its command's instance. `tree.walk(line)` stops short of it, at a
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
-`tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all:
-`fleets merge <fleet> --into <into> [--quiet]`. `tree.usage_of(cls, phrase=0)` says one of its commands by a phrase
-alike: `0`, its `PHRASE` (`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a
-`KeyError` for a class that isn't one of them, and an `IndexError` for a phrase it hasn't.
+`tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all, and
+`[--yes]` last for one that may ask first: `fleets merge <fleet> --into <into> [--quiet] [--yes]`.
+`tree.usage_of(cls, phrase=0)` says one of its commands by a phrase alike: `0`, its `PHRASE`
+(`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a `KeyError` for a class that
+isn't one of them, and an `IndexError` for a phrase it hasn't.
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:
