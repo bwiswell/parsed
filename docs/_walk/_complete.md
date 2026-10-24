@@ -33,6 +33,7 @@ The words before the one being typed are read loosely, as far as they go, and wh
 | at a flag waiting for its value | its values, by its kind |
 | in a `Pairs` field | a key not yet given, then that key's values; and the command's flags not yet given |
 | in any other rest of the line | the command's flags not yet given, since a flag may stand anywhere |
+| in a line passed on (a `Line` slot's), from its first word | nothing: it's another app's line |
 
 A name's scope is its field's words so far, read by the scope's own resolver: `fleet Hauler dock ` offers the
 stations within Hauler's reach, and `board --fleet Hauler ` does too; `fleet Hauler jump vruba then dock ` offers

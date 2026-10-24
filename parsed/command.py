@@ -46,14 +46,14 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import ClassVar
 
-from seared import Field, Seared, field_kind
+from seared import Field, FieldKind, Seared, field_kind
 from seared.doc import is_seared_class
 
 from ._phrase import Binding, Bound, Place, bind
 from ._walk._terms import HELP_SHORT
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
-from .kinds import Kind, Named, Pairs, default_kind
+from .kinds import Kind, Line, Named, Pairs, default_kind
 
 _CACHE = '__parsed_declaration__'
 
@@ -460,6 +460,7 @@ def _field_kinds(
         if place.renamed and place.slot in kinds
     ]
     _check_forms(cls, name, read, binding)
+    _check_lines(cls, name, read, binding, chain)
     scopes: dict[str, set[str]] = {}  # each field, and the fields its names are scoped by
     for said, field, kind in read:
         if not isinstance(kind, Named) or kind.scope is None:
@@ -498,6 +499,32 @@ def _check_follows(name: str, said: str, kind: Named, chain: type[Command] | Non
             f"{kind.scope!r} isn't: {chain.__qualname__}'s are {shared}"
         )
         raise DeclarationError(msg)
+
+
+def _check_lines(
+    cls: type[Command], name: str, read: list[tuple[str, str, Kind]], binding: Binding, chain: type | None
+) -> None:
+    """Refuse a ``Line`` where it can't be one.
+
+    That's a field that isn't a ``Str`` of one value, or isn't said as the rest of each phrase, and a chain's step.
+    """
+    fields = {spec.attr: spec.field for spec in cls.__seared_fields__}
+    for said, field, kind in read:
+        if not isinstance(kind, Line):
+            continue
+        if field_kind(fields[field]) is not FieldKind.STR or fields[field].many:
+            msg = f'{name}: {said!r} is read as a Line, the rest of a line as typed, so {field} is a Str of one value'
+            raise DeclarationError(msg)
+        places = [place for bound in binding.phrases for place in bound.places if place.field == field]
+        if not places or not all(place.rest for place in places):
+            msg = f'{name}.{field} is read as a Line, so each phrase says it as the rest of the line: {{{field}**}}'
+            raise DeclarationError(msg)
+        if chain is not None:
+            msg = (
+                f"{name}.{field} is read as a Line, which takes the rest of the line, then among it, so {name} can't "
+                f'be a step of {chain.__qualname__}'
+            )
+            raise DeclarationError(msg)
 
 
 def _check_forms(cls: type[Command], name: str, read: list[tuple[str, str, Kind]], binding: Binding) -> None:

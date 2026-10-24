@@ -2,14 +2,15 @@
 
 Typed command trees on [seared](https://github.com/bwiswell/seared), for people and agents.
 
-> **0.2.0 is the first version to build on,** its public surface settled. `app.main(argv)` runs a program's
-> arguments as its command line, and a refusal says the line's own words, each flag's value by its kind and each
-> name by what a person calls it (`--into <fleet>`, `no ore 'lab'`); an app's resolvers may say why a word names
-> nothing. Help says each command in its own words, and a package's commands get reference pages. A line says a
-> chain of steps, joined by `then`, run as one order and called as one tool; an app mounts trees of commands under
-> prefixes of words and runs each line by its handler, giving one envelope with an exit code; a read waits on its
-> reply; lines are completed as they're typed, written back from an instance, and described as data for the tools
-> that read commands.
+> **0.2.1 reads a line as a shell gives it:** an argument holding a double quote reads as given
+> (`--args '{"station": "s1"}'`), a command that passes a line on to another app gets it whole, its flags among it,
+> and `app.help(line)` gives any line's help without a session. `app.main(argv)` runs a program's arguments as its
+> command line, and a refusal says the line's own words, each flag's value by its kind and each name by what a
+> person calls it (`--into <fleet>`, `no ore 'lab'`). Help says each command in its own words, and a package's
+> commands get reference pages. A line says a chain of steps, joined by `then`, run as one order and called as one
+> tool; an app mounts trees of commands under prefixes of words and runs each line by its handler, giving one
+> envelope with an exit code; a read waits on its reply; lines are completed as they're typed, written back from an
+> instance, and described as data for the tools that read commands.
 
 ## Why parsed
 
@@ -27,14 +28,14 @@ phrase in place of a topic, and class constants for the rest. From that one decl
 Each release is tagged `v<version>` on GitHub. Install one by its tag:
 
 ```sh
-uv add git+https://github.com/bwiswell/parsed --tag v0.2.0
+uv add git+https://github.com/bwiswell/parsed --tag v0.2.1
 ```
 
 `uv add` records the tag as the dependency's source:
 
 ```toml
 [tool.uv.sources]
-parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.2.0" }
+parsed = { git = "https://github.com/bwiswell/parsed", tag = "v0.2.1" }
 ```
 
 **The tag is the pin.** uv doesn't check a version range against a git source, so a release is chosen by moving

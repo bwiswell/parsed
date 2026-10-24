@@ -1,8 +1,9 @@
 # `help.py`: how a command is said and what it does, in its own words
 
-A line that gives `--help` runs nothing ([`app.md`](app.md#sessions)). Where it says a command, it's answered with
-the command's help; short of one, with a listing of what it may still say. Both come from what the commands
-declare: their phrases, their docstrings, their fields' `doc=` and their kinds.
+A line that gives `--help` runs nothing ([`app.md`](app.md#sessions)), and `app.help(line)` gives the same text
+without a session. Where it says a command, it's answered with the command's help; short of one, with a listing of
+what it may still say. Both come from what the commands declare: their phrases, their docstrings, their fields'
+`doc=` and their kinds.
 
 ## A command's help
 

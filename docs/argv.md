@@ -67,7 +67,9 @@ hold.
 | `fleet` `f1` `dock` `Vesta Ring` | `fleet f1 dock "Vesta Ring"`: a word with a space quoted, so it's a value |
 | `look log --n 40` (one argument) | `look log --n 40`: a single argument is the whole line, so a caller quotes once |
 | `say` `""` | `say ""`: an empty word |
-| `say` `a"b` | refused: of several, one holds a double quote, which no word of a line can |
+| `call` `t` `--args` `{"station": "s1"}` | `call t --args "{\"station\": \"s1\"}"`: a double quote escaped ([`_walk/_words.md`](_walk/_words.md)), so the field holds the argument as given |
+
+At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`.
 
 ## In this module
 

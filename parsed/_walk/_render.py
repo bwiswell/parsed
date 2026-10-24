@@ -1,4 +1,4 @@
-"""Rendering: a command's instance back to the line that says it, so the tree reads that line to the same instance.
+r"""Rendering: a command's instance back to the line that says it, so the tree reads that line to the same instance.
 
 ``render(tree, command, names)`` takes the first of the command's phrases that can say it:
 
@@ -10,7 +10,7 @@
 **Each value is written by its field's kind** (:meth:`parsed.kinds.Kind.write`): a literal word for a value one reads
 to, else the kind's own spelling, from the field's wire value. **A word is quoted** where the line would read it
 otherwise: a value spelled like a literal word that may stand there (``dock "nearest"``), one with a space, one that
-begins with ``--``, or none at all. A value holding a double quote can't be said, since a line has no escapes.
+begins with ``--``, or none at all; a double quote in one is escaped (``\"``), so every string can be said.
 
 **Then the flags,** in the order the command declares its fields, each not at its default: a switch alone
 (``--quiet``, or ``--no-stop`` for one that defaults to ``True``), a value after its name, and a list's given once for
@@ -28,11 +28,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from parsed._phrase import Word
-from parsed.errors import RenderError
+from parsed.errors import ReadError, RenderError
 from parsed.kinds import Name, Pairs
 
+from ._hints import passes
 from ._terms import THEN, Arity, SlotKind
-from ._walker import _key, _Moved, _shared, head_of
+from ._walker import _key, _literal, _Moved, _shared, head_of
+from ._words import split, word
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
@@ -195,8 +197,16 @@ class _Saying:
         return not place.required and self._at_default(place.field)
 
     def line(self, tree: Tree, bound: Bound) -> str:
-        """The line ``bound``'s phrase says the instance in, each word quoted where the tree would read it otherwise."""
-        return ' '.join([*tree.under.split(), *self.said(tree.top, bound)[0], *self.flags(tree)])
+        """The line ``bound``'s phrase says the instance in, each word quoted where the tree would read it otherwise.
+
+        A line passed on (a ``Line`` slot's) comes last, after the flags, which would be its own after it; ``--``
+        before it where it begins as a flag would.
+        """
+        words, flags = self.said(tree.top, bound)[0], self.flags(tree)
+        if not passes(self.found, bound) or self._skipped(bound.places[-1]):
+            return ' '.join([*tree.under.split(), *words, *flags])
+        passed = words.pop()
+        return ' '.join([*tree.under.split(), *words, *flags, *(['--'] if passed.startswith('-') else []), passed])
 
     def said(self, node: Node, bound: Bound, *, start: int = 0, stop: int | None = None) -> tuple[list[str], Node]:
         """The words ``bound``'s parts from ``start`` to ``stop`` say, walked from ``node``; and where they reach."""
@@ -253,6 +263,8 @@ class _Saying:
 
     def _slot_words(self, place: Place, kind: SlotKind, node: Node, after: Node) -> list[str]:
         """A slot's value as words, each quoted where the line would read it otherwise."""
+        if kind is SlotKind.LINE:
+            return [self._passed(place, node)]
         spelled = self._spelled(place.field, self.found.kind_of(place))
         if kind is SlotKind.REST and not place.many and not isinstance(self.found.kind_of(place), Pairs):
             text = spelled[0] if spelled else ''
@@ -263,6 +275,21 @@ class _Saying:
             return [_quoted(word, literals) for word in spelled]
         stops = {*after.words, *cut} if kind is SlotKind.MANY else set(cut)
         return [_quoted(word, {*stops, *node.words} if at == 0 else stops) for at, word in enumerate(spelled)]
+
+    def _passed(self, place: Place, node: Node) -> str:
+        """A line passed on, as it is: refused where the tree wouldn't read it back to itself."""
+        value = str(self._value(place.field) or '')
+        try:
+            words = split(value)
+        except ReadError:
+            words = []
+        if not words or value != value.strip() or _literal(node, words[0]) is not None:
+            msg = (
+                f'{self.found.cls.__qualname__}.{place.field} is {value!r}, which no line passes on as it is: a line '
+                f"of words, the first of them none of the phrase's"
+            )
+            raise RenderError(msg)
+        return value
 
     def _spelled(self, attr: str, kind: Kind) -> list[str]:
         field = self.specs[attr].field
@@ -289,10 +316,6 @@ class _Saying:
         return words
 
 
-def _quoted(word: str, literals: Collection[str]) -> str:
+def _quoted(text: str, literals: Collection[str]) -> str:
     """A word as a line says it: quoted where it would read as a literal, hold a space, or begin as a flag."""
-    if '"' in word:
-        msg = f"{word!r} can't be said on a line: a word can't hold a double quote"
-        raise RenderError(msg)
-    plain = word and not any(ch.isspace() for ch in word) and not word.startswith('--')
-    return word if plain and word.lower() not in literals else f'"{word}"'
+    return word(text, quoted=text.startswith('--') or text.lower() in literals)

@@ -385,6 +385,16 @@ class TestUsageLabels:
         assert Colour().usage_label(seared.Str()) == 'colour'
 
 
+class TestLine:
+    def test_what_it_is_and_an_example(self):
+        line = parsed.kinds.Line()
+        assert line.describe(seared.Str()) == 'a line, as typed: its flags are its own'
+        assert (line.example(seared.Str()), line.usage_label(seared.Str())) == ('word --flag', None)
+
+    def test_read_as_typed(self):
+        assert parsed.kinds.Line().read('fleet f1 --yes "a b"', seared.Str()) == 'fleet f1 --yes "a b"'
+
+
 class TestWriting:
     # A wire value back to its words, which read to it again.
     @pytest.mark.parametrize(

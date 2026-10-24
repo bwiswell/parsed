@@ -2081,3 +2081,73 @@ class TestHelpAtAnyDepth:
         app.on(farlandia.FleetMine, lambda command, ctx: f'{command.fleet} mines, yes: {"yes" in ctx.reading.own}')
         found = await self._run(app, '--yes mine', subjects=('fleet prospector',))
         assert (found.line, found.text) == ('fleet prospector --yes mine', 'f1 mines, yes: True')
+
+
+class TestHelpForAnyLine:
+    async def _asked(self, app: App, line: str, **given) -> str:
+        async with app.open(**given) as session:
+            return (await session.run(line)).text
+
+    @pytest.mark.parametrize(
+        'line',
+        [
+            'relay run',
+            'fleet f1 jump nearest iron',
+            'fleet f1 jump',
+            'relay',
+            '',
+            'fleet f1 mine --for soon',
+            'ship s1',
+        ],
+    )
+    async def test_the_text_a_session_gives_its_help(self, app, line):
+        assert app.help(line) == await self._asked(app, f'{line} --help')
+
+    @pytest.mark.parametrize('line', ['relay run --help', '-h relay run', 'fleet f1 jump --help --json'])
+    async def test_a_line_that_asks_already(self, app, line):
+        assert app.help(line) == await self._asked(app, line)
+
+    def test_a_command_s_by_the_phrase_it_said(self, app):
+        assert app.help('relay run').splitlines()[0] == 'relay run [--config <path>]'
+        assert app.help('detachment d1 mine').splitlines()[0] == 'detachment <detachment> mine [--for <span>]'
+
+    def test_short_of_one_what_it_may_still_say(self, app):
+        assert _column(app.help('fleet f1 jump')) == ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']
+        assert app.help('fleet f1 mine --for soon').split('\n\n')[:2] == [  # one command beneath: its own help
+            'fleet <fleet> mine [--for <span>]',
+            'Mine until the hold is full.',
+        ]
+
+    def test_its_names_unread_short_of_a_command(self, app):
+        assert app.help('fleet nosuch mine').splitlines()[0] == 'fleet <fleet> mine [--for <span>]'
+
+    @pytest.mark.parametrize(
+        ('line', 'column', 'says'),
+        [
+            ('rela', 0, "no command 'rela'; did you mean relay?"),
+            ('fleet f1 progrms', 9, "no command 'fleet f1 progrms'"),
+            ('rela --help', 0, "no command 'rela'"),
+            ('fleet "f1', 6, 'the quote at column 7 is never closed'),
+        ],
+    )
+    def test_a_word_that_goes_nowhere_refused_as_it_was_given(self, app, line, column, says):
+        with pytest.raises(ReadError, match=re.escape(says)) as caught:
+            app.help(line)
+        assert (caught.value.line, caught.value.column) == (line, column)
+
+    def test_a_command_for_a_person_listed_only_at_a_terminal(self, app):
+        assert 'ship <ship> fit' not in _column(app.help(''))
+        assert 'ship <ship> fit' in _column(app.help('', terminal=True))
+        assert app.help('ship s1') == (
+            'ship <ship> fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+        )
+        assert app.help('ship s1', terminal=True).splitlines()[0] == 'ship <ship> fit'
+        assert app.help('ship s1 fit').splitlines()[0] == 'ship <ship> fit'  # asked by its whole line, whoever asks
+
+    def test_under_a_subject(self, app):
+        assert _column(app.help('jump', subjects=('fleet prospector',))) == [
+            'fleet <fleet> jump nearest <ore>',
+            'fleet <fleet> jump <system>',
+        ]
+        with pytest.raises(ValueError, match=r"subject 'flet prospector': no command of farlandia"):
+            app.help('jump', subjects=('flet prospector',))

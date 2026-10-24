@@ -7,6 +7,41 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.2.1 — 2026-10-24
+
+**Arguments as given, lines passed on whole, and help for any line.** A front end built on parsed takes what a shell
+gives it: an argument holding a double quote reads as given, JSON among them; a command that passes a line on to
+another app gets it whole, its flags among it; and any line's help, partial or whole, is had without a session. One
+sequence reads differently, marked **Breaking** below: a backslash right before a double quote escapes it, where it
+was a plain backslash.
+
+### Added
+
+- **A word may hold a double quote:** a backslash right before one makes it a plain character, quoted or not, so
+  `--args "{\"station\": \"s1\"}"` reads `{"station": "s1"}`; any other backslash is itself (`C:\temp`). A command
+  line's argument holding one reads as given, so at a shell `call t --args '{"station": "s1"}'` gives the field the
+  JSON, and `line_of` no longer refuses it; `render` writes a value holding one, and completion offers a name
+  holding one, each escaped. `parsed._walk._words.word(text)` writes any string as a word that reads back to it.
+- **A line passed on whole:** `parsed.kinds.Line()`, on a `{line**}` slot, takes the rest of the line as typed,
+  from its first word: its flags, parsed's own, `--` and `then` among it, quotes kept. So `see fleet f1 buy ship
+  hauler --yes` gives `see` the line `fleet f1 buy ship hauler --yes`, and `--yes` is the line's. A flag before the
+  line's first word is the command's own (`see --pretty fleet f1 show`), and the command's usage says its flags
+  first (`see [--pretty] <line …>`). Render writes the line as it is, completion offers nothing within it, and
+  `app.main` writes JSON only for a `--json` the line doesn't pass on. `SlotKind.LINE` and `Tree.lines` say where
+  one is; a tree without one reads as before. A `Line` is a `Str` of one value, said as the rest of each phrase, on
+  no chain's step.
+- **Help for any line, without a session:** `app.help(line, subjects=(), terminal=False)` gives the text
+  `<line> --help` gives: a command's help by the phrase the line said, or what a partial line may still say, so
+  `app.help('fetch')` is `fetch`'s help. A line that doesn't give `--help` is read with it before its first word, so
+  a command that passes a line on gives its own. A line whose words go nowhere raises its `ReadError`, its line and
+  column as given.
+
+### Changed
+
+- **Breaking: a backslash right before a double quote escapes it.** It was a plain backslash, and the quote opened
+  or closed: `"C:\dir\"`, which read `C:\dir\`, now leaves its quote open, and is refused. Say it `"C:\dir"\`, or
+  `C:\dir\` where it holds no space. No other line reads differently.
+
 ## 0.2.0 — 2026-10-24
 
 **The first real version.** Its public surface is settled: a breaking change waits for a minor version from here.

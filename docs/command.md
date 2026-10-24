@@ -244,4 +244,5 @@ put it right:
 | scopes that go round (`a` scoped by `b`, `b` by `a`) | a scope is read before the names it narrows |
 | a `keyed` field read by any kind but `Pairs`, or `Pairs` reading a field that isn't keyed | a keyed field's words are pairs |
 | a `Pairs` field that `PHRASE` doesn't say as the rest of the line | `{variables**}` |
+| a `Line` field that isn't a `Str` of one value, or a phrase doesn't say as the rest of the line, or on a chain's step | `{line**}`; a step's line is cut at `then` |
 | a literal word that reads to `None`, on a field that isn't `nullable` | seared would drop the `null` |

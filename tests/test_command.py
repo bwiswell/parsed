@@ -704,6 +704,57 @@ class TestForms:
 
         assert declaration(Retreat).field_kinds['share'].words == {'off': None}
 
+    def test_a_line_said_as_the_rest_of_the_line(self):
+        @parsed.parsed
+        class See(Command):
+            PHRASE = 'see {line**}'
+            EXTRA_PHRASES = ('look {line**}',)
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'line': parsed.kinds.Line()}
+
+            line: str = parsed.Str(required=True)
+
+        assert declaration(See).field_kinds['line'] == parsed.kinds.Line()
+
+    @pytest.mark.parametrize(
+        'field',
+        [parsed.Int(required=True), parsed.Str(many=True, default_factory=list)],
+    )
+    def test_a_line_s_field_is_a_str_of_one_value(self, field):
+        cls = _line_command('see {line**}', field)
+        with pytest.raises(DeclarationError, match=r'the rest of a line as typed, so line is a Str of one value'):
+            declaration(cls)
+
+    @pytest.mark.parametrize('phrase', ['see {line}', 'see'])  # an extra phrase writes it as PHRASE does
+    def test_a_line_anywhere_but_the_rest_of_each_phrase(self, phrase):
+        cls = _line_command(phrase, parsed.Str(required=True))
+        with pytest.raises(DeclarationError, match=r'each phrase says it as the rest of the line: \{line\*\*\}'):
+            declaration(cls)
+
+    def test_a_line_on_no_step(self):
+        class Order(Command):
+            STEPS = True
+
+        @parsed.parsed
+        class Say(Order):
+            PHRASE = 'say {line**}'
+            KINDS: ClassVar[dict[str, parsed.Kind]] = {'line': parsed.kinds.Line()}
+
+            line: str = parsed.Str(required=True)
+
+        with pytest.raises(DeclarationError, match=r"then among it, so .*Say can't be a step of .*Order"):
+            declaration(Say)
+
+
+def _line_command(phrase: str, field: object) -> type[Command]:
+    """A command whose ``line`` is read as a Line, said by ``phrase``."""
+    namespace: dict[str, object] = {
+        'PHRASE': phrase,
+        'KINDS': {'line': parsed.kinds.Line()},
+        '__annotations__': {'line': object},
+        'line': field,
+    }
+    return parsed.parsed(type('See', (Command,), namespace))
+
 
 class TestScopes:
     def test_a_scope_names_another_field(self):

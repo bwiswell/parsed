@@ -92,6 +92,11 @@ class TestNames:
     def test_a_scope_given_as_a_flag(self):
         assert _words(Tree([Board]), 'board --fleet Hauler ', farlandia.NAMES) == ['Ceres']
 
+    def test_a_name_with_a_double_quote_offered_escaped(self, tree):
+        names = {**farlandia.NAMES, 'fleet': farlandia.Table({'The "Q"': 'q'})}
+        assert _words(tree, 'fleet ', names) == [r'"The \"Q\""']
+        assert tree.read(r'fleet "The \"Q\"" mine', names=names).fleet == 'q'  # typed as offered, it reads
+
     def test_a_name_with_a_space_offered_quoted(self, tree):
         assert tree.complete('fleet Prospector dock vr', farlandia.NAMES) == Completion(
             words=['"Vruba\'a Belt 1"'], replace=2
@@ -152,6 +157,20 @@ class Run(Command):
     routine: str = parsed.Str(required=True)
     variables: dict[str, str] = parsed.Str(keyed=True, default_factory=dict)
     at: int | None = parsed.Int(default=None, ge=1)
+
+
+@pytest.fixture(scope='module')
+def verbs() -> Tree:
+    return Tree.collect('_support_tooled')
+
+
+class TestALinePassedOn:
+    @pytest.mark.parametrize('text', ['see fle', 'see fleet f1 ', 'see fleet f1 --', 'see -- fleet '])
+    def test_nothing_inside_it(self, verbs, text):
+        assert verbs.complete(text).words == []
+
+    def test_the_command_s_flags_before_it(self, verbs):
+        assert verbs.complete('see --pr').words == ['--pretty']
 
 
 class TestFlagsAfterTheRest:

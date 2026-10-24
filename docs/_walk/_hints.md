@@ -14,6 +14,7 @@ words, a `<slot>` for each slot, then its flags. A refusal gives it as its hint.
 | a switch | `[--quiet]`, or `[--no-stop]` for one negated |
 | a flag's value | by its kind: `<span>`, `<n>`, `<path>`, a name's `<fleet>`; else the flag's name, `<label>` |
 | last, for a command that may ask first (`asks=True`, its `ASKS`) | `[--yes]`, which answers it |
+| for one that passes a line on (`passing=True`), the flags and `[--yes]` before the line | `see [--pretty] <line …>` |
 
 So `fleets merge {fleet}`, with a required `into` (a fleet's name) and a `quiet` switch, asked first, is
 `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`. `usage(…, start=n)` begins at the phrase's `n`th part, for
@@ -25,6 +26,9 @@ Where a line stops at a slot, the hint is the line so far, then:
 - **where one command lies past the slot,** the rest of its usage, flags and all: `fleets init` hints
   `fleets init <ships> … [--name <name>]`, and `fleet f1 jump` hints `fleet f1 jump <system>`;
 - **where several do,** the slot's `<…>`, then `…` if more must follow: `fleet <fleet> …`.
+
+**`passes(found, bound)`** says whether a phrase ends at a line passed on, a slot read by a `Line`, whose flags
+then stand before it.
 
 **`label(kind, field, name)`** is what a flag's value is written as, between `<` and `>`: the kind's
 `usage_label(field)` ([`kinds.md`](../kinds.md#labelling-a-value)), else `name`, the flag's, then each of the

@@ -179,6 +179,34 @@ class TestAnAgentsTooling:
         _, said = self._read(tooled, capsys, 'listen', 'FleetState', '--count', '3', '--for', '30s', '--meta')
         assert (said['count'], said['for'], said['meta'], said['slots']) == (3, 30.0, True, [])
 
+    def test_json_arguments_as_the_shell_gives_them(self, tooled, capsys):
+        # `tooled call t --args '{"station": "s1"}'`: the shell gives the argument with its double quotes.
+        _, said = self._read(tooled, capsys, 'call', 'dock', '--args', '{"station": "s1", "note": "a \\"b\\""}')
+        assert json.loads(said['args']) == {'station': 's1', 'note': 'a "b"'}
+        _, said = self._read(tooled, capsys, 'query', 'Prices', 'station=s1', '--request', '{"good": "iron"}')
+        assert (said['request'], said['slots']) == ('{"good": "iron"}', ['station=s1'])
+
+    def test_a_condition_on_a_string_that_reads_as_a_number(self, tooled, capsys):
+        # `--until 'name="40"'`: the string "40", where `name=40` would be the number.
+        _, said = self._read(tooled, capsys, 'wait', 'FleetState', '--until', 'name="40"')
+        assert said['until'] == ['name="40"']
+
+    def test_a_line_passed_on_whole(self, tooled, capsys):
+        # `tooled see fleet f1 buy ship hauler --yes`: the line's flags are its own, parsed's among them.
+        argv = ('see', 'fleet', 'f1', 'buy', 'ship', 'hauler', '--yes', '--until', 'docked=true')
+        verb, said = self._read(tooled, capsys, *argv)
+        assert (verb, said['line']) == ('see', 'fleet f1 buy ship hauler --yes --until docked=true')
+        _, said = self._read(tooled, capsys, 'do', '--pretty', 'fleet', 'f1', 'dock', 'Vesta Ring')
+        assert (said['line'], said['pretty']) == ('fleet f1 dock "Vesta Ring"', True)
+        _, said = self._read(tooled, capsys, 'session', 'run', '--', 'fleet', 'f1', '--x')
+        assert said['command'] == 'fleet f1 --x'
+
+    def test_a_line_passed_on_keeps_its_json(self, tooled, capsys):
+        code, out, _ = _main(tooled, capsys, 'see', 'fleet', 'f1', '--json')
+        assert (code, out.split(' ', 1)[0]) == (0, 'see')  # the verb's text: --json is the line's
+        code, out, _ = _main(tooled, capsys, '--json', 'see', 'fleet', 'f1')
+        assert (code, json.loads(out)['text'].split(' ', 1)[0]) == (0, 'see')  # before it, the verb's own
+
     def test_an_invoke_s_dry_run_and_its_negated_switch(self, tooled, capsys):
         code, out, _ = _main(tooled, capsys, 'invoke', 'FleetOrder', 'fleet=f1', '--dry-run', '--no-retry')
         assert (code, out.strip().endswith('(a dry run)')) == (0, True)
@@ -227,6 +255,16 @@ class TestAnAgentsTooling:
             r'^  --until <until> …\s+a path and the value it must equal; all must hold$', said, re.MULTILINE
         )
         assert 'Examples:\n  wait FleetState fleet=f1 --until docked=true --timeout 2m' in said
+
+    def test_a_verb_s_help_without_running_it(self, tooled, capsys):
+        # `tooled fetch --help`, as tooled says it in its own words: the text the line gives, with no session.
+        assert tooled.help('fetch') == _main(tooled, capsys, 'fetch', '--help')[1].removesuffix('\n')
+        assert tooled.help('fetch').startswith(
+            'fetch <operation> [<slots> …] [--policy <path>] [--pretty] [--select <select>] [--timeout <span>]\n\n'
+        )
+        said = 'see [--policy <path>] [--pretty] [--select <select>] <line …>'
+        assert tooled.help('see fleet f1').splitlines()[0] == said  # the verb's own: --help before the line
+        assert tooled.help('see fleet f1 --help').splitlines()[0] == said  # the line's --help is passed on
 
 
 class TestTheirReferencePages:
