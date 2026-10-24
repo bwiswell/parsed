@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 import pytest
 
@@ -27,7 +27,7 @@ def _command(phrase: str, **fields: object) -> type[Command]:
 
 @pytest.fixture(scope='module')
 def fixtures() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 class TestCompiling:
@@ -204,7 +204,7 @@ class TestFlags:
         assert fixtures.flags_of(farlandia.FleetMine) == {
             'for': Flag(name='for', field='for_', arity=Arity.VALUE),
         }
-        assert set(fixtures.flags_of(rio.HandheldConnect)) == {'host', 'port', 'label'}
+        assert set(fixtures.flags_of(protocol.HandheldConnect)) == {'host', 'port', 'label'}
 
     def test_underscores_written_as_dashes(self):
         found = Tree([_command('cap', max_bytes=parsed.Int(default=0))])
@@ -410,9 +410,9 @@ class TestUnder:
         assert farm.render(farlandia.FleetDock(fleet='f1', station='nearest')) == 'farm fleet f1 dock "nearest"'
 
     def test_several_words_spaced_once(self):
-        found = Tree([farlandia.Log], under='  rio   relay ')
-        assert found.under == 'rio relay'
-        assert found.read('rio relay log 4') == farlandia.Log(n=4)
+        found = Tree([farlandia.Log], under='  mesh   relay ')
+        assert found.under == 'mesh relay'
+        assert found.read('mesh relay log 4') == farlandia.Log(n=4)
 
     def test_none_by_default(self, fixtures):
         assert fixtures.under == ''

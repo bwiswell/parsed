@@ -69,8 +69,8 @@ class TestMounting:
         assert App('farm').mount(tree).tree is tree
 
     def test_a_tree_s_own_prefix_kept_beneath(self):
-        mounted = App('rio').mount(Tree.collect('_support_service', under='relay'), under='rio')
-        assert mounted.under == 'rio relay'
+        mounted = App('mesh').mount(Tree.collect('_support_service', under='relay'), under='mesh')
+        assert mounted.under == 'mesh relay'
         assert mounted.source == '_support_service'
 
     def test_each_mount_with_its_own_params(self, app):
@@ -1464,7 +1464,7 @@ class TestChains:
             game.on_chain(farlandia.FleetCommand, _ordered)
 
     def test_a_mount_binds_only_a_chain_it_holds(self):
-        relay = App('rio').mount('_support_service', under='relay')
+        relay = App('mesh').mount('_support_service', under='relay')
         with pytest.raises(DeclarationError, match=r"has no step of FleetCommand's chain"):
             relay.on_chain(farlandia.FleetCommand, _ordered)
 
@@ -1758,7 +1758,7 @@ class LookLog(parsed.Command):
 class TestRootOptions:
     @pytest.fixture
     def relay(self) -> App:
-        found = App('relayctl', options=Root, version='1.2.3')
+        found = App('servicectl', options=Root, version='1.2.3')
         found.mount('_support_service')
         return found
 
@@ -1822,7 +1822,7 @@ class _Flipping:
 class TestMain:
     @pytest.fixture
     def relay(self) -> App:
-        found = App('relayctl', options=Root, version='1.2.3')
+        found = App('servicectl', options=Root, version='1.2.3')
         found.mount('_support_service')
         found.mount(Tree([LookLog]))
         found.on(service.Run, lambda command, ctx: f'run {command.config} under {ctx.options.config}')
@@ -1847,10 +1847,10 @@ class TestMain:
         assert self._main(relay, capsys, *args) == (0, 'the last 40, root n 1\n', '')
 
     def test_version_and_help(self, relay, capsys):
-        assert self._main(relay, capsys, '--version', 'status') == (0, 'relayctl 1.2.3\n', '')
+        assert self._main(relay, capsys, '--version', 'status') == (0, 'servicectl 1.2.3\n', '')
         code, out, _ = self._main(relay, capsys, '-h')
         program, options, listed = out.split('\n\n')
-        assert (code, program) == (0, 'relayctl [--config <config>] [--n <n>] [--version] <command> …')
+        assert (code, program) == (0, 'servicectl [--config <config>] [--n <n>] [--version] <command> …')
         assert options.splitlines() == [  # the program's, above what it may say
             '  -c, --config <config>  a path',
             '  --n <n>                a whole number',
@@ -1894,7 +1894,7 @@ class TestMain:
         code, out, err = self._main(relay, capsys, '--json', 'rn')
         assert (code, err, json.loads(out)['error']['error']) == (2, '', 'usage')
         code, out, _ = self._main(relay, capsys, '--json', '--confg', 'r.toml', 'run')  # refused before the line
-        assert (code, json.loads(out)['text']) == (2, 'relayctl takes no --confg; did you mean --config?')
+        assert (code, json.loads(out)['text']) == (2, 'servicectl takes no --confg; did you mean --config?')
 
     def test_json_help_s_envelope_alone(self, relay, capsys):
         code, out, _ = self._main(relay, capsys, '--json', '--help', 'look')
@@ -1910,7 +1910,7 @@ class TestMain:
         ('args', 'code', 'says'),
         [
             (('rn',), 2, "no command 'rn'; did you mean run?"),
-            (('--confg', 'r.toml', 'run'), 2, 'relayctl takes no --confg; did you mean --config?'),
+            (('--confg', 'r.toml', 'run'), 2, 'servicectl takes no --confg; did you mean --config?'),
             (('--n', 'x', 'status'), 2, "--n: 'x' is not a whole number"),
             ((), 2, 'no command: the line has no words'),
         ],
@@ -1962,7 +1962,7 @@ class TestMain:
         assert self._main(relay, capsys, 'validate-config') == (130, '', '')
 
     def test_the_program_s_arguments_by_default(self, relay, capsys, monkeypatch):
-        monkeypatch.setattr('sys.argv', ['relayctl', 'status'])
+        monkeypatch.setattr('sys.argv', ['servicectl', 'status'])
         assert relay.main() == 0
         assert capsys.readouterr().out == 'up\n'
 
@@ -2025,10 +2025,10 @@ class TestHelpAtAnyDepth:
 
     async def test_a_namespace_s_line_by_its_mount_s_doc(self):
         relays = App('relays')
-        relays.mount('_support_service', under='rio relay', doc="Relay a site's readers.\n\nMore.")
-        assert (await self._run(relays, '--help')).text == "rio relay …  Relay a site's readers."
-        assert (await self._run(relays, 'rio --help')).text == "rio relay …  Relay a site's readers."
-        assert _column((await self._run(relays, 'rio relay --help')).text)[0] == 'rio relay run [--config <config>]'
+        relays.mount('_support_service', under='mesh relay', doc="Relay a site's messages.\n\nMore.")
+        assert (await self._run(relays, '--help')).text == "mesh relay …  Relay a site's messages."
+        assert (await self._run(relays, 'mesh --help')).text == "mesh relay …  Relay a site's messages."
+        assert _column((await self._run(relays, 'mesh relay --help')).text)[0] == 'mesh relay run [--config <config>]'
 
     async def test_a_command_s_own_where_it_says_one(self, app):
         found = await self._run(app, 'relay run --help')

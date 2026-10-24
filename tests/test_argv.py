@@ -27,7 +27,7 @@ class Root(parsed.Parsed):
 
 @pytest.fixture(scope='module')
 def options() -> Options:
-    return options_of('relayctl', Root, '1.2.3')
+    return options_of('servicectl', Root, '1.2.3')
 
 
 class TestDeclaring:
@@ -46,7 +46,7 @@ class TestDeclaring:
 
     def test_the_program_s_usage(self, options):
         assert options.usage() == (
-            'relayctl [--config <config>] [--quiet] [--no-color] [--workers <workers>] [--tags <tags> …] [--version] '
+            'servicectl [--config <config>] [--quiet] [--no-color] [--workers <workers>] [--tags <tags> …] [--version] '
             '<command> …'
         )
         assert options_of('farlandia', None, None).usage() == 'farlandia <command> …'
@@ -138,14 +138,14 @@ class TestReading:
     @pytest.mark.parametrize(
         ('args', 'says', 'kind'),
         [
-            (['--confg', 'a', 'run'], r'relayctl takes no --confg; did you mean --config\?', 'usage'),
-            (['-x', 'run'], r'relayctl takes no -x', 'usage'),
+            (['--confg', 'a', 'run'], r'servicectl takes no --confg; did you mean --config\?', 'usage'),
+            (['-x', 'run'], r'servicectl takes no -x', 'usage'),
             (['--config'], r'--config needs a value `--config <config>`', 'usage'),
             (['-c', '-q', 'run'], r'-c needs a value `-c <config>`', 'usage'),
             (['--quiet=yes', 'run'], r'--quiet takes nothing after it', 'usage'),
             (['--help=yes'], r'--help takes nothing after it', 'usage'),
             (['--yes', '--yes', 'run'], r'--yes is given twice', 'usage'),
-            (['--jsn', 'run'], r'relayctl takes no --jsn; did you mean --json\?', 'usage'),
+            (['--jsn', 'run'], r'servicectl takes no --jsn; did you mean --json\?', 'usage'),
             (['-q', '--quiet', 'run'], r'--quiet is given twice', 'usage'),
             (['--workers', 'many', 'run'], r"--workers: 'many' is not a whole number", 'usage'),
             (['--workers', '0', 'run'], r'--workers: must be >= 1', 'validation'),

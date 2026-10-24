@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 import pytest
 
@@ -32,7 +32,7 @@ def _one(phrase: str, **fields: object) -> Tree:
 
 @pytest.fixture(scope='module')
 def tree() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 class TestEveryFixture:
@@ -58,7 +58,7 @@ class TestEveryFixture:
             ('ship s1 fit', farlandia.ShipFit(ship='s1')),
             (
                 'handheld connect dock r7 --host 10.0.0.2 --port 5085',
-                rio.HandheldConnect(source='dock', reader_id='r7', host='10.0.0.2', port=5085),
+                protocol.HandheldConnect(source='dock', reader_id='r7', host='10.0.0.2', port=5085),
             ),
         ],
     )

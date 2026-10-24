@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 
 from parsed.doc import render_command
@@ -63,7 +63,7 @@ class TestAPage:
         assert '`for a person at a terminal`' not in fit
         assert 'for a person at a terminal' in _sections(fit)['']
         assert 'Instead [`ShipsMakeAdd`](ShipsMakeAdd.md)' in fit
-        assert 'Fields from [`HandheldEndpoint`](HandheldEndpoint.md)' in render_command(rio.HandheldConnect)
+        assert 'Fields from [`HandheldEndpoint`](HandheldEndpoint.md)' in render_command(protocol.HandheldConnect)
 
     def test_seared_s_fields_after(self):
         assert _sections(render_command(farlandia.FleetMine))['Fields'].startswith(

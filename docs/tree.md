@@ -28,7 +28,7 @@ tree.read('relay run')        # Run(config=None)
 tree.read('relay')            # ReadError: relay: then what? run | validate-config | status
 ```
 
-A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'rio relay'`). `tree.root` is where a
+A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'mesh relay'`). `tree.root` is where a
 line's walk begins, and `tree.top` where every phrase does, past the prefix. An [app](app.md) mounts each tree it
 holds under one.
 

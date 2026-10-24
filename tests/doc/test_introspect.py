@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import _support_service as service
 import pytest
 from seared.doc import SchemaDoc
@@ -16,7 +16,7 @@ from parsed.kinds import Duration, Pairs, Switch
 
 
 class TestIsCommandClass:
-    @pytest.mark.parametrize('cls', [farlandia.FleetMine, farlandia.Log, rio.HandheldConnect])
+    @pytest.mark.parametrize('cls', [farlandia.FleetMine, farlandia.Log, protocol.HandheldConnect])
     def test_a_command(self, cls):
         assert is_command_class(cls)
 
@@ -26,7 +26,7 @@ class TestIsCommandClass:
             Command,
             farlandia.FleetCommand,
             farlandia.FleetView,
-            rio.HandheldEndpoint,
+            protocol.HandheldEndpoint,
             farlandia.FleetMine(fleet='f1'),
             3,
         ],
@@ -100,7 +100,7 @@ class TestCommandDoc:
         assert introspect_command(farlandia.Say).examples == ()
 
     def test_the_class_it_takes_its_fields_from(self):
-        assert introspect_command(rio.HandheldConnect).fields_from == (rio.HandheldEndpoint,)
+        assert introspect_command(protocol.HandheldConnect).fields_from == (protocol.HandheldEndpoint,)
         assert introspect_command(farlandia.FleetMine).fields_from == ()  # its bases are commands
 
     def test_not_a_command_is_refused(self):

@@ -4,7 +4,7 @@
 reads them. The shell's tokens are the words: `prog <words…>`, as a line says them.
 
 ```
-relayctl -c relay.toml run --config own.toml
+servicectl -c service.toml run --config own.toml
          └─ root ────┘ └─ the line ────────┘
 ```
 
@@ -22,7 +22,7 @@ class Options(parsed.Parsed):
     quiet: bool = parsed.Bool(default=False)
 
 
-app = parsed.App('relayctl', options=Options, version='1.2.3')
+app = parsed.App('servicectl', options=Options, version='1.2.3')
 ```
 
 - **Each field is a flag,** read as a command's flag is ([`tree.md`](tree.md)): its wire name with `_` written `-`,
@@ -30,10 +30,10 @@ app = parsed.App('relayctl', options=Options, version='1.2.3')
   kind ([`kinds.md`](kinds.md)). Its `KINDS` and `SHORTS` are merged along the MRO, as a command's are.
 - **Each is optional:** a field with no default is refused when the app is made, so an app that runs lines without
   a command line (in-process) gets each field's default.
-- **`--version`,** with `App(version=…)`, writes the program's version, `relayctl 1.2.3`, and exits 0, whatever
+- **`--version`,** with `App(version=…)`, writes the program's version, `servicectl 1.2.3`, and exits 0, whatever
   follows.
 - **parsed's own flags** (`-h` or `--help`, `--json`, `--yes`, `--dry-run`) may stand among them, and are the
-  line's: they're put first on it (`Said.run`), so `relayctl --json -c relay.toml status` runs `--json status`.
+  line's: they're put first on it (`Said.run`), so `servicectl --json -c service.toml status` runs `--json status`.
 - **`--` ends them,** so a line may begin with a word that starts with dashes.
 
 | Refused when the app is made (a `DeclarationError`) | |
@@ -48,7 +48,7 @@ app = parsed.App('relayctl', options=Options, version='1.2.3')
 
 | Refused when read (a `ReadError`) | The message | Exit |
 |---|---|---|
-| a flag the program doesn't take | `relayctl takes no --confg; did you mean --config?` | 2 |
+| a flag the program doesn't take | `servicectl takes no --confg; did you mean --config?` | 2 |
 | a flag with no value after it | `--config needs a value` | 2 |
 | a switch given a value, or a flag given twice, parsed's own among them | `--quiet takes nothing after it`, `--yes is given twice` | 2 |
 | a word its kind can't read | `--workers: 'many' is not a whole number` | 2 |
@@ -57,7 +57,7 @@ app = parsed.App('relayctl', options=Options, version='1.2.3')
 ## The line
 
 **After the first word, every flag is the line's,** never the program's: in
-`relayctl -c relay.toml run --config own.toml`, `run`'s own `--config` is `own.toml`, whatever the root options
+`servicectl -c service.toml run --config own.toml`, `run`'s own `--config` is `own.toml`, whatever the root options
 hold.
 
 **The arguments are the line's words,** each as the shell gave it:
@@ -72,7 +72,7 @@ hold.
 ## In this module
 
 - `options_of(prog, cls, version)` declares and checks an app's root options, giving `Options`: their flags, shorts
-  and kinds, `defaults()`, `usage()` (`relayctl [--config <config>] [--quiet] [--version] <command> …`) and
+  and kinds, `defaults()`, `usage()` (`servicectl [--config <config>] [--quiet] [--version] <command> …`) and
   `help()`, the usage then a row for each root option and `--version`, each with its field's `doc=` or what its
   words are.
 - `read(args, options)` reads a program's arguments to `Said`: the root options loaded, parsed's own flags given

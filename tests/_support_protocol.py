@@ -1,4 +1,4 @@
-"""Commands shaped like a rio service's, written fresh: parsed's tests depend on no service.
+"""A command built on a protocol's request class, written fresh: parsed's tests depend on no protocol package.
 
 It grows with each release that needs more of it. So far: a protocol's request class, a plain seared class as a
 protocol package declares it, and the command that inherits it, so the command's fields and their bounds are the
