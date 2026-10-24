@@ -68,6 +68,24 @@ class TestTheContext:
     def test_the_session_s_verbosity(self, session):
         assert _context(session, 'log').verbosity == 1
 
+    def test_the_program_s_root_options(self, session):
+        assert _context(session, 'log').options is None  # an app with no options class
+
+    async def test_the_program_s_root_options_given(self):
+        @parsed.parsed
+        class Root(parsed.Parsed):
+            quiet: bool = parsed.Bool(default=False)
+
+        app = App('farlandia', options=Root)
+        app.mount('_support_farlandia')
+        async with app.open(options=Root(quiet=True)) as opened:
+            assert _context(opened, 'log').options == Root(quiet=True)
+
+    async def test_whether_a_person_is_at_a_terminal(self, app, session):
+        assert _context(session, 'log').terminal is False  # by default
+        async with app.open(terminal=True) as opened:
+            assert _context(opened, 'log').terminal is True
+
     def test_one_for_each_line(self, session):
         first, second = _context(session, 'log'), _context(session, 'log')
         assert first == second

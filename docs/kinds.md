@@ -88,6 +88,32 @@ isn't a literal for `1`); else `kind.spell(value, field)`, the kind's own spelli
 
 A kind of an app's own that overrides `form` overrides `spell` too, so its values write back.
 
+## Describing its words
+
+`kind.describe(field)` says what a field's words are, for help ([`help.md`](help.md)) and reference pages
+([`doc/render.md`](doc/render.md)) where the field has no `doc=`: `kind.what(field)`, the kind's own description,
+then its literal words (`a number, % after it or not, or off`):
+
+| Kind | Says |
+|---|---|
+| `Word` | `a word`; `a path` for a `Path`, `a UUID` for a `UUID` |
+| `Number` | `a whole number` for an `Int`, else `a number`; with a suffix, `% after it or not` |
+| `Switch` | `true or false` |
+| `Choice` | `one of red, green or blue`, the `Enum`'s values |
+| `Duration` | `a span of time, such as 90s, 10m or 1h30m` |
+| `Moment` | `a date, such as 2026-10-21`, a time or both, by its field |
+| `Name` | `a station`, its category, and `, within its fleet` for a scoped one |
+| `Pairs` | `variable and value pairs`, by its category |
+
+A kind of an app's own overrides `what` (`a hex number, such as ff`); its literal words follow, as they do for any.
+
+## An example
+
+`kind.example(field)` is a value the field may hold, as an instance holds it, for `parsed check` to make its
+instances with ([`doc/check.md`](doc/check.md)). It's `None` by default, which leaves the value to the field's type
+and constraints. A kind of an app's own with a form of its own gives one its form reads, since a value made from the
+type alone may not: a `slot=value` kind gives `'fleet=f1'`, where a string's `example` would be refused.
+
 ## What a kind offers
 
 Completion offers a kind's literal words, then `kind.offers(field)`: a `Choice`'s values, `true` and `false` for a

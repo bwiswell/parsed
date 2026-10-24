@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
+from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
+import _support_service as service
 import pytest
 
 import parsed
@@ -25,7 +27,7 @@ def _command(phrase: str, **fields: object) -> type[Command]:
 
 @pytest.fixture(scope='module')
 def fixtures() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 class TestCompiling:
@@ -202,7 +204,7 @@ class TestFlags:
         assert fixtures.flags_of(farlandia.FleetMine) == {
             'for': Flag(name='for', field='for_', arity=Arity.VALUE),
         }
-        assert set(fixtures.flags_of(rio.HandheldConnect)) == {'host', 'port', 'label'}
+        assert set(fixtures.flags_of(protocol.HandheldConnect)) == {'host', 'port', 'label'}
 
     def test_underscores_written_as_dashes(self):
         found = Tree([_command('cap', max_bytes=parsed.Int(default=0))])
@@ -290,6 +292,34 @@ class TestReading:
         )
         assert fixtures.usage(fixtures.walk('fleet f1 dock nearest').end) == 'fleet <fleet> dock nearest'
 
+    def test_usage_of_a_command_says_it_by_its_phrase(self, fixtures):
+        assert fixtures.usage_of(farlandia.FleetDock) == 'fleet <fleet> dock [<station>]'  # not its extra phrase
+        assert fixtures.usage_of(farlandia.Log) == 'log [<n>]'
+
+    def test_its_shorts_each_to_the_flag_it_says(self):
+        assert dict(Tree.collect('_support_service').shorts) == {'c': 'config'}
+        assert dict(Tree.collect('_support_farlandia').shorts) == {}
+
+    def test_a_short_saying_two_flags_is_refused(self):
+        @parsed.parsed
+        class Count(Command):
+            PHRASE = 'count'
+            SHORTS: ClassVar[dict[str, str]] = {'count': 'c'}
+
+            count: int = parsed.Int(default=1)
+
+        with pytest.raises(DeclarationError, match=r'-c is --config in Run and --count in .*Count: a short says one'):
+            Tree([service.Run, Count])
+
+    def test_usage_of_a_command_by_another_of_its_phrases(self, fixtures):
+        assert fixtures.usage_of(farlandia.FleetDock, 1) == 'fleet <fleet> dock nearest'
+        with pytest.raises(IndexError):
+            fixtures.usage_of(farlandia.FleetDock, 2)
+
+    def test_usage_of_another_tree_s_command(self):
+        with pytest.raises(KeyError):
+            Tree([farlandia.Log]).usage_of(farlandia.FleetMine)
+
     def test_exported(self):
         assert parsed.Tree is Tree
 
@@ -374,14 +404,15 @@ class TestUnder:
 
     def test_its_usage_says_it(self, farm):
         assert farm.usage(farm.walk('farm log').end) == 'farm log [<n>]'
+        assert farm.usage_of(farlandia.Log) == 'farm log [<n>]'
 
     def test_a_line_written_back_begins_with_it(self, farm):
         assert farm.render(farlandia.FleetDock(fleet='f1', station='nearest')) == 'farm fleet f1 dock "nearest"'
 
     def test_several_words_spaced_once(self):
-        found = Tree([farlandia.Log], under='  rio   relay ')
-        assert found.under == 'rio relay'
-        assert found.read('rio relay log 4') == farlandia.Log(n=4)
+        found = Tree([farlandia.Log], under='  mesh   relay ')
+        assert found.under == 'mesh relay'
+        assert found.read('mesh relay log 4') == farlandia.Log(n=4)
 
     def test_none_by_default(self, fixtures):
         assert fixtures.under == ''

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import pytest
 from seared.doc import json_schema as seared_json_schema
 
@@ -22,7 +22,7 @@ class TestSchema:
         assert set(found['properties']) == set(seared['properties']) == {'fleet', 'for'}
 
     def test_a_protocol_s_bounds_are_its_own(self):
-        port = json_schema(rio.HandheldConnect)['properties']['port']
+        port = json_schema(protocol.HandheldConnect)['properties']['port']
         assert (port['minimum'], port['maximum'], port['default']) == (1, 65535, 5084)
 
     def test_its_keys_in_one_order(self):

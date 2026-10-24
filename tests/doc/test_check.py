@@ -24,7 +24,7 @@ class Colour(enum.Enum):
 
 class TestTheFixtures:
     def test_every_one_passes(self):
-        report = check(['_support_farlandia', '_support_rio'])
+        report = check(['_support_farlandia', '_support_protocol'])
         assert report.ok, report.problems
         assert (report.commands, report.schemas) == (17, 17)
         assert report.examples == 11
@@ -33,9 +33,9 @@ class TestTheFixtures:
         assert report.skipped == {}
 
     def test_the_report_as_data(self):
-        report = check(['_support_rio'])
+        report = check(['_support_protocol'])
         assert report.to_json() == {
-            'targets': ['_support_rio'],
+            'targets': ['_support_protocol'],
             'ok': True,
             'commands': 1,
             'checked': {'round-trips': 2, 'examples': 0, 'schemas': 1, 'chains': 0},
@@ -78,7 +78,7 @@ class TestSeededFaults:
         assert problem.message == 'no commands in _support_check.empty'
 
     def test_a_schema_too_big(self):
-        report = check(['_support_rio'], max_schema_bytes=100)
+        report = check(['_support_protocol'], max_schema_bytes=100)
         (problem,) = report.problems
         assert problem.check == 'schema'
         assert problem.message.startswith('it takes 668 bytes, over 100')
@@ -137,6 +137,14 @@ class TestGeneratedExamples:
     @pytest.mark.parametrize('field', [seared.Str(pattern='[A-Z]{3}'), seared.Bytes()])
     def test_none_to_be_had(self, field):
         assert checking._example(field) is checking._UNMADE
+
+    def test_a_kind_s_own_example_first(self):
+        assert checking._example(seared.Str(many=True), 'fleet=f1') == ['fleet=f1']
+        assert checking._example(seared.Str(), None) == 'example'  # none of its own
+
+    def test_a_kind_of_an_app_s_own_with_its_example_round_trips(self):
+        # tooled's `slot=value` words: a value made from the type alone ('example') wouldn't read.
+        assert check(['_support_tooled']).ok
 
     def test_two_instances_one_with_its_required_fields(self):
         assert checking._instances(examples.Log) == ([examples.Log(), examples.Log(n=1)], [])

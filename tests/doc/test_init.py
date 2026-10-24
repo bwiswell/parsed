@@ -3,7 +3,7 @@
 import importlib
 
 from parsed import doc
-from parsed.doc import chains, introspect, keys
+from parsed.doc import chains, generate, introspect, keys, render
 
 
 def test_it_gathers_its_modules():
@@ -15,6 +15,8 @@ def test_it_gathers_its_modules():
     assert doc.check is importlib.import_module('parsed.doc.check').check
     assert doc.chain_schema is chains.chain_schema
     assert doc.chain_keys is keys.chain_keys
+    assert doc.build_docs is generate.build_docs
+    assert doc.render_command is render.render_command
     assert set(doc.__all__) == {
         'ChainDoc',
         'CheckReport',
@@ -23,14 +25,17 @@ def test_it_gathers_its_modules():
         'Problem',
         'SlotDoc',
         'StepDoc',
+        'build_docs',
         'chain_keys',
         'chain_schema',
         'check',
         'command_key',
+        'document',
         'dump_chain',
         'introspect_chain',
         'introspect_command',
         'is_command_class',
         'json_schema',
         'load_chain',
+        'render_command',
     }

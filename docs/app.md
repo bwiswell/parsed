@@ -25,22 +25,26 @@ async with app.open(Link(galaxy)) as session:                # the link is opene
     result.text, result.code                                 # 'f1 mines', 0
 
 app.run('relay run', settings)                               # one line, in a session of its own
+sys.exit(app.main())                                         # the program's arguments, as its command line
 ```
 
 ## Mounting
 
-`app.mount(target, under='', params=None)` mounts a tree, or a module or package of commands by name (collected as
-[`Tree.collect`](tree.md) collects them), and returns its `Mount`:
+`app.mount(target, under='', params=None, doc=None)` mounts a tree, or a module or package of commands by name
+(collected as [`Tree.collect`](tree.md) collects them), and returns its `Mount`:
 
-- **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'rio relay'`. None mounts it at the
+- **`under`** is the prefix its lines begin with: `'relay'`, or several words, `'mesh relay'`. None mounts it at the
   root. A tree with a prefix of its own keeps it, beneath `under`.
 - **`params`** is what its handlers are given beside the command: a service's settings, say. It's the mount's, so
   one package can be mounted several times, each with its own prefix and its own settings: one group serves many
   apps, or one app twice.
+- **`doc`** is what it's for, as help says it on its namespace's line ([sessions](#sessions)): by default its
+  module's docstring, the package's named, or a tree's first command's module's.
 
-A `Mount` has its `app`, its `tree` (under its prefix), its `under`, its `params` and its `source`: the module or
-package named, or a tree's first command's module. Its `label` (`service.cli under 'relay'`) is how a refusal names
-it, and `holds(cls)` says whether a command is one of its own. `app.mounts` lists them, in the order they were made.
+A `Mount` has its `app`, its `tree` (under its prefix), its `under`, its `params`, its `doc` (and its `summary`,
+the first line) and its `source`: the module or package named, or a tree's first command's module. Its `label`
+(`service.cli under 'relay'`) is how a refusal names it, and `holds(cls)` says whether a command is one of its own.
+`app.mounts` lists them, in the order they were made.
 
 **A mount that would make a line read two ways is refused** with a `DeclarationError` naming both mounts and the
 words they share ([`_walk/_route.md`](_walk/_route.md)):
@@ -129,13 +133,14 @@ then the app's. Each scope's run in the order they were added, and `app.hooks(Cl
 async, and is awaited. Every hook of a line is given the context its handler is (the same object), so a hook sees a
 dry run as the handler does.
 
-No hook runs for a line that doesn't read, a line that gives `--help`, or a command with no handler: none of them
-reaches a handler. Hooks are the app's; a mount's own come later.
+No hook runs for a line that doesn't read, a line that gives `--help`, a command for a person at a terminal run
+with none, or a command with no handler: none of them reaches a handler. Hooks are the app's; a mount's own come
+later.
 
 ## Sessions
 
-`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=())` gives a `Session`, used once, as
-`async with app.open(state) as session`:
+`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=(), terminal=False, options=None)` gives a
+`Session`, used once, as `async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
   async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
@@ -147,6 +152,12 @@ reaches a handler. Hooks are the app's; a mount's own come later.
 - **`interval`** is how often, in seconds, a wait reads again when nothing says the state moved: a second by
   default; `None` for an app that calls `session.changed()` on every change, so a wait reads only then.
 - **`subjects`** are the words tried before a bare line, in turn ([subjects](#subjects)): none by default.
+- **`terminal`** is whether a person is at a terminal (`ctx.terminal`): `False` by default, and anything but
+  `True` or `False` is a `TypeError`. Without one, a command for a person is refused
+  ([a person at a terminal](#a-person-at-a-terminal)).
+- **`options`** are the program's root options (`ctx.options`), an instance of the app's options class
+  ([the command line](#the-command-line)): by default, each field's default, or `None` for an app with none. An
+  instance of another class, or any for an app with no options class, is a `TypeError`.
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -154,8 +165,9 @@ of it as a [`Result`](reply.md), the envelope every parsed app answers with: its
 well, whether it was done, and any error, with its exit code. Nothing the line or its handler does is raised.
 
 `await session.call(line)` runs it the same way and gives what the handler returned, letting every error through: a
-`ReadError` for a line that doesn't read, a `LookupError` for a command with no handler, a `TypeError` for a
-handler that returned something besides its `REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
+`ReadError` for a line that doesn't read, a `RefusedError` for a command for a person at a terminal run with none,
+a `LookupError` for a command with no handler, a `TypeError` for a handler that returned something besides its
+`REPLY`, text, nothing or an `Ask`, and whatever the handler raises.
 
 **A handler asks first** by returning `parsed.Ask(question, then)`, having done nothing yet
 ([`reply.md`](reply.md#asking-first)). Each question is answered yes by `--yes` on the line, or `yes=True` given to
@@ -178,18 +190,98 @@ line of a stream. Any other line gives its one result there, and `session.run` g
 (`controls.on_change = session.changed`). Every wait on the session reads again at once; a change while a read is
 under way isn't missed.
 
-**A line that gives `--help` runs nothing.** It's answered with its command's usage
-([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
+**A line that gives `--help` runs nothing,** at any depth. It's answered as `run`'s text and `call`'s result:
 
-**`app.run(line, state=None, verbosity=0, yes=False, answer=None, interval=1.0, subjects=())`** runs one line in a
-session of its own, opened around it and closed after, and gives its `Result`: for a program that runs one line and
-exits. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there, open a session.
+- **where it says a command,** with the command's help ([`help.md`](help.md#a-commands-help)), by the phrase the
+  line said: its usage, its docstring, a row for each argument, its other phrases, its examples and what it asks of
+  the line. Its values aren't loaded.
+- **short of one,** with what it may still say ([`help.md`](help.md#a-listing)), one entry a line, each with its
+  summary in a column, in the order they're mounted and declared:
+  - **a mount whose prefix the line hasn't said yet** as its namespace's line, its prefix and its `doc`'s summary:
+    `relay …  A service's skeleton group.` A bare `--help` gives the root's commands, then each namespace's line;
+  - **any other** by each command beneath where the line's words go: a mount's for its prefix (`relay --help`), a
+    phrase's for its words so far (`fleet f1 jump --help`).
+
+  Where one command alone is beneath, short of a slot it needs (`wait --help`, before its operation), the answer is
+  that command's help. The result has no `command`, and exits 0. A word that goes nowhere (`rela --help`) is still
+  refused.
+- **An `INTERACTIVE` command is left out of a listing** when no one is at a terminal
+  ([a person at a terminal](#a-person-at-a-terminal)), or the line gives `--json`, as a tool would: it's not theirs
+  to run. Where that leaves nothing (`ship s1 --help`), each one's refusal is the answer, naming its `INSTEAD`. Its
+  own help, asked by its whole line, is answered whoever asks.
+
+parsed's own flags (`--help` or `-h`, `--json`, `--yes`, `--dry-run`) may stand anywhere on a line, the first word's
+place among them: `--yes fleet f1 buy ship hauler`.
+
+**`app.run(line, state=None, …)`** runs one line in a session of its own, opened around it and closed after, and
+gives its `Result`: for a program that runs one line and exits. It takes `yes=False`, as `run` does, and the rest as
+`app.open` does. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there,
+open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
 line's handler would be given. Outside `async with`, before it or after, each is refused with a `RuntimeError`, as
 is opening a session twice. An error the session's body raises goes on past it, whatever the state makes of it.
 `session.subjects` are its subjects, and `session.complete(text)` what may come next on a line being typed, with
 them; neither needs it open.
+
+## A person at a terminal
+
+Whether a person is at a terminal is the front end's to say, as the session opens: `app.open(state, terminal=True)`,
+or `app.run(line, terminal=True)`. It's `False` by default, so a program that runs lines in-process, as an agent's
+tooling does, needn't say so. `session.terminal` holds it. `app.main` says it from stdin and stdout
+([the command line](#the-command-line)).
+
+- **A handler reads it** as `ctx.terminal`, so a viewer gives text where it would draw.
+- **Without one, a command for a person is refused** (`INTERACTIVE = True`: [`command.md`](command.md)). It's
+  refused once the line reads, before its values are loaded or any hook runs, so nothing is done and no value is
+  checked for a command that can't run.
+  - `run` gives a `refused` error, exit 3 ([`reply.md`](reply.md#errors-and-exit-codes)), naming what's said in its
+    place where the command declares that (`INSTEAD`); `call` raises `parsed.RefusedError`.
+  - `--help` is still answered. A dry run is refused too, since its handler would run.
+  - A chain is refused where any of its steps is for a person.
+
+```
+ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead
+```
+
+What's said in its place is said as the mount the line went to says it, else as the first mount that holds it does,
+else by its phrase alone. The error's `instead` is that phrase after its mount's prefix,
+`'ships make {ship} add {part}'`, as a result's `command` is.
+
+Nothing is inferred from it: a terminal doesn't make `parsed.reply.terminal` the session's `answer`. A front end at
+one gives both, as `app.main` does.
+
+## The command line
+
+`app.main(argv=None, state=None, verbosity=0, interval=1.0, subjects=())` runs a program's arguments as its command
+line and gives its exit code, so a program's entry point is one line:
+
+```python
+app = parsed.App('servicectl', options=Options, version='1.2.3')
+app.mount('relay.cli')
+
+
+def main() -> None:
+    sys.exit(app.main())                                     # servicectl -c service.toml run
+```
+
+- **The arguments** (`sys.argv[1:]` by default) are the root options, then a line ([`argv.md`](argv.md)). After
+  the first word, every flag is the line's, and a single argument is the whole line:
+  `servicectl "run --config own.toml"`.
+- **Root options** are the fields of `App(prog, options=Options)`, a seared class whose fields are each optional:
+  read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, which exits 0.
+- **parsed's own flags** given among the root options are the line's, put first on it: `servicectl --json status`
+  runs `--json status`. A bare `--help` writes the program's own help (its usage, then a row for each root option
+  and `--version`) above the root's listing.
+- **A person is at a terminal** when stdin and stdout both are one. There, a line's `INTERACTIVE` command runs and
+  a question a line asks is put to them (`parsed.reply.terminal`); elsewhere, under a pipe or a tool, the command is
+  refused and the question left unanswered.
+- **What it writes:** each result's text as it comes, a watch's at each change: to stdout when it went well, else to
+  stderr. With `--json` anywhere on the line, or before it, each result's envelope instead
+  ([`reply.md`](reply.md#as-json)), a line of JSON on stdout, a refusal's too, so a tool reads one stream. Its exit
+  code is the last result's ([`reply.md`](reply.md#errors-and-exit-codes)), or 130 when it's interrupted (Ctrl-C).
+
+It runs an event loop of its own, as `app.run` does, so it's refused inside one with a `RuntimeError`.
 
 ## Subjects
 
@@ -250,5 +342,6 @@ Each is a `DeclarationError`, made when the app is put together:
 | `mount.on` of a command the mount doesn't hold | bind it on the app, or on the mount that has it |
 | a second handler for a command, or a second resolver for a category, on the app or on one mount | bind each once |
 | `names` of a category that isn't a name, or a resolver without `lookup`, `suggest` and `options` | |
+| `App(prog, options=…)` of root options it can't read, or a `version` that isn't a string | each named in [`argv.md`](argv.md#root-options) |
 
 A module named that doesn't import raises its `ImportError`.

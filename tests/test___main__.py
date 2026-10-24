@@ -20,7 +20,7 @@ def _run(*argv: str) -> subprocess.CompletedProcess[str]:
 
 class TestMain:
     def test_a_clean_package(self, capsys):
-        assert main(['check', '_support_farlandia', '_support_rio']) == 0
+        assert main(['check', '_support_farlandia', '_support_protocol']) == 0
         report = json.loads(capsys.readouterr().out)
         assert (report['ok'], report['commands']) == (True, 17)
 
@@ -30,7 +30,7 @@ class TestMain:
         assert problem['check'] == 'round-trip'
 
     def test_the_schema_bound(self, capsys):
-        assert main(['check', '_support_rio', '--max-schema-bytes', '100']) == 1
+        assert main(['check', '_support_protocol', '--max-schema-bytes', '100']) == 1
         assert json.loads(capsys.readouterr().out)['problems'][0]['check'] == 'schema'
 
     def test_the_chain_s_bound(self, capsys):
@@ -44,8 +44,8 @@ class TestMain:
             (['check', '_support_nowhere'], "a target doesn't import: No module named '_support_nowhere'"),
             (['check'], 'the following arguments are required: target'),
             ([], 'the following arguments are required: verb'),
-            (['chek', '_support_rio'], "argument verb: invalid choice: 'chek' (choose from check)"),
-            (['check', '_support_rio', '--max-schema-bytes', 'lots'], "invalid int value: 'lots'"),
+            (['chek', '_support_protocol'], "argument verb: invalid choice: 'chek' (choose from check)"),
+            (['check', '_support_protocol', '--max-schema-bytes', 'lots'], "invalid int value: 'lots'"),
         ],
     )
     def test_a_usage_error_is_json_on_stderr_exit_2(self, capsys, argv, says):
@@ -60,7 +60,7 @@ class TestMain:
 
 
 def test_check_runs_as_a_module():
-    found = _run('check', '_support_rio')
+    found = _run('check', '_support_protocol')
     assert found.returncode == 0, found.stderr
     assert json.loads(found.stdout)['ok'] is True
 

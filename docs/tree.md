@@ -28,7 +28,7 @@ tree.read('relay run')        # Run(config=None)
 tree.read('relay')            # ReadError: relay: then what? run | validate-config | status
 ```
 
-A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'rio relay'`). `tree.root` is where a
+A prefix is words, as a phrase's are; several are spaced once (`tree.under == 'mesh relay'`). `tree.root` is where a
 line's walk begins, and `tree.top` where every phrase does, past the prefix. An [app](app.md) mounts each tree it
 holds under one.
 
@@ -38,7 +38,9 @@ holds under one.
 [`Reading`](_walk/_walker.md#reading): the command, and each field's words. With `placeholders=True`, it reads an
 unquoted `<name>` as any value, as in the lines help shows ([`_walk/_walker.md`](_walk/_walker.md#placeholders)).
 `tree.usage(reading.end)` says how the command is said by the phrase it ended at, prefix and flags and all:
-`fleets merge <fleet> --into <into> [--quiet]`.
+`fleets merge <fleet> --into <into> [--quiet]`. `tree.usage_of(cls, phrase=0)` says one of its commands by a phrase
+alike: `0`, its `PHRASE` (`fleet <fleet> dock [<station>]`), then each of `EXTRA_PHRASES` from `1`. It raises a
+`KeyError` for a class that isn't one of them, and an `IndexError` for a phrase it hasn't.
 
 The line is split into words, double quotes holding a name with spaces (`"Vruba'a Belt 1"`), and its flags are
 split off. Then it's read from the root, a word at a time:
@@ -138,6 +140,12 @@ says whether it takes a value, across the whole tree:
 - **a `Bool` flag is a switch,** written `--no-…` when its field defaults to `True`;
 - **every other flag takes a value.**
 
+**A short flag** is one letter after one dash, `-c`, where a command's `SHORTS` gives its flag one
+([`command.md`](command.md#the-constants)). None is automatic. It says its flag on the commands that declare it,
+and a command that doesn't refuses it (`load takes no -c`). A short says one flag throughout a tree, so
+`tree.shorts` is the tree-wide table, letter to flag name: `{'c': 'config'}`. `-h` is `--help`'s, and any other
+`-x` is a word.
+
 **A wait's flags** join the table once any command can wait: `--until`, `--timeout` and `--count`, each taking a
 value, and `--watch`, a switch ([`wait.md`](wait.md)). A field of another command may take one of their names only
 as the wait's does. `tree.waits` says whether any command can wait.
@@ -158,6 +166,7 @@ Each is a `DeclarationError` naming the commands and the phrases:
 | two flags of one command with one name (`n`, and a field with `data_key='n'`) | |
 | a flag name that isn't lowercase words (`--Count`) | give the field a `data_key` |
 | a field whose flag is one of parsed's own: `--help`, `--json`, `--yes`, `--dry-run` | parsed takes them for every command |
+| a short that says one flag in one command and another in another (`-c` for `--config` and `--count`) | a short says one flag in a tree |
 | a field whose flag is `--until`, `--timeout`, `--watch` or `--count`, on a command that can wait | a wait takes them there |
 | a step whose phrase says `then` | it joins a chain's steps |
 

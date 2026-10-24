@@ -12,7 +12,8 @@ which of its slots were read is known.
 **Flags** are split off a line before the walk, since they may stand anywhere after the first word, and the walk
 doesn't yet know its command. So a flag's name says whether it takes a value, across the whole tree. A flag is its
 field's wire name, ``_`` written ``-`` (``for_`` with ``data_key='for'`` is ``--for``); a ``Bool`` flag is a switch,
-written ``--no-…`` when its field defaults to ``True``.
+written ``--no-…`` when its field defaults to ``True``. A flag has a short form only where its command's ``SHORTS``
+gives it one (``-c``), and a short says one flag throughout the tree.
 
 **The build refuses** what would make a line read two ways, or a flag mean two things:
 
@@ -20,7 +21,8 @@ written ``--no-…`` when its field defaults to ``True``.
 - two kinds of slot at one node (one word, several, the rest of the line);
 - a flag that's a switch in one command and takes a value in another;
 - two flags of one command with one name, a flag name that isn't lowercase words, and a flag that's one of parsed's
-  own (``--help``, ``--json``, ``--yes``, ``--dry-run``).
+  own (``--help``, ``--json``, ``--yes``, ``--dry-run``);
+- a short that says one flag in one command and another in another.
 
 Every command is declared first (:func:`parsed.command.declaration`), so a tree that builds holds only commands whose
 declarations check.
@@ -121,7 +123,7 @@ class Tree:
     Args:
         commands: The command classes. A base, which has no ``PHRASE``, is left out, and a class given twice counts
             once.
-        under: A prefix of words every phrase follows (``'rio relay'``); none by default.
+        under: A prefix of words every phrase follows (``'mesh relay'``); none by default.
 
     Attributes:
         commands: Each command's declaration, in the order given.
@@ -130,13 +132,16 @@ class Tree:
         top: Where every phrase begins: the node after the prefix's words, or the root.
         flags: Every flag's name, and whether it takes a value, across the tree: a wait's (``--until``,
             ``--timeout``, ``--watch``, ``--count``) among them when a command can wait.
+        shorts: Each short flag a command declares (``SHORTS``), to the flag it says: ``{'c': 'config'}``. A short
+            says one flag throughout the tree, and only on the commands that declare it.
         waits: Whether any of its commands can wait (:mod:`parsed.wait`).
         chains: Each chain's base, to the steps beneath it among the tree's commands, in their order: the commands
             ``then`` joins on a line.
 
     Raises:
         DeclarationError: A command's declaration doesn't check, two phrases would read a line two ways, a flag
-            would mean two things, or the prefix isn't words. The message names the commands and the phrases.
+            would mean two things, a short would say two flags, or the prefix isn't words. The message names the
+            commands and the phrases.
     """
 
     def __init__(self, commands: Iterable[type], *, under: str = '') -> None:
@@ -153,6 +158,7 @@ class Tree:
             self.top = self.top.words.setdefault(word, Node())
         self._flags: dict[type, Mapping[str, Flag]] = {}
         arities: dict[str, tuple[Arity, str]] = {}
+        shorts: dict[str, tuple[str, str]] = {}  # each short's flag, and the command that first said so
         self.waits = any(found_declaration.can_wait for found_declaration in self.commands)
         for name in WAIT_FLAGS if self.waits else ():
             _check_arity(name, Arity.SWITCH if name in WAIT_SWITCHES else Arity.VALUE, 'a wait', arities)
@@ -171,7 +177,9 @@ class Tree:
             self._flags[found_declaration.cls] = flags
             for name, flag in flags.items():
                 _check_arity(name, flag.arity, found_declaration.cls.__qualname__, arities)
+            _check_shorts(found_declaration, flags, shorts)
         self.flags: Mapping[str, Arity] = MappingProxyType({name: arity for name, (arity, _) in arities.items()})
+        self.shorts: Mapping[str, str] = MappingProxyType({short: name for short, (name, _) in shorts.items()})
         self.chains = _chains(self.commands)
 
     @classmethod
@@ -209,8 +217,27 @@ class Tree:
         Args:
             end: Where a walk ended: a reading's ``end``.
         """
-        fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
-        said = usage(end.bound, self.flags_of(end.declaration.cls).values(), fields)
+        return self._usage(end.declaration, end.bound)
+
+    def usage_of(self, cls: type, phrase: int = 0) -> str:
+        """How one of the tree's commands is said by a phrase, as :meth:`usage` writes it: ``log [<n>]``.
+
+        Args:
+            cls: The command.
+            phrase: Which phrase: ``0``, its ``PHRASE``, by default; then each of ``EXTRA_PHRASES``, from ``1``.
+
+        Raises:
+            KeyError: ``cls`` isn't one of the tree's commands.
+            IndexError: It has no such phrase.
+        """
+        if cls not in self._flags:
+            raise KeyError(cls)
+        found = declaration(cls)
+        return self._usage(found, found.phrases[phrase])
+
+    def _usage(self, found: Declaration, bound: Bound) -> str:
+        fields = {spec.attr: spec.field for spec in found.cls.__seared_fields__}
+        said = usage(bound, self.flags_of(found.cls).values(), fields)
         return f'{self.under} {said}' if self.under else said
 
     def walk(self, line: str, names: Mapping[str, Resolver] | None = None, *, placeholders: bool = False) -> Reading:
@@ -381,6 +408,18 @@ def _flags_of(found: Declaration) -> Mapping[str, Flag]:
             raise DeclarationError(msg)
         flags[flag] = Flag(name=flag, field=attr, arity=Arity.SWITCH if switch else Arity.VALUE, negated=negated)
     return MappingProxyType(flags)
+
+
+def _check_shorts(found: Declaration, flags: Mapping[str, Flag], shorts: dict[str, tuple[str, str]]) -> None:
+    """Refuse a short flag that says one flag here and another in a command before: it says one throughout a tree."""
+    names = {flag.field: name for name, flag in flags.items()}
+    command = found.cls.__qualname__
+    for attr, short in found.shorts.items():
+        name = names[attr]
+        known = shorts.setdefault(short, (name, command))
+        if known[0] != name:
+            msg = f'-{short} is --{known[0]} in {known[1]} and --{name} in {command}: a short says one flag in a tree'
+            raise DeclarationError(msg)
 
 
 def _check_arity(name: str, arity: Arity, command: str, arities: dict[str, tuple[Arity, str]]) -> None:

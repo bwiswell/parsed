@@ -7,6 +7,65 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.1.8 — 2026-10-23
+
+**The command line and help.** `app.main(argv)` runs a program's arguments as its command line: its root options
+before the first word, then the line, every flag after the first word its own, a single argument the whole line,
+short flags where a command gives them, parsed's own flags at any depth, and `--json` for the envelope. Help says a
+command in its own words, a listing says what a line may still say, a mount's namespace a line of it, and a package
+gets reference pages. A command for a person at a terminal is refused without one, naming what to say instead.
+
+### Added
+
+- **The command line:** `app.main(argv)` runs a program's arguments as its command line and gives its exit code,
+  for `sys.exit(app.main())`. After the first word every flag is the line's, and a single argument is the whole
+  line (`prog "look log --n 40"`). A person is at a terminal when stdin and stdout both are, and there a question a
+  line asks is put to them. Each result's text is written as it comes, to stdout, or to stderr when it went wrong.
+  `parsed.argv` reads the arguments.
+- **Root options:** `App(prog, options=Options, version='1.2.3')`. The options class is a seared class whose fields,
+  each optional, are the flags before a command line's first word, given to handlers as `ctx.options` (each field's
+  default where none was given; `app.open` and `app.run` take `options=`). `--version` and `-h` or `--help` stand
+  there too.
+- **Short flags:** `SHORTS = {'config': 'c'}` on a command, merged along the MRO as `KINDS` is, says `--config` as
+  `-c`. None is automatic, and `-h` is `--help`'s on every command. A short says one flag throughout a tree
+  (`tree.shorts`), refused at build otherwise, and only on the commands that declare it; any other `-x` is a word.
+- **parsed's own flags at any depth:** `--help` (or `-h`), `--json`, `--yes` and `--dry-run` may stand anywhere on a
+  line, before its first word too (`--yes fleet f1 buy ship hauler`), and among a command line's root options, where
+  they're the line's. A line that gives `--help` short of a command is answered with what it may still say, exit 0,
+  not refused: a bare `--help`, a mount's prefix (`relay --help`), a phrase partway (`fleet f1 jump --help`).
+- **`--json` on a command line** writes each result's envelope as a line of JSON on stdout, a refusal's too, so a
+  tool reads one stream.
+- **Whether a person is at a terminal:** `app.open(state, terminal=True)` says one is, and `app.run` takes it too.
+  It's `False` by default, so a program that runs lines in-process needn't say so. A handler reads it as
+  `ctx.terminal`, so a viewer gives text where it would draw. Without one, a line that says an `INTERACTIVE`
+  command, a chain's step among them, is refused before its values are loaded or any hook runs: a `refused` error,
+  exit 3, naming its `INSTEAD` (``say `ships make <ship> add <part>` instead``), and `parsed.RefusedError` from
+  `session.call`. `--help` is still answered.
+- **Help in a command's own words:** a line that gives `--help` on a command gets its help, by the phrase it said:
+  its usage, its docstring, a row for each argument (its field's `doc=`, or what its words are), its other phrases,
+  its `EXAMPLES`, and what it asks of the line (`--yes`, a wait's flags, `then`, or a person at a terminal and what
+  to say instead). `parsed.help` writes it.
+- **Listings with summaries and namespaces:** help short of a command gives each entry's summary, its docstring's
+  first line, in a column. A mount whose prefix the line hasn't said is one line, its prefix and its `doc`
+  (`app.mount(…, doc=…)`, by default its module's docstring). An `INTERACTIVE` command is left out where no one is
+  at a terminal, or the line gives `--json`; where that leaves nothing, its refusal is the answer. Where one command
+  alone is beneath a line (`wait --help`, short of its operation), its help is the answer. `prog --help` writes the
+  program's own help, a row for each root option, above the listing.
+- **What a kind's words are:** `kind.describe(field)`, `a span of time, such as 90s, 10m or 1h30m` then any literal
+  words, from `kind.what(field)`, which a kind of an app's own overrides.
+- **A kind's own example:** `kind.example(field)`, a value the field may hold, which `parsed check` makes its
+  instances with where a kind gives one. A kind with a form of its own (`slot=value`) gives one its form reads,
+  since a value made from the field's type alone may not.
+- **Reference pages:** `parsed.doc.render_command`, `document` and `build_docs`, a package's command reference in
+  Markdown over seared's pipeline. A command's page has its phrases, usage, arguments and examples above seared's
+  fields, and any other class gets seared's page. `python -m parsed.doc <package>` writes them, with `--check` for
+  CI. `FlagDoc.short` gives a flag's short form, and `tree.usage_of(cls, phrase)` says a command by any phrase.
+
+### Fixed
+
+- **A required list flag's usage** is written as it's said, `--until <until> …`, no longer in brackets as an
+  optional one is.
+
 ## 0.1.7 — 2026-10-23
 
 **Chains and subjects.** A line says a chain of steps, joined by `then`, run as one order, each step's names

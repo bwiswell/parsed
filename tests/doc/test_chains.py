@@ -27,7 +27,7 @@ from parsed.tree import Tree
 
 @pytest.fixture(scope='module')
 def tree() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 def _chain(*steps: type) -> Tree:

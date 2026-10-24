@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from pathlib import Path
 from typing import ClassVar
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
+import _support_service as service
 import pytest
 
 import parsed
@@ -30,7 +32,7 @@ def _one(phrase: str, **fields: object) -> Tree:
 
 @pytest.fixture(scope='module')
 def tree() -> Tree:
-    return Tree.collect('_support_farlandia', '_support_rio')
+    return Tree.collect('_support_farlandia', '_support_protocol')
 
 
 class TestEveryFixture:
@@ -56,7 +58,7 @@ class TestEveryFixture:
             ('ship s1 fit', farlandia.ShipFit(ship='s1')),
             (
                 'handheld connect dock r7 --host 10.0.0.2 --port 5085',
-                rio.HandheldConnect(source='dock', reader_id='r7', host='10.0.0.2', port=5085),
+                protocol.HandheldConnect(source='dock', reader_id='r7', host='10.0.0.2', port=5085),
             ),
         ],
     )
@@ -656,11 +658,65 @@ class TestFlags:
     def test_a_quoted_flag_is_a_word(self, tree):
         assert tree.read('say "--loud" now').message == '--loud now'
 
+    def test_parsed_s_own_first_too(self, tree):
+        assert tree.walk('--yes --json log').own == {'yes', 'json'}
+        assert tree.walk('-h fleet f1 mine').own == {'help'}
+
     def test_parsed_s_own_on_any_command(self, tree):
         reading = tree.walk('fleet f1 buy ship hauler --yes --json')
         assert reading.own == {'yes', 'json'}
         assert reading.data() == {'fleet': 'f1', 'hull': 'hauler'}
         assert tree.walk('log --help --dry-run').own == {'help', 'dry-run'}
+
+
+@pytest.fixture(scope='module')
+def shorts() -> Tree:
+    """-c is Run's --config; FleetMine takes no --config, and Load one with no short."""
+    return Tree([service.Run, farlandia.FleetMine, _command('load', config=parsed.Str(default=None))])
+
+
+class TestShortFlags:
+    def test_a_short_says_its_flag(self, shorts):
+        assert shorts.read('run -c c.toml') == service.Run(config=Path('c.toml'))
+        assert shorts.walk('run -c c.toml').given['config'].by == Flag(name='config', field='config', arity='value')
+
+    def test_h_is_help_s(self, shorts):
+        assert shorts.walk('run -h').own == {'help'}
+        assert shorts.walk('fleet f1 mine -h --dry-run').own == {'help', 'dry-run'}
+
+    def test_any_other_is_a_word(self, tree):
+        assert tree.read('say -x now').message == '-x now'
+        assert tree.read('say "-h"').message == '-h'  # quoted, a value
+
+    @pytest.mark.parametrize(
+        ('line', 'says'),
+        [
+            ('run -c', r'-c needs a value `-c <config>`'),
+            ('run -c a -c b', r'-c is given twice'),
+            ('run -c a --config b', r'--config is given twice'),
+            ('run -h -h', r'-h is given twice'),
+            ('fleet f1 mine -c x', r'fleet f1 mine takes no -c'),
+            ('load -c x', r'load takes no -c'),  # a --config, but no short for it
+        ],
+    )
+    def test_refusals_name_it_as_given(self, shorts, line, says):
+        with pytest.raises(ReadError, match=says):
+            shorts.read(line)
+
+    def test_a_short_s_value_is_never_a_cut(self):
+        @parsed.parsed
+        class Step(Command):
+            STEPS = True
+            SHORTS: ClassVar[dict[str, str]] = {'by': 'b'}
+
+            by: str = parsed.Str(default='')
+
+        @parsed.parsed
+        class Go(Step):
+            PHRASE = 'go'
+
+        reading = Tree([Go]).walk('go -b then')
+        assert (reading.data(), reading.then) == ({'by': 'then'}, ())
 
 
 class TestReading:
@@ -703,7 +759,7 @@ class TestRefusals:
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
             ('log 40 50', r"log 40: '50' is left over"),
             ('fleet f1 dock nearest now', r"fleet f1 dock nearest: 'now' is left over"),
-            ('--yes log', r'--yes comes before a command: a flag follows the first word'),
+            ('--into f2 log', r'--into comes before a command: a flag follows the first word'),
             ('say "hello', r'the quote at column 5 is never closed'),
             ('log --n 3', r'no command takes --n'),
             ('log --into f2', r'log takes no --into `log \[<n>\]`'),
@@ -741,7 +797,7 @@ class TestRefusalsAsData:
         [
             ('', 0, None),
             ('say "hello', 4, None),
-            ('--yes log', 0, '--yes'),
+            ('--into f2 log', 0, '--into'),
             ('log --fro 3', 4, '--fro'),
             ('fleets merge f1 --into f2 --quiet=no', 26, '--quiet=no'),
             ('fleet f1 mien', 9, 'mien'),

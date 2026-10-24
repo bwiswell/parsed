@@ -8,11 +8,11 @@ so a module that declares commands needs no other import.
 | Group | Names |
 |---|---|
 | Commands | `Command` ([`command.md`](command.md)), `Effect` and `effect_of` ([`effect.md`](effect.md)) |
-| The app | `App` ([`app.md`](app.md)), a program's trees mounted under prefixes, with their handlers and names; `Context` ([`context.md`](context.md)), what a handler is given beside its command; `Result` ([`reply.md`](reply.md)), what running a line comes to; `Ask`, a handler's question, asked before it acts |
+| The app | `App` ([`app.md`](app.md)), a program's trees mounted under prefixes, with their handlers and names, and its command line ([`argv.md`](argv.md)); `Context` ([`context.md`](context.md)), what a handler is given beside its command; `Result` ([`reply.md`](reply.md)), what running a line comes to; `Ask`, a handler's question, asked before it acts |
 | Kinds | `Kind` and `Name` ([`kinds.md`](kinds.md)); the default kinds stay `parsed.kinds.*` |
 | Names | `Resolver` ([`names.md`](names.md)), what an app gives for a category of its names |
 | The tree | `Tree` ([`tree.md`](tree.md)) |
-| Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RenderError`, `TimedOutError` ([`errors.md`](errors.md)) |
+| Errors | `ParsedError`, `DeclarationError`, `ReadError`, `RefusedError`, `RenderError`, `TimedOutError` ([`errors.md`](errors.md)) |
 | Version | `__version__` |
 
 **seared's:**
@@ -41,7 +41,8 @@ class Mined(parsed.Parsed):
 any name without shadowing the module, as the family's message modules do with `import zeared`.
 
 **`python -m parsed` is parsed's own command line** (`__main__.py`): `check <target> …` checks a package's commands
-in its CI ([`doc/check.md`](doc/check.md)).
+in its CI ([`doc/check.md`](doc/check.md)). `python -m parsed.doc <target>` writes, or checks, a package's command
+reference pages ([`doc/generate.md`](doc/generate.md)).
 
 ## See also
 

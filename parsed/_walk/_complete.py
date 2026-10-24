@@ -105,6 +105,18 @@ def goes(tree: Tree, tokens: list[Token]) -> bool:
     return _Completer(tree, {}, flagging=False)._walk(tokens) is not None  # noqa: SLF001 -- the walk is this module's
 
 
+def beneath(tree: Tree, tokens: list[Token]) -> list[End] | None:
+    """The commands a line's words may still say in ``tree``: every one beneath where they go, in the tree's order.
+
+    The flags are split off by the tree's arities, and the words read loosely, as completion reads a line; ``None``
+    where a word goes nowhere.
+    """
+    completer = _Completer(tree, {}, flagging=False)
+    words, _, _ = completer._flags(tokens)  # noqa: SLF001 -- the walk is this module's
+    walked = completer._walk(words)  # noqa: SLF001
+    return None if walked is None else _ends(walked[0])
+
+
 def _chained(
     tree: Tree, text: str, tokens: list[Token], names: Mapping[str, Resolver]
 ) -> tuple[list[Token], _Later | None, _Slots] | None:
@@ -204,7 +216,7 @@ class _Completer:
             if token.raw == '--':
                 words += tokens[at:]
                 break
-            found = _flag(token)
+            found = _flag(token, self.tree.shorts)
             if found is None:
                 words.append(token)
                 continue

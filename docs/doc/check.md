@@ -21,8 +21,10 @@ protocol in its CI.
 **The instances are made from each field's type and constraints,** with no generator beside: a string `example`
 (or the first of a few words its lengths and pattern take), a number `1` moved into its bounds, a switch the other
 way from its default, an `Enum`'s first member, a span of ten minutes, a list of one, a pair `key` and its value.
-A command whose required field takes none of them (a pattern no word fits) has no round trips, and is listed under
-`skipped` with that field. Its examples and its schema are still checked, so an `EXAMPLES` line covers it.
+A field read by a kind with a form of its own takes the kind's example instead, where it gives one
+([`kind.example(field)`](../kinds.md#an-example)): `fleet=f1` for a `slot=value` kind, which `example` wouldn't
+fit. A command whose required field takes none of them (a pattern no word fits) has no round trips, and is listed
+under `skipped` with that field. Its examples and its schema are still checked, so an `EXAMPLES` line covers it.
 
 **An example's `<name>` stands for any value,** as help writes one (`fleet <fleet> mine --for <for>`): the walk
 reads it by no kind and no resolver ([`_walk/_walker.md`](../_walk/_walker.md#placeholders)), and the line must end

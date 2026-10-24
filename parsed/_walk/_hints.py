@@ -47,7 +47,7 @@ def _flag(flag: Flag, field: Field) -> str:
         return f'[--{flag.name}]'
     said = f'--{flag.name} <{flag.name}>'
     if field.many:
-        return f'[{said} …]'
+        said = f'{said} …'
     return said if field.required else f'[{said}]'
 
 

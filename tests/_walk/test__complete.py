@@ -8,7 +8,7 @@ import _support_farlandia as farlandia
 import pytest
 
 import parsed
-from parsed._walk import Completion, goes, split
+from parsed._walk import Completion, beneath, goes, split
 from parsed._walk._complete import being_typed
 from parsed.command import Command
 from parsed.tree import Tree
@@ -163,6 +163,23 @@ class TestFlagsAfterTheRest:
         assert say.complete('say hello --l') == Completion(words=['--loud'], replace=3)
 
 
+@parsed.parsed
+class Send(Command):
+    """Send on or not, by someone: a slot after a flag that has a short form."""
+
+    PHRASE = 'send {on}'
+    SHORTS: ClassVar[dict[str, str]] = {'by': 'b'}
+
+    on: bool = parsed.Bool(required=True)
+    by: str = parsed.Str(default='')
+
+
+class TestShortFlags:
+    def test_a_short_s_value_is_its_flag_s_not_a_slot_s(self):
+        send = Tree([Send])
+        assert _words(send, 'send -b ann ') == _words(send, 'send --by ann ') == ['true', 'false']
+
+
 class TestFarlandiasCases:
     """farlandia's own completion cases (``tests/client/test_tree.py``), on this fixture's commands.
 
@@ -287,6 +304,28 @@ class TestChainPlace:
     def test_somewhere_the_line_doesn_t_say_every_name(self, tree):
         offered = _words(tree, 'fleet Prospector jump nearest iron then move ', farlandia.NAMES)
         assert offered == ['Vesta', '"Vruba\'a Belt 1"', '"Vruba Rings"', 'Ceres', '"Sol Belt"']
+
+
+class TestBeneath:
+    # For help short of a command: the commands a line's words may still say.
+    def _phrases(self, tree: Tree, line: str) -> list[str] | None:
+        ends = beneath(tree, split(line))
+        return None if ends is None else list(dict.fromkeys(end.bound.phrase.text for end in ends))
+
+    def test_every_command_beneath_in_the_tree_s_order(self, tree):
+        jumps = ['fleet {fleet} jump nearest {ore}', 'fleet {fleet} jump {system}']
+        assert self._phrases(tree, 'fleet f1 jump') == jumps
+        every = {bound.phrase.text for found in tree.commands for bound in found.phrases}
+        assert set(self._phrases(tree, '') or ()) == every  # every phrase, extra ones among them
+
+    def test_its_own_where_it_says_a_command(self, tree):
+        assert self._phrases(tree, 'log --help') == ['log {n}']  # with its slot and without, one phrase
+
+    def test_flags_split_off_by_the_tree(self, tree):
+        assert self._phrases(tree, 'fleet f1 mine --for soon --help') == ['fleet {fleet} mine']
+
+    def test_none_where_a_word_goes_nowhere(self, tree):
+        assert self._phrases(tree, 'flet') is None
 
 
 class TestGoes:

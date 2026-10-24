@@ -1,8 +1,12 @@
 """Reading a line by a tree: its flags split off, its words walked from the root, each field's words kept.
 
-**The flags first.** A word that begins with ``--`` outside quotes is a flag, anywhere after the line's first word:
+**The flags first.** A word that begins with ``--`` outside quotes is a flag, anywhere after the line's first word,
+and parsed's own anywhere at all:
 
 - **its name is lowercased,** and ``--name=value`` gives its value in the same word (``--label="north dock"``);
+- **a short flag** (``-c``) is one letter after ``-``, where a command's ``SHORTS`` gives it one: it says its flag,
+  on the commands that declare it, and takes a value as its flag does. ``-h`` is ``--help``'s; any other ``-x`` is a
+  word;
 - **whether it takes a value is the tree's to say** (:attr:`parsed.tree.Tree.flags`), since the walk doesn't know
   its command yet: a switch takes no value, and any other flag takes the word after it;
 - **parsed's own** (``--help``, ``--json``, ``--yes``, ``--dry-run``) are switches every command takes;
@@ -52,7 +56,7 @@ from parsed.wait import FLAGS as WAIT_FLAGS
 from parsed.wait import TIMEOUT, Condition, Wait, problem
 
 from ._hints import close, either, usage
-from ._terms import RESERVED, THEN, Arity, SlotKind
+from ._terms import HELP, HELP_SHORT, RESERVED, THEN, Arity, SlotKind
 from ._words import Token, split
 
 if TYPE_CHECKING:
@@ -219,7 +223,8 @@ class _Walker:
 
     def walk(self) -> Reading:
         tokens = split(self.line)
-        if tokens and _flag(tokens[0]) is not None:
+        first = _flag(tokens[0], self.tree.shorts) if tokens else None
+        if first is not None and first[0] not in RESERVED:
             msg = f'{tokens[0].raw} comes before a command: a flag follows the first word'
             raise self.refuse(msg, word=tokens[0])
         pieces, joins = _pieces(self.tree, tokens) if self.tree.chains else ([tokens], [])
@@ -342,7 +347,7 @@ class _Walker:
             if token.raw == '--':
                 words += tokens[at:]
                 break
-            found = _flag(token)
+            found = _flag(token, self.tree.shorts)
             if found is None:
                 words.append(token)
                 continue
@@ -352,12 +357,12 @@ class _Walker:
                 continue
             arity = self._arity(name, token)
             if arity is Arity.SWITCH and value is not None:
-                msg = f'--{name} takes nothing after it'
+                msg = f'{_given(token, name)} takes nothing after it'
                 raise self.refuse(msg, word=token)
             if arity is Arity.VALUE and value is None:
-                if at == len(tokens) or tokens[at].raw == '--' or _flag(tokens[at]) is not None:
-                    msg = f'--{name} needs a value'
-                    raise self.refuse(msg, word=token, hint=f'--{name} <{name}>')
+                if at == len(tokens) or tokens[at].raw == '--' or _flag(tokens[at], self.tree.shorts) is not None:
+                    msg = f'{_given(token, name)} needs a value'
+                    raise self.refuse(msg, word=token, hint=f'{_given(token, name)} <{name}>')
                 value = tokens[at]
                 at += 1
             flags.append((name, token, value))
@@ -374,10 +379,10 @@ class _Walker:
 
     def _own(self, name: str, token: Token, value: Token | None, own: set[str]) -> None:
         if value is not None:
-            msg = f'--{name} takes nothing after it'
+            msg = f'{_given(token, name)} takes nothing after it'
             raise self.refuse(msg, word=token)
         if name in own:
-            msg = f'--{name} is given twice'
+            msg = f'{_given(token, name)} is given twice'
             raise self.refuse(msg, word=token)
         own.add(name)
 
@@ -504,9 +509,12 @@ class _Walker:
             flag = takes.get(name)
             if flag is None:
                 raise self._not_taken(end, name, saids[0][1], words)
+            short = next((token for _, token, _ in saids if _is_short(token)), None)
+            if short is not None and found.shorts.get(flag.field) != short.raw[1]:
+                raise self._not_taken(end, name, short, words)
             field = fields[flag.field]
             if len(saids) > 1 and (flag.arity is Arity.SWITCH or not field.many):
-                msg = f'--{name} is given twice'
+                msg = f'{_given(saids[1][1], name)} is given twice'
                 raise self.refuse(msg, word=saids[1][1], field=flag.field)
             out[flag.field] = _Field(
                 by=flag,
@@ -616,7 +624,7 @@ class _Walker:
             return self.refuse(msg, word=token, hint=self._usage(end))
         hint = self._usage(end)
         near = [f'--{found}' for found in close(name, self.tree.flags_of(end.declaration.cls))]
-        return self.refuse(f'{_said(words)} takes no --{name}', word=token, hint=hint, near=near)
+        return self.refuse(f'{_said(words)} takes no {_given(token, name)}', word=token, hint=hint, near=near)
 
     def _values(self, fields: Mapping[str, _Field], moved: _Moved | None = None) -> dict[str, object]:
         """Each field's value, a name's scope read before it; a switch's is ``True``, or ``False`` for ``--no-…``.
@@ -728,7 +736,7 @@ def _pieces(tree: Tree, tokens: list[Token]) -> tuple[list[list[Token]], list[To
     while at < len(tokens):
         token = tokens[at]
         at += 1
-        found = _flag(token)
+        found = _flag(token, tree.shorts)
         if token.raw == '--':
             pieces[-1] += tokens[at - 1 :]
             break
@@ -841,15 +849,36 @@ def head_of(bound: Bound, shared: Collection[str]) -> int:
     )
 
 
-def _flag(token: Token) -> tuple[str, Token | None] | None:
-    """A flag's name and the value it gives after ``=``, if ``token`` is one: ``--`` and a name, outside quotes."""
-    head, eq, _ = token.raw.partition('=')
-    if not head.startswith('--') or len(head) == len('--') or '"' in head:
+def _flag(token: Token, shorts: Mapping[str, str] | None = None) -> tuple[str, Token | None] | None:
+    """A flag's name and the value it gives after ``=``, if ``token`` is one: ``--`` and a name, outside quotes.
+
+    Or a short flag, ``-`` and a letter: ``-h``, ``--help``'s, or one ``shorts`` gives, to the flag it says.
+    """
+    raw = token.raw
+    if raw[:1] != '-':  # most words: neither a flag nor a short
+        return None
+    if len(raw) == len('-c'):  # a short, if it's a letter one gives; `--` and `-3` are no letter's
+        letter = raw[1]
+        name = HELP if letter == HELP_SHORT else None if shorts is None else shorts.get(letter)
+        return None if name is None else (name, None)
+    head, eq, _ = raw.partition('=')
+    if not head.startswith('--') or len(head) == len('--') or '"' in head:  # `--=x` names nothing
         return None
     if not eq:
         return head[2:].lower(), None
     at = len(head) + 1  # the head has no quotes, so the text and the raw word agree up to the `=`
     return head[2:].lower(), Token(text=token.text[at:], start=token.start + at, raw=token.raw[at:])
+
+
+def _is_short(token: Token) -> bool:
+    """Whether ``token`` is said as a short flag would be: ``-`` and one letter, unquoted."""
+    raw = token.raw
+    return len(raw) == 2 and raw[0] == '-' and raw[1].isascii() and raw[1].isalpha()  # noqa: PLR2004 -- `-c`
+
+
+def _given(token: Token, name: str) -> str:
+    """A flag as a refusal names it: as given, when it's short (``-c``); else by its name (``--config``)."""
+    return token.raw if _is_short(token) else f'--{name}'
 
 
 def _ends(node: Node) -> list[End]:

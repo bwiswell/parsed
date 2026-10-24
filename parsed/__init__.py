@@ -8,11 +8,12 @@ parsed's own surface:
 
 - ``app.py``: :class:`App`, a program's trees mounted under prefixes, the handlers their commands run with, the
   hooks around them, and the names it reads lines with.
+- ``argv.py``: a program's arguments as its command line, its root options first, for :meth:`App.main`.
 - ``context.py``: :class:`Context`, what a handler is given beside its command.
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.
 - ``errors.py``: :class:`ParsedError`, the base of parsed's errors, :class:`DeclarationError`, :class:`ReadError`,
-  :class:`RenderError` and :class:`TimedOutError`.
+  :class:`RefusedError`, :class:`RenderError` and :class:`TimedOutError`.
 - ``kinds.py``: :class:`Kind`, how a field's words are read, and :class:`Name`, one of an app's names; the default
   kinds stay ``parsed.kinds.*``.
 - ``names.py``: :class:`Resolver`, what an app gives for a category of its names.
@@ -57,13 +58,13 @@ from .app import App
 from .command import Command
 from .context import Context
 from .effect import Effect, effect_of
-from .errors import DeclarationError, ParsedError, ReadError, RenderError, TimedOutError
+from .errors import DeclarationError, ParsedError, ReadError, RefusedError, RenderError, TimedOutError
 from .kinds import Kind, Name
 from .names import Resolver
 from .reply import Ask, Result
 from .tree import Tree
 
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 
 __all__ = [
     'UUID',
@@ -91,6 +92,7 @@ __all__ = [
     'Path',
     'PolarsFrame',
     'ReadError',
+    'RefusedError',
     'RenderError',
     'Resolver',
     'Result',

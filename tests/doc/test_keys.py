@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import _support_farlandia as farlandia
-import _support_rio as rio
+import _support_protocol as protocol
 import pytest
 
 from parsed.doc import chain_keys, command_key, introspect_command
@@ -23,7 +23,7 @@ class TestCommandKey:
             (farlandia.FleetBuyShip(fleet='f1', hull='hauler'), 'fleet/f1/buy/ship/hauler'),
             (farlandia.Log(n=40), 'log/40'),
             (farlandia.FleetsStart(on=False), 'fleets/start/false'),
-            (rio.HandheldConnect(source='dock', reader_id='r7', host='h'), 'handheld/connect/dock/r7'),
+            (protocol.HandheldConnect(source='dock', reader_id='r7', host='h'), 'handheld/connect/dock/r7'),
         ],
     )
     def test_its_words_and_its_slots_values(self, command, key):

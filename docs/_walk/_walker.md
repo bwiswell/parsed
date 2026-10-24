@@ -5,10 +5,14 @@ the words walked from the root. `Tree.walk(line)` calls it.
 
 ## The flags first
 
-A word that begins with `--`, outside quotes, is a flag, anywhere after the line's first word:
+A word that begins with `--`, outside quotes, is a flag, anywhere after the line's first word, and parsed's own
+anywhere at all:
 
 - **its name is lowercased,** and `--name=value` gives its value in the same word: `--for=90`,
   `--label="north dock"`;
+- **a short flag** is `-` and one letter, where a command's `SHORTS` gives one (`tree.shorts`): it says its flag, on
+  the commands that declare it, and takes a value as its flag does (`-c relay.toml`). `-h` is `--help`'s; any other
+  `-x`, and any quoted, is a word;
 - **whether it takes a value is the tree's to say** (`tree.flags`), since the walk doesn't know its command yet: a
   switch takes no value, and any other flag takes the word after it, even one that's a literal (`--into merge`), or
   begins with one dash (`--by -3`);
@@ -79,17 +83,18 @@ word is missing; its `suggestions` are the did-you-mean's words, or the words th
 |---|---|---|
 | has no words | `no command: the line has no words` | the first words |
 | leaves a quote open | ``the quote at column 5 is never closed: "hello `say "hello"` `` | |
-| begins with a flag | `--yes comes before a command: a flag follows the first word` | |
+| begins with a flag, not one of parsed's own | `--into comes before a command: a flag follows the first word` | |
 | gives a flag no command takes | `no command takes --fro; did you mean --for?` | flags close to it |
 | gives a value to a switch | `--quiet takes nothing after it` | |
 | ends at a flag that takes a value, or gives it a flag | ``--for needs a value `--for <for>` `` | |
-| gives a flag twice | `--for is given twice` | |
+| gives a flag twice | `--for is given twice`; a short as given, `-c is given twice` | |
 | says a word no command says | `no command 'fleet f1 mien'; did you mean mine?` | words close to it |
 | … with no word close to it | `no command 'fleet f1 xyz': buy \| dock \| jump \| mine \| sell` | the words that may come |
 | goes on after a command's last word | ``log 40: '50' is left over `log [<n>]` `` | |
 | stops at a slot | ``fleet f1 jump: which system? `fleet f1 jump <system>` `` | |
 | stops at a word that isn't a command | `fleet f1: then what? buy \| dock \| jump \| mine \| sell` | the words that may come |
 | gives a flag its command doesn't take | ``fleet f1 mine takes no --into `fleet <fleet> mine [--for <for>]` `` | its flags close to it |
+| gives a short its command doesn't declare | ``load takes no -c `load [--config <config>]` `` | |
 | leaves out a required flag | ``fleets merge f1 needs --into `fleets merge f1 --into <into>` `` | |
 | gives a slot a word its kind can't read | `log {n}: 'many' is not a whole number` | |
 | gives a flag a word its kind can't read | `--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m` | |

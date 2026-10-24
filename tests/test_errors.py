@@ -1,7 +1,7 @@
 """Tests for ``parsed/errors.py``: one base for every error parsed raises."""
 
 import parsed
-from parsed.errors import DeclarationError, ParsedError, ReadError, RenderError, TimedOutError
+from parsed.errors import DeclarationError, ParsedError, ReadError, RefusedError, RenderError, TimedOutError
 
 
 def test_exported():
@@ -56,6 +56,27 @@ class TestReadError:
         found = ReadError("no command 'flet'", line='flet', word='flet', suggestions=('fleet',)).to_json()
         assert (found['word'], found['suggestions']) == ('flet', ['fleet'])
         assert 'field' not in found
+
+
+class TestRefusedError:
+    def test_parsed_s(self):
+        assert parsed.RefusedError is RefusedError
+        assert issubclass(RefusedError, ParsedError)
+
+    def test_its_parts(self):
+        found = RefusedError('log is for a person at a terminal', line='log 3')
+        assert str(found) == found.message == 'log is for a person at a terminal'
+        assert (found.line, found.instead) == ('log 3', None)
+
+    def test_as_data_with_what_s_said_in_its_place_where_there_s_one(self):
+        message = 'ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+        assert RefusedError(message, line='ship s1 fit', instead='ships make {ship} add {part}').to_json() == {
+            'error': 'refused',
+            'message': message,
+            'line': 'ship s1 fit',
+            'instead': 'ships make {ship} add {part}',
+        }
+        assert 'instead' not in RefusedError('log is for a person at a terminal', line='log').to_json()
 
 
 def test_a_render_error_is_parsed_s_and_a_value_error():

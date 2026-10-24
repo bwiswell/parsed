@@ -10,7 +10,10 @@ A handler is ``handler(command, ctx)``, and ``ctx`` is a :class:`Context`, made 
 - **The line's:** ``ctx.line``, ``ctx.reading`` (each field's words, and parsed's own flags), ``ctx.phrase``, the
   phrase that said it (so a handler tells a twin's wording from its command's), and ``ctx.dry_run``, whether
   ``--dry-run`` was given.
-- **The session's:** ``ctx.verbosity``, how much to say: ``0`` by default, more for more.
+- **The program's:** ``ctx.options``, its root options, given before a command line's first word
+  (``--config``).
+- **The session's:** ``ctx.verbosity``, how much to say: ``0`` by default, more for more; and ``ctx.terminal``,
+  whether a person is at a terminal, so a viewer gives text where it would draw.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ from .app import App, Mount, Session  # noqa: TC001
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from seared import Seared
 
     from .names import Resolver
 
@@ -81,3 +86,13 @@ class Context[S]:
     def verbosity(self) -> int:
         """How much to say: ``0`` by default, more for more, as the session was opened with."""
         return self.session.verbosity
+
+    @property
+    def options(self) -> Seared | None:
+        """The program's root options, given before the first word: a field's default where it wasn't, or ``None``."""
+        return self.session.options
+
+    @property
+    def terminal(self) -> bool:
+        """Whether a person is at a terminal, as the session was opened with: ``False`` by default."""
+        return self.session.terminal

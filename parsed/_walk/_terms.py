@@ -7,6 +7,13 @@ import enum
 #: Flags parsed takes for itself on every command, which no field may be named for.
 RESERVED = ('help', 'json', 'yes', 'dry-run')
 
+#: The flag that asks for help, and its short form, which no ``SHORTS`` may take.
+HELP = 'help'
+HELP_SHORT = 'h'
+
+#: The flag that asks for what came of a line as its envelope, a line of JSON.
+JSON = 'json'
+
 #: The word that joins a chain's steps on a line.
 THEN = 'then'
 
