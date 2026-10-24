@@ -36,7 +36,7 @@ Each call declares new classes, so declaring can be timed from nothing.
 
 ## Results
 
-Recorded <!-- bench:run -->2026-10-24, Python 3.14.3, median of 3 runs; parsed 0.1.8, seared 0.4.4<!-- /bench:run -->.
+Recorded <!-- bench:run -->2026-10-24, Python 3.14.3, median of 3 runs; parsed 0.2.0, seared 0.4.4<!-- /bench:run -->.
 
 ### Declaring
 
@@ -45,16 +45,16 @@ What a tree costs before any line is read:
 <!-- bench:declaring -->
 | Case       | What it times                                                   | Per tree | Per command |
 |------------|-----------------------------------------------------------------|----------|-------------|
-| `decorate` | creating and decorating every command, as importing them does   | 63.0 ms  | 239.52 µs   |
-| `declare`  | each command's first `declaration`                              | 7.1 ms   | 26.95 µs    |
-| `reread`   | `declaration` again, kept on the class                          | 24.0 µs  | 0.09 µs     |
-| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.0 ms   | 3.95 µs     |
+| `decorate` | creating and decorating every command, as importing them does   | 69.1 ms  | 262.87 µs   |
+| `declare`  | each command's first `declaration`                              | 8.0 ms   | 30.33 µs    |
+| `reread`   | `declaration` again, kept on the class                          | 24.9 µs  | 0.09 µs     |
+| `build`    | the `Tree` from them: their phrases compiled, the whole checked | 1.3 ms   | 4.85 µs     |
 <!-- /bench:declaring -->
 
 So a module of <!-- bench:commands -->263<!-- /bench:commands --> commands costs
-<!-- bench:decorate-ms -->~63 ms<!-- /bench:decorate-ms --> to import, declaring them all
-<!-- bench:declare-ms -->~7 ms<!-- /bench:declare-ms --> more, and building their tree
-<!-- bench:build-ms -->~1.0 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
+<!-- bench:decorate-ms -->~69 ms<!-- /bench:decorate-ms --> to import, declaring them all
+<!-- bench:declare-ms -->~8 ms<!-- /bench:declare-ms --> more, and building their tree
+<!-- bench:build-ms -->~1.3 ms<!-- /bench:build-ms -->, once. A command line that starts a process for each line pays
 all three each time.
 
 ### Reading
@@ -65,12 +65,12 @@ A line for each command, on a tree built once: its `PHRASE`, each slot a word, a
 <!-- bench:reading -->
 | Case   | What it times                                                     | Every line | Per line |
 |--------|-------------------------------------------------------------------|------------|----------|
-| `walk` | a line's flags split off, its words walked, each read by its kind | 3.4 ms     | 13.12 µs |
-| `read` | a line on to its instance, which seared loads from the values     | 5.0 ms     | 19.07 µs |
+| `walk` | a line's flags split off, its words walked, each read by its kind | 3.8 ms     | 14.31 µs |
+| `read` | a line on to its instance, which seared loads from the values     | 5.6 ms     | 21.27 µs |
 <!-- /bench:reading -->
 
-So a line costs <!-- bench:walk-us -->~13 µs<!-- /bench:walk-us --> to walk, and
-<!-- bench:read-us -->~19 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
+So a line costs <!-- bench:walk-us -->~14 µs<!-- /bench:walk-us --> to walk, and
+<!-- bench:read-us -->~21 µs<!-- /bench:read-us --> to read on to its instance, the difference seared's `load`.
 
 ### Completing
 
@@ -80,10 +80,10 @@ values, the literal words and the flags offered there:
 <!-- bench:completing -->
 | Case       | What it times                                   | Every line | Per line |
 |------------|-------------------------------------------------|------------|----------|
-| `complete` | what may come after a line's words but its last | 2.6 ms     | 9.74 µs  |
+| `complete` | what may come after a line's words but its last | 2.8 ms     | 10.58 µs |
 <!-- /bench:completing -->
 
-So a completion costs <!-- bench:complete-us -->~10 µs<!-- /bench:complete-us -->.
+So a completion costs <!-- bench:complete-us -->~11 µs<!-- /bench:complete-us -->.
 
 ### Rendering
 
@@ -93,10 +93,10 @@ values spelled by their kinds and quoted where they must be, its flags given:
 <!-- bench:rendering -->
 | Case     | What it times                                                                        | Every command | Per command |
 |----------|--------------------------------------------------------------------------------------|---------------|-------------|
-| `render` | an instance back to its line: its phrase picked, its values spelled, its flags given | 2.0 ms        | 7.49 µs     |
+| `render` | an instance back to its line: its phrase picked, its values spelled, its flags given | 2.4 ms        | 9.24 µs     |
 <!-- /bench:rendering -->
 
-So writing a command back costs <!-- bench:render-us -->~7 µs<!-- /bench:render-us -->.
+So writing a command back costs <!-- bench:render-us -->~9 µs<!-- /bench:render-us -->.
 
 ### Running
 
@@ -107,7 +107,7 @@ it put in its envelope. The handler and the hooks do nothing, so this is parsed'
 <!-- bench:running -->
 | Case  | What it times                                                                              | Every line | Per line |
 |-------|--------------------------------------------------------------------------------------------|------------|----------|
-| `run` | a line run in a session: routed, read, its handler called between hooks, its envelope made | 11.0 ms    | 41.82 µs |
+| `run` | a line run in a session: routed, read, its handler called between hooks, its envelope made | 11.1 ms    | 42.31 µs |
 <!-- /bench:running -->
 
 So running a line costs <!-- bench:run-us -->~42 µs<!-- /bench:run-us -->, of which reading it is the most.
@@ -121,7 +121,7 @@ change to the wake, fifty times an operation:
 <!-- bench:waiting -->
 | Case   | What it times                                                                         | Every wake | Per wake |
 |--------|---------------------------------------------------------------------------------------|------------|----------|
-| `wake` | a change to its wake: a watch reads again and gives its next reply, its envelope made | 577.8 µs   | 11.56 µs |
+| `wake` | a change to its wake: a watch reads again and gives its next reply, its envelope made | 612.2 µs   | 12.24 µs |
 <!-- /bench:waiting -->
 
 So a wait wakes <!-- bench:wake-us -->~12 µs<!-- /bench:wake-us --> after a change.
@@ -133,19 +133,19 @@ Every number here is <!-- bench:runs -->the median of three runs<!-- /bench:runs
 <!-- bench:spread -->
 | Case       | Spread |
 |------------|--------|
-| `decorate` | 4.9%   |
-| `declare`  | 0.9%   |
-| `reread`   | 1.8%   |
-| `build`    | 12.1%  |
-| `walk`     | 5.3%   |
-| `read`     | 6.3%   |
-| `complete` | 4.8%   |
-| `render`   | 3.9%   |
-| `run`      | 1.0%   |
-| `wake`     | 3.5%   |
+| `decorate` | 8.1%   |
+| `declare`  | 13.9%  |
+| `reread`   | 6.1%   |
+| `build`    | 17.7%  |
+| `walk`     | 15.0%  |
+| `read`     | 23.3%  |
+| `complete` | 8.7%   |
+| `render`   | 28.4%  |
+| `run`      | 31.4%  |
+| `wake`     | 6.4%   |
 <!-- /bench:spread -->
 
-The widest is <!-- bench:spread-max -->~12%<!-- /bench:spread-max -->.
+The widest is <!-- bench:spread-max -->~31%<!-- /bench:spread-max -->.
 
 ## Reproducing
 
