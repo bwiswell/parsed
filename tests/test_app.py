@@ -1849,6 +1849,14 @@ class TestMain:
     def test_after_the_first_word_every_flag_is_the_line_s(self, relay, capsys, args):
         assert self._main(relay, capsys, *args) == (0, 'the last 40, root n 1\n', '')
 
+    def test_a_flag_given_with_its_value_whatever_it_holds(self, relay, capsys):
+        assert self._main(relay, capsys, 'run', '--config=my dir/c.toml') == (0, 'run my dir/c.toml under None\n', '')
+
+    def test_a_value_said_as_a_flag_after_dashes(self, app, capsys):
+        app.on(farlandia.Say, lambda command, ctx: command.message)
+        assert self._main(app, capsys, 'say', '--x=a b') == (2, '', 'no command takes --x\n')  # the flag, as --x=ab
+        assert self._main(app, capsys, 'say', '--', '--x=a b') == (0, '--x=a b\n', '')
+
     def test_version_and_help(self, relay, capsys):
         assert self._main(relay, capsys, '--version', 'status') == (0, 'servicectl 1.2.3\n', '')
         code, out, _ = self._main(relay, capsys, '-h')

@@ -68,8 +68,13 @@ hold.
 | `look log --n 40` (one argument) | `look log --n 40`: a single argument is the whole line, so a caller quotes once |
 | `say` `""` | `say ""`: an empty word |
 | `call` `t` `--args` `{"station": "s1"}` | `call t --args "{\"station\": \"s1\"}"`: a double quote escaped ([`_walk/_words.md`](_walk/_words.md)), so the field holds the argument as given |
+| `call` `t` `--args={"a": 1}` | `call t --args="{\"a\": 1}"`: one given as `--name=value` is the flag, whatever its value holds, the value written as a word |
+| `say` `--` `--x=a b` | `say -- --x="a b"`: after `--`, the word `--x=a b`, as any value beginning with a dash is said |
 
-At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`.
+At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`,
+or `servicectl call t --args='{"station": "s1"}'`. An argument shaped `--name=value` is a flag wherever it stands
+before `--`, as one with no space in its value always was: `say '--x=a b'` is refused (`no command takes --x`), and
+`say -- '--x=a b'` says it.
 
 **A line back to its arguments:** `args_of(line)` gives each of a line's words as given, its quotes and escapes
 taken off, so `args_of(line_of(args)) == args` for several arguments; a single one is the whole line, and comes back
