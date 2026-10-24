@@ -27,7 +27,8 @@ handlers see what entering it gave. Each line's handler is called as ``handler(c
 - ``app.run(line, state)`` runs one line in a session of its own, for a program that runs one and exits.
 
 A line that gives ``--help`` runs nothing: it's answered with its command's usage, or, short of a command, with what
-it may still say, each command's usage beneath where its words go. parsed's own flags may stand anywhere on a line.
+it may still say, each command's usage beneath where its words go. ``app.help(line)`` gives the same text without a
+session, for a line that says ``--help`` or not. parsed's own flags may stand anywhere on a line.
 
 **Whether a person is at a terminal** is the front end's to say: ``app.open(state, terminal=True)``. It's ``False``
 by default, so a program that runs lines in-process needn't say so. Without one, a line that says an ``INTERACTIVE``
@@ -603,6 +604,35 @@ class App:
             ValueError: A subject isn't words a command begins with.
         """
         return self._subject(line, self._subjects(subjects))
+
+    def help(self, line: str, *, subjects: Sequence[str] = (), terminal: bool = False) -> str:
+        """The help a line asks for, given ``--help``, without a session: the text a session's ``run`` would give.
+
+        Where the line says a command, the command's help, by the phrase it said; short of one, what it may still
+        say (see the module). A line that doesn't give ``--help`` is read with it before its first word, so a
+        command that passes a line on gives its own help.
+
+        Args:
+            line: The line, whole or partial, ``--help`` among its words or not.
+            subjects: The words tried before a bare line, in turn (see the module): the line read as typed first.
+            terminal: Whether a person is at a terminal, as :meth:`open` takes it: only there does a listing say an
+                ``INTERACTIVE`` command.
+
+        Raises:
+            ReadError: The line's words go nowhere, refused as it was given.
+            ValueError: A subject isn't words a command begins with.
+        """
+        checked = self._subjects(subjects)
+        asked = line if HELP in self._own_of(line, checked) else f'--{HELP} {line}'
+        try:
+            return self._help(self._walk(asked, checked))
+        except ReadError:
+            listed = self._listing(asked, checked, terminal=terminal)
+            if listed is not None:
+                return listed
+            if asked == line:
+                raise
+        return self._help(self._walk(line, checked))  # its words go nowhere: refused as it was given
 
     def _listing(self, line: str, subjects: tuple[str, ...], *, terminal: bool) -> str | None:
         """What a line that asks for help may still say, where it stops short of a command (see :mod:`parsed.help`).

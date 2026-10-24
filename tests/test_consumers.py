@@ -256,6 +256,16 @@ class TestAnAgentsTooling:
         )
         assert 'Examples:\n  wait FleetState fleet=f1 --until docked=true --timeout 2m' in said
 
+    def test_a_verb_s_help_without_running_it(self, tooled, capsys):
+        # `tooled fetch --help`, as tooled says it in its own words: the text the line gives, with no session.
+        assert tooled.help('fetch') == _main(tooled, capsys, 'fetch', '--help')[1].removesuffix('\n')
+        assert tooled.help('fetch').startswith(
+            'fetch <operation> [<slots> …] [--policy <path>] [--pretty] [--select <select>] [--timeout <span>]\n\n'
+        )
+        said = 'see [--policy <path>] [--pretty] [--select <select>] <line …>'
+        assert tooled.help('see fleet f1').splitlines()[0] == said  # the verb's own: --help before the line
+        assert tooled.help('see fleet f1 --help').splitlines()[0] == said  # the line's --help is passed on
+
 
 class TestTheirReferencePages:
     @pytest.mark.parametrize('target', ['_support_tooled', '_support_protocol', '_support_service'])
