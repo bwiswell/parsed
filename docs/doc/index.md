@@ -10,7 +10,10 @@ shape of `zeared.doc` wherever the meaning matches, so a tool reads a command as
 - [`chains.py`](chains.md): a chain as one tool call: `introspect_chain(tree, base)`, a `ChainDoc`;
   `chain_schema(tree, base)`, its arguments' schema; `load_chain` and `dump_chain`, its arguments to its steps and
   back;
-- [`check.py`](check.md): `check(targets)`, and `python -m parsed check`, a package's commands checked in its CI.
+- [`check.py`](check.md): `check(targets)`, and `python -m parsed check`, a package's commands checked in its CI;
+- [`render.py`](render.md): `render_command(cls)`, a command's reference page in Markdown;
+- [`generate.py`](generate.md): `document(cls)` and `build_docs(target)`, a package's reference pages over seared's
+  pipeline, and `python -m parsed.doc`, which writes or checks them.
 
 ```python
 import parsed.doc

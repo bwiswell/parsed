@@ -79,6 +79,8 @@ from .argv import options_of
 from .argv import read as read_args
 from .command import Command, declaration, is_chain_base
 from .errors import DeclarationError, ReadError, RefusedError, RenderError, TimedOutError
+from .help import Entry, cleaned, listing, summary
+from .help import command as command_help
 from .kinds import spell_span
 from .reply import CODES, Ask, Result
 from .reply import terminal as ask_at_terminal
@@ -94,6 +96,7 @@ if TYPE_CHECKING:
     from .context import Context
     from .names import Resolver
     from .reply import Answer
+    from .tree import End
     from .wait import Wait
 
 #: What a command runs with: a callable, given the command and its context (``handler(command, ctx)``), whose result
@@ -164,7 +167,7 @@ class App:
         """The resolvers given for every mount, by category."""
         return MappingProxyType(self._bound.names)
 
-    def mount(self, target: Tree | str, *, under: str = '', params: object = None) -> Mount:
+    def mount(self, target: Tree | str, *, under: str = '', params: object = None, doc: str | None = None) -> Mount:
         """Mount ``target``'s commands under ``under``, a prefix of words, with ``params`` for their handlers.
 
         Args:
@@ -172,6 +175,8 @@ class App:
                 under a prefix of its own keeps it, beneath ``under``.
             under: The prefix its lines begin with (``'relay'``); none by default.
             params: What its handlers are given beside the command: a service's settings, say.
+            doc: What it's for, as help says it on its namespace's line; by default its module's docstring (a
+                tree's first command's).
 
         Raises:
             DeclarationError: Its commands don't build a tree, ``under`` isn't words, or a line would read two ways
@@ -189,7 +194,7 @@ class App:
         else:
             msg = f'mount({target!r}): a tree, or a module or package of commands by name'
             raise DeclarationError(msg)
-        mounted = Mount(self, tree, source=source, params=params)
+        mounted = Mount(self, tree, source=source, params=params, doc=doc)
         self._routes.add(mounted)
         self._mounts.append(mounted)
         return mounted
@@ -497,7 +502,7 @@ class App:
             return 0
         as_json = JSON in said.own or JSON in _own_given(said.line)
         if HELP in said.own and not said.line.strip() and not as_json:
-            _write(self._options.usage(), ok=True)  # the program's, above what it may say
+            _write(self._options.help() + '\n', ok=True)  # the program's, above what it may say
         terminal = _at_terminal()
         opened = self.open(
             state,
@@ -587,11 +592,14 @@ class App:
         """
         return self._subject(line, self._subjects(subjects))
 
-    def _listing(self, line: str, subjects: tuple[str, ...]) -> str | None:
-        """What a line that asks for help may still say, where it stops short of a command: each command's usage.
+    def _listing(self, line: str, subjects: tuple[str, ...], *, terminal: bool) -> str | None:
+        """What a line that asks for help may still say, where it stops short of a command (see :mod:`parsed.help`).
 
-        One a line, in the order the commands are mounted and declared. ``None`` for a line that doesn't ask, or
-        whose words go nowhere.
+        Each mount beneath where its words go: a mount whose prefix they stop short of as its namespace's line, its
+        prefix and its summary; any other by each command beneath, its usage and its summary. In the order they're
+        mounted and declared. An ``INTERACTIVE`` command is left out when no one is at a terminal, or the line gives
+        ``--json``; where that leaves nothing, each one's refusal is said instead. ``None`` for a line that doesn't
+        ask, or whose words go nowhere.
         """
         said = self._said(line, subjects)
         try:
@@ -601,17 +609,37 @@ class App:
         flags = _before_dashes(tokens)
         if not any(_flag(token) == (HELP, None) for token in flags):
             return None
-        routing: list[Token] = []  # the words a mount is found by: up to a field's flag, as the routes read them
-        for token in flags:
-            if _flag(token) is not None and not _is_own(token):
-                break
-            if not _is_own(token):
-                routing.append(token)
-        usages: list[str] = []
+        everything = terminal and not any(_flag(token) == (JSON, None) for token in flags)
+        entries, refused = self._entries(_routing(flags), tokens, said, everything=everything)
+        if entries:
+            return listing(entries)
+        return '\n'.join(dict.fromkeys(refused)) or None
+
+    def _entries(
+        self, routing: list[Token], tokens: list[Token], said: str, *, everything: bool
+    ) -> tuple[list[Entry], list[str]]:
+        """A listing's entries, and the refusals of the interactive commands it left out (see :meth:`_listing`)."""
+        entries: dict[str, Entry] = {}
+        refused: list[str] = []
         for mount in self._routes.beneath(routing):
-            ends = beneath(mount.tree, tokens)
-            usages += [] if ends is None else [mount.tree.usage(end) for end in ends]
-        return '\n'.join(dict.fromkeys(usages)) or None
+            if len(routing) < len(mount.under.split()):  # its prefix not yet said: its namespace's line
+                if everything or any(not found.interactive for found in mount.tree.commands):
+                    entries.setdefault(mount.under, Entry(f'{mount.under} …', mount.summary))
+                continue
+            for end in beneath(mount.tree, tokens) or ():
+                if not everything and end.declaration.interactive:
+                    refused.append(_for_a_person(mount, end, said).message)
+                    continue
+                usage = mount.tree.usage(end)
+                entries.setdefault(usage, Entry(usage, summary(end.declaration.cls)))
+        return list(entries.values()), refused
+
+    def _help(self, routed: Routed) -> str:
+        """The help a line that gives ``--help`` says, where it says a command: the command's, by the phrase it said."""
+        end = routed.reading.end
+        found = end.declaration
+        instead = None if found.instead is None else _saying(routed.mount, found.instead).usage_of(found.instead)
+        return command_help(routed.mount.tree, found.cls, phrase=found.phrases.index(end.bound), instead=instead)
 
     def _said(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str:
         """The line to read: ``line``, after the subject it reads under, if one."""
@@ -707,14 +735,16 @@ class Mount:
         tree: Its tree, under its prefix.
         source: Where its commands come from: the module or package named, or a tree's first command's module.
         params: What its handlers are given beside the command; ``None`` if nothing.
+        doc: What it's for: the ``doc`` it was mounted with, else its module's docstring; ``None`` for neither.
     """
 
-    def __init__(self, app: App, tree: Tree, *, source: str, params: object) -> None:
+    def __init__(self, app: App, tree: Tree, *, source: str, params: object, doc: str | None = None) -> None:
         """Hold the tree and its parameters; nothing bound yet."""
         self.app = app
         self.tree = tree
         self.source = source
         self.params = params
+        self.doc = cleaned(doc) if doc is not None else cleaned(getattr(sys.modules.get(source), '__doc__', None))
         self._held = frozenset(found.cls for found in tree.commands)
         self._bound = _Bindings(self.label)
 
@@ -726,6 +756,11 @@ class Mount:
     def under(self) -> str:
         """Its prefix's words, separated by single spaces; ``''`` at the root."""
         return self.tree.under
+
+    @property
+    def summary(self) -> str | None:
+        """The first line of its ``doc``, as help says it on its namespace's line; ``None`` for none."""
+        return None if self.doc is None else self.doc.splitlines()[0]
 
     @property
     def label(self) -> str:
@@ -982,12 +1017,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError as e:
-            listed = self.app._listing(line, self._subjects)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
             said = self.app._said(line, self._subjects)  # noqa: SLF001
             yield _refused(line, None, e) if listed is None else Result(said, text=listed)
             return
         if 'help' in routed.reading.own:
-            yield Result(routed.reading.line, routed.said, text=routed.mount.tree.usage(routed.reading.end))
+            yield Result(routed.reading.line, routed.said, text=self.app._help(routed))  # noqa: SLF001
             return
         try:
             self._check_terminal(routed)
@@ -1032,12 +1067,12 @@ class Session[S]:
         try:
             routed = self.app._walk(line, self._subjects)  # noqa: SLF001 -- the session is the app's
         except ReadError:
-            listed = self.app._listing(line, self._subjects)  # noqa: SLF001
+            listed = self.app._listing(line, self._subjects, terminal=self.terminal)  # noqa: SLF001
             if listed is None:
                 raise
             return listed
         if 'help' in routed.reading.own:
-            return routed.mount.tree.usage(routed.reading.end)
+            return self.app._help(routed)  # noqa: SLF001
         self._check_terminal(routed)
         found: Seared | str | Ask | None = None
         steps = [step.load() for step in routed.reading.steps]
@@ -1103,7 +1138,7 @@ class Session[S]:
             return
         for step in routed.reading.steps:
             if step.end.declaration.interactive:
-                raise _for_a_person(routed.mount, step, routed.reading.line)
+                raise _for_a_person(routed.mount, step.end, routed.reading.line)
 
     def _check_open(self) -> None:
         if self._stack is None:
@@ -1321,21 +1356,24 @@ def _outcome(routed: Routed, found: Seared | str | Ask | None, waited: float | N
     return Result(line, said, done=done, met=met, waited=waited, reply=found, text=str(found))
 
 
-def _for_a_person(mount: Mount, step: Reading, line: str) -> RefusedError:
-    """The refusal of a command for a person at a terminal: its phrase, and what's said in its place, if anything.
-
-    What's said in its place (``INSTEAD``) is said as the mount the line went to says it, else the first mount that
-    holds it, else by its phrase alone.
-    """
-    phrase = step.end.bound.phrase.text
-    message = f'{_under(mount.tree, phrase)} is for a person at a terminal'
-    instead = step.end.declaration.instead
+def _for_a_person(mount: Mount, end: End, line: str) -> RefusedError:
+    """The refusal of a command for a person at a terminal: its phrase, and what's said in its place, if anything."""
+    message = f'{_under(mount.tree, end.bound.phrase.text)} is for a person at a terminal'
+    instead = end.declaration.instead
     if instead is None:
         return RefusedError(message, line=line)
-    held = mount if mount.holds(instead) else next((other for other in mount.app.mounts if other.holds(instead)), None)
-    tree = held.tree if held is not None else Tree((instead,))
+    tree = _saying(mount, instead)
     said = _under(tree, cast('str', declaration(instead).phrase))
     return RefusedError(f'{message}: say `{tree.usage_of(instead)}` instead', line=line, instead=said)
+
+
+def _saying(mount: Mount, cls: type[Command]) -> Tree:
+    """The tree that says ``cls`` for a line gone to ``mount``: the mount's, else the first that holds it, else its own.
+
+    Its own is a tree of it alone, so its phrase is said with no prefix.
+    """
+    held = mount if mount.holds(cls) else next((other for other in mount.app.mounts if other.holds(cls)), None)
+    return held.tree if held is not None else Tree((cls,))
 
 
 def _under(tree: Tree, phrase: str) -> str:
@@ -1397,6 +1435,17 @@ async def _awaited(found: object) -> object:
 
 #: The exit code of a program stopped by an interrupt (Ctrl-C), as a shell gives it: 128 and ``SIGINT``.
 _INTERRUPTED = 130
+
+
+def _routing(flags: list[Token]) -> list[Token]:
+    """The words a line's mount is found by: up to a field's flag, parsed's own passed over, as the routes read them."""
+    found: list[Token] = []
+    for token in flags:
+        if _flag(token) is not None and not _is_own(token):
+            break
+        if not _is_own(token):
+            found.append(token)
+    return found
 
 
 def _before_dashes(tokens: list[Token]) -> list[Token]:

@@ -51,6 +51,9 @@ class FleetMine(FleetCommand):
   `ALIASES` and `SHORTS` are merged along the bases instead: a base's entries and its subclasses' all count, a
   subclass's winning where they share a key.
 - **No flag has a short form unless `SHORTS` gives it one,** and `-h` is `--help`'s on every command.
+- **Help and reference pages say a command in its own words** ([`help.md`](help.md),
+  [`doc/render.md`](doc/render.md)): its docstring, its first line its summary in a listing, and each field's
+  `doc=` beside its slot or flag.
 - **Annotate a mutable constant as a `ClassVar`** (`KINDS: ClassVar[dict[str, …]] = {…}`), as ruff's RUF012 asks.
   seared never takes a `ClassVar` for a field.
 

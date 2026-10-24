@@ -311,6 +311,11 @@ class TestReading:
         with pytest.raises(DeclarationError, match=r'-c is --config in Run and --count in .*Count: a short says one'):
             Tree([service.Run, Count])
 
+    def test_usage_of_a_command_by_another_of_its_phrases(self, fixtures):
+        assert fixtures.usage_of(farlandia.FleetDock, 1) == 'fleet <fleet> dock nearest'
+        with pytest.raises(IndexError):
+            fixtures.usage_of(farlandia.FleetDock, 2)
+
     def test_usage_of_another_tree_s_command(self):
         with pytest.raises(KeyError):
             Tree([farlandia.Log]).usage_of(farlandia.FleetMine)

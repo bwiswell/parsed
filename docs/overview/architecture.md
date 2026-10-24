@@ -53,11 +53,15 @@ seared  <-  zeared
   reply as it changes.
 - **Docs** ([`../doc/index.md`](../doc/index.md)): a command as data, a `CommandDoc` in `zeared.doc`'s shape, and
   its arguments as a closed JSON Schema, for the tools that read commands; a chain as one tool call, its steps
-  tagged by their words; and `python -m parsed check`, a package's commands and chains checked in its CI.
+  tagged by their words; `python -m parsed check`, a package's commands and chains checked in its CI; and
+  `python -m parsed.doc`, a package's reference pages over seared's pipeline.
+- **Help** ([`../help.md`](../help.md)): a command's help from its own words (its usage, docstring, fields' `doc=`
+  and kinds, other phrases, examples and what it asks of the line), and a listing of what a line short of a command
+  may still say, each mount's namespace a line until the line goes along its prefix, an interactive command left out
+  for a caller with no terminal.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`; `ReadError`, one error for a line
   that doesn't read, with where it stands, a hint and what may have been meant; `RefusedError`, for a command for a
   person at a terminal run with none; and `RenderError`, for an instance no line can say.
 
-Help arrives next, adding its part here. What each part costs is in
-[`benchmarks.md`](benchmarks.md).
+What each part costs is in [`benchmarks.md`](benchmarks.md).

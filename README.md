@@ -69,6 +69,7 @@ Command modules keep to `import parsed`, unaliased, so a field can be named anyt
 - [`docs/tree.md`](docs/tree.md): every command's phrases, compiled and checked as a whole.
 - [`docs/app.md`](docs/app.md): a program's trees mounted under prefixes, with their handlers and names.
 - [`docs/argv.md`](docs/argv.md): a program's arguments as its command line, its root options first.
+- [`docs/help.md`](docs/help.md): how a command is said and what it does, in its own words.
 - [`docs/context.md`](docs/context.md): what a handler is given beside its command.
 - [`docs/reply.md`](docs/reply.md): what running a line comes to, and its exit code.
 - [`docs/wait.md`](docs/wait.md): a read that waits on its reply.

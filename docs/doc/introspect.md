@@ -24,7 +24,8 @@ or the rest of the line (`rest`). So a polymorphic command's twin shows as a sec
 by its own kind: `detachment`, filling `fleet`, read as a detachment.
 
 A **`FlagDoc`** is a flag's `name` as a line writes it (`for`, `no-stop`), its `field` and `kind`, whether it's a
-`switch` (and `negated`), `required`, or a list's (`many`).
+`switch` (and `negated`), `required`, or a list's (`many`), and its `short` form's letter (`'c'` for `-c`), or
+`None`.
 
 **`fields_from`** links a command to the contract it's built on: a command that inherits a protocol's request class
 (`class HandheldConnect(parsed.Command, HandheldEndpoint)`) names that class, beside its `reply`, so a tool can tell

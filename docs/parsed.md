@@ -41,7 +41,8 @@ class Mined(parsed.Parsed):
 any name without shadowing the module, as the family's message modules do with `import zeared`.
 
 **`python -m parsed` is parsed's own command line** (`__main__.py`): `check <target> …` checks a package's commands
-in its CI ([`doc/check.md`](doc/check.md)).
+in its CI ([`doc/check.md`](doc/check.md)). `python -m parsed.doc <target>` writes, or checks, a package's command
+reference pages ([`doc/generate.md`](doc/generate.md)).
 
 ## See also
 

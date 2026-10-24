@@ -51,6 +51,19 @@ class TestDeclaring:
         )
         assert options_of('farlandia', None, None).usage() == 'farlandia <command> …'
 
+    def test_the_program_s_help(self, options):
+        usage, rows = options.help().split('\n\n')
+        assert usage == options.usage()
+        assert rows.splitlines() == [
+            '  -c, --config <config>  a path',
+            '  -q, --quiet            on when given',
+            '  --no-color             off when given',
+            '  --workers <workers>    a whole number',
+            '  --tags <tags>          a word',
+            "  --version              the program's version",
+        ]
+        assert options_of('farlandia', None, None).help() == 'farlandia <command> …'
+
     def test_refused(self):
         @parsed.parsed
         class Required(parsed.Parsed):

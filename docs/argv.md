@@ -72,7 +72,9 @@ hold.
 ## In this module
 
 - `options_of(prog, cls, version)` declares and checks an app's root options, giving `Options`: their flags, shorts
-  and kinds, `defaults()` and `usage()` (`relayctl [--config <config>] [--quiet] [--version] <command> …`).
+  and kinds, `defaults()`, `usage()` (`relayctl [--config <config>] [--quiet] [--version] <command> …`) and
+  `help()`, the usage then a row for each root option and `--version`, each with its field's `doc=` or what its
+  words are.
 - `read(args, options)` reads a program's arguments to `Said`: the root options loaded, parsed's own flags given
   among them (`own`), whether `--version` stood there, the `line` the words after them say, and `run`, that line
   with the own flags first.
