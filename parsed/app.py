@@ -62,6 +62,7 @@ import contextlib
 import importlib
 import inspect
 import re
+import sys
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, AsyncExitStack
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -71,10 +72,13 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast, overload
 from ._walk import Completion, Reading, Routes, goes, split
 from ._walk._complete import being_typed
 from ._walk._walker import _flag
+from .argv import options_of
+from .argv import read as read_args
 from .command import Command, declaration, is_chain_base
 from .errors import DeclarationError, ReadError, RefusedError, RenderError, TimedOutError
 from .kinds import spell_span
-from .reply import Ask, Result
+from .reply import CODES, Ask, Result
+from .reply import terminal as ask_at_terminal
 from .tree import Tree
 
 if TYPE_CHECKING:
@@ -118,17 +122,30 @@ class App:
 
     Args:
         prog: The program's name, as it's typed: ``farlandia``.
+        options: The root options' class, a seared class whose fields are the flags before a command line's first
+            word (``--config``), each optional; read once by :meth:`main`, and given to handlers as ``ctx.options``.
+            ``None`` by default, for none.
+        version: The program's version, as ``--version`` says it before the first word; ``None`` for none.
+
+    Attributes:
+        prog: The program's name.
+        options: The root options' class, or ``None``.
+        version: The program's version, or ``None``.
 
     Raises:
-        DeclarationError: ``prog`` isn't a name.
+        DeclarationError: ``prog`` isn't a name; ``options`` isn't a seared class, or a field of it is required, has
+            no word form, is read as a name, or takes a flag of parsed's; or ``version`` isn't a string.
     """
 
-    def __init__(self, prog: str) -> None:
+    def __init__(self, prog: str, *, options: type[Seared] | None = None, version: str | None = None) -> None:
         """An app with nothing mounted yet."""
         if not isinstance(prog, str) or not prog.strip():
             msg = f"App({prog!r}): prog is the program's name, as it's typed"
             raise DeclarationError(msg)
         self.prog = prog
+        self._options = options_of(prog, options, version)
+        self.options = self._options.cls
+        self.version = version
         self._mounts: list[Mount] = []
         self._routes: Routes[Mount] = Routes()
         self._bound = _Bindings('')
@@ -299,6 +316,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Session[None]: ...
     @overload
     def open[S](
@@ -310,6 +328,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Session[S]: ...
     @overload
     def open[S](
@@ -321,6 +340,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Session[S]: ...
     @overload
     def open[S](
@@ -332,6 +352,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Session[S]: ...
     def open(  # noqa: PLR0913 -- its state, and how its lines are said, answered, waited on, read and run
         self,
@@ -342,6 +363,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Session[Any]:
         """A session of the app, to run lines against ``state``: ``async with app.open(state) as session``.
 
@@ -357,14 +379,23 @@ class App:
             subjects: The words tried before a bare line, in turn (``'fleet prospector'``); none by default.
             terminal: Whether a person is at a terminal (``ctx.terminal``): ``False`` by default, so a line that
                 says an ``INTERACTIVE`` command is refused, naming its ``INSTEAD``.
+            options: The root options (``ctx.options``), an instance of the app's options class; by default, each
+                field's default, or ``None`` for an app with no options class.
 
         Raises:
             ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
                 command begins with (:meth:`Session.use`).
-            TypeError: ``terminal`` isn't ``True`` or ``False``.
+            TypeError: ``terminal`` isn't ``True`` or ``False``, or ``options`` isn't the app's root options.
         """
         return Session(
-            self, state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects, terminal=terminal
+            self,
+            state,
+            verbosity=verbosity,
+            answer=answer,
+            interval=interval,
+            subjects=subjects,
+            terminal=terminal,
+            options=options,
         )
 
     def run(  # noqa: PLR0913 -- the line, its state, and how it's said, answered and waited on
@@ -378,6 +409,7 @@ class App:
         interval: float | None = 1.0,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> Result:
         """Run one line in a session of its own, opened around it and closed after: for a program that runs one.
 
@@ -393,6 +425,7 @@ class App:
             interval: How often a wait reads again, as :meth:`open` takes it.
             subjects: The words tried before a bare line, as :meth:`open` takes them.
             terminal: Whether a person is at a terminal, as :meth:`open` takes it.
+            options: The root options, as :meth:`open` takes them.
 
         Raises:
             RuntimeError: It's called inside a running event loop.
@@ -404,7 +437,13 @@ class App:
             raise RuntimeError(msg)
 
         opened = self.open(
-            state, verbosity=verbosity, answer=answer, interval=interval, subjects=subjects, terminal=terminal
+            state,
+            verbosity=verbosity,
+            answer=answer,
+            interval=interval,
+            subjects=subjects,
+            terminal=terminal,
+            options=options,
         )
 
         async def once() -> Result:
@@ -412,6 +451,68 @@ class App:
                 return await session.run(line, yes=yes)
 
         return asyncio.run(once())
+
+    def main(
+        self,
+        argv: Sequence[str] | None = None,
+        state: object = None,
+        *,
+        verbosity: int = 0,
+        interval: float | None = 1.0,
+        subjects: Sequence[str] = (),
+    ) -> int:
+        """Run a program's arguments as its command line, and give its exit code: ``sys.exit(app.main())``.
+
+        The arguments are the root options, then a line (:mod:`parsed.argv`). A person is at a terminal when stdin
+        and stdout both are one, and there a question a line asks is put to them (``parsed.reply.terminal``). Each
+        result's text is written as it comes (a watch's, each change): to stdout when it went well, else to stderr.
+        ``-h`` or ``--help`` before the first word writes the program's usage, and ``--version`` its version.
+
+        Args:
+            argv: The arguments, after the program's name: ``sys.argv[1:]`` by default.
+            state: The app's state, as :meth:`open` takes it.
+            verbosity: How much handlers should say, as :meth:`open` takes it.
+            interval: How often a wait reads again, as :meth:`open` takes it.
+            subjects: The words tried before a bare line, as :meth:`open` takes them.
+
+        Raises:
+            RuntimeError: It's called inside a running event loop.
+        """
+        if _looping():
+            msg = 'app.main() runs an event loop of its own; inside one, open a session: async with app.open(state)'
+            raise RuntimeError(msg)
+        try:
+            said = read_args(sys.argv[1:] if argv is None else argv, self._options)
+        except ReadError as e:
+            _write(str(e), ok=False)
+            return CODES[e.kind]
+        if said.help or said.version:
+            _write(self._options.usage() if said.help else f'{self.prog} {self.version}', ok=True)
+            return 0
+        terminal = _at_terminal()
+        opened = self.open(
+            state,
+            verbosity=verbosity,
+            answer=ask_at_terminal if terminal else None,
+            interval=interval,
+            subjects=subjects,
+            terminal=terminal,
+            options=said.options,
+        )
+
+        async def each() -> int:
+            code = 0
+            async with opened as session, contextlib.aclosing(session.watch(said.line)) as results:
+                async for result in results:
+                    if result.text is not None:
+                        _write(result.text, ok=result.ok)
+                    code = result.code
+            return code
+
+        try:
+            return asyncio.run(each())
+        except KeyboardInterrupt:
+            return _INTERRUPTED
 
     def walk(self, line: str, *, subjects: Sequence[str] = (), placeholders: bool = False) -> Routed:
         """The mount ``line`` goes to, and what its tree reads the line to, with the mount's names.
@@ -668,6 +769,7 @@ class Session[S]:
         answer: What answers a question a line asks, when ``--yes`` doesn't; ``None`` leaves it unanswered.
         interval: How often, in seconds, a wait reads again when nothing has changed; ``None``: only on a change.
         terminal: Whether a person is at a terminal: without one, an ``INTERACTIVE`` command is refused.
+        options: The root options: an instance of the app's options class, or ``None`` for an app with none.
     """
 
     def __init__(  # noqa: PLR0913 -- the app, its state, and how its lines are said, answered, waited on and read
@@ -680,13 +782,14 @@ class Session[S]:
         interval: float | None,
         subjects: Sequence[str] = (),
         terminal: bool = False,
+        options: Seared | None = None,
     ) -> None:
         """Hold what to open; nothing is entered until the session opens.
 
         Raises:
             ValueError: ``interval`` isn't a positive number of seconds, or ``None``; or a subject isn't words a
                 command begins with.
-            TypeError: ``terminal`` isn't ``True`` or ``False``.
+            TypeError: ``terminal`` isn't ``True`` or ``False``, or ``options`` isn't the app's root options.
         """
         if interval is not None and (
             isinstance(interval, bool) or not isinstance(interval, int | float) or interval <= 0
@@ -696,11 +799,21 @@ class Session[S]:
         if not isinstance(terminal, bool):
             msg = f'terminal={terminal!r}: whether a person is at a terminal, True or False'
             raise TypeError(msg)
+        declared = app.options
+        if options is not None and (declared is None or not isinstance(options, declared)):
+            want = (
+                'the app has no root options: App(prog, options=…)'
+                if declared is None
+                else f"an instance of {declared.__qualname__}, the app's root options"
+            )
+            msg = f'options={options!r}: {want}'
+            raise TypeError(msg)
         self.app = app
         self.verbosity = verbosity
         self.answer = answer
         self.interval = interval
         self.terminal = terminal
+        self.options = options if options is not None else app._options.defaults()  # noqa: SLF001 -- the app's
         self._given = state
         self._state: Any = None
         self._stack: AsyncExitStack | None = None
@@ -1236,6 +1349,22 @@ async def _woken(change: asyncio.Event, seconds: float | None) -> bool:
 async def _awaited(found: object) -> object:
     """``found``, awaited if it's awaitable: what a sync or an async callable gave."""
     return await found if inspect.isawaitable(found) else found
+
+
+#: The exit code of a program stopped by an interrupt (Ctrl-C), as a shell gives it: 128 and ``SIGINT``.
+_INTERRUPTED = 130
+
+
+def _write(text: str, *, ok: bool) -> None:
+    """Write a line for people: to stdout when it went well, else to stderr, at once."""
+    stream = sys.stdout if ok else sys.stderr
+    stream.write(text + '\n')
+    stream.flush()
+
+
+def _at_terminal() -> bool:
+    """Whether a person is at a terminal: whether stdin and stdout both are one."""
+    return all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stdout))
 
 
 def _looping() -> bool:

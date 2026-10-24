@@ -8,6 +8,7 @@ parsed's own surface:
 
 - ``app.py``: :class:`App`, a program's trees mounted under prefixes, the handlers their commands run with, the
   hooks around them, and the names it reads lines with.
+- ``argv.py``: a program's arguments as its command line, its root options first, for :meth:`App.main`.
 - ``context.py``: :class:`Context`, what a handler is given beside its command.
 - ``command.py``: :class:`Command`, the base of every command, and what a command declares.
 - ``effect.py``: :class:`Effect` and :func:`effect_of`, what running a command does.

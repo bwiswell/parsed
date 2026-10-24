@@ -40,15 +40,17 @@ class FleetMine(FleetCommand):
 | `REPLY` | `None` | the seared class its handler returns |
 | `KINDS` | empty | how a field's words are read, by field name ([`kinds.md`](kinds.md)) |
 | `ALIASES` | empty | other names a phrase's slot may fill a field by, slot name to field name: `{'detachment': 'fleet'}` |
+| `SHORTS` | empty | a flag's short form, one letter, by field name: `{'config': 'c'}` says `--config` as `-c` ([`tree.md`](tree.md#flags)) |
 | `EXAMPLES` | `()` | lines that say it, for help and for `parsed check` to read; a `<name>` stands for any value |
 | `STEPS` | `False` | on a chain's base: the commands beneath it are steps, which `then` joins on a line ([chains](#chains)) |
 | `MOVES` | `False` | on a step: where it takes its chain, the field that says so (`'to'`), or `True` for somewhere the line doesn't say ([a chain's place](#a-chains-place)) |
 
 - **Every constant but `PHRASE` is optional, and none is inferred.** A command declares what it knows; nothing is
   required for one tool or another's sake.
-- **Each is inherited** like any class attribute, so a base can declare one for every command beneath it. `KINDS`
-  and `ALIASES` are merged along the bases instead: a base's entries and its subclasses' all count, a subclass's
-  winning where they share a key.
+- **Each is inherited** like any class attribute, so a base can declare one for every command beneath it. `KINDS`,
+  `ALIASES` and `SHORTS` are merged along the bases instead: a base's entries and its subclasses' all count, a
+  subclass's winning where they share a key.
+- **No flag has a short form unless `SHORTS` gives it one,** and `-h` is `--help`'s on every command.
 - **Annotate a mutable constant as a `ClassVar`** (`KINDS: ClassVar[dict[str, …]] = {…}`), as ruff's RUF012 asks.
   seared never takes a `ClassVar` for a field.
 
@@ -217,6 +219,10 @@ put it right:
 | `INSTEAD` on a command that isn't interactive, naming itself, a base or a non-command, or another interactive command | it names a form an agent can use, in place of an interactive command |
 | a `REPLY` that isn't a decorated seared class | |
 | `KINDS` that isn't a mapping, or a key that isn't a field name | |
+| `SHORTS` that isn't a mapping, a key that isn't a field name, or a value that isn't one letter | `{'config': 'c'}` |
+| a `SHORTS` letter `h` | `-h` is `--help`'s, on every command |
+| an entry of a command's own `SHORTS` for no field, or for a field a slot of its phrase says | a slot has no flag; a base's entries may go unused |
+| two flags of a command with one short letter | |
 | a command with a `PHRASE`, not decorated | decorate it with `@parsed.parsed` |
 | a base that declares fields, not decorated | seared would drop them |
 | a field without an annotation, on the command, a base or a request class it inherits | seared would leave it out; add an annotation (`hours: float = …`) |

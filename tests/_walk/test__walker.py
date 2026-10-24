@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from pathlib import Path
 from typing import ClassVar
 
 import _support_farlandia as farlandia
 import _support_rio as rio
+import _support_service as service
 import pytest
 
 import parsed
@@ -661,6 +663,56 @@ class TestFlags:
         assert reading.own == {'yes', 'json'}
         assert reading.data() == {'fleet': 'f1', 'hull': 'hauler'}
         assert tree.walk('log --help --dry-run').own == {'help', 'dry-run'}
+
+
+@pytest.fixture(scope='module')
+def shorts() -> Tree:
+    """-c is Run's --config; FleetMine takes no --config, and Load one with no short."""
+    return Tree([service.Run, farlandia.FleetMine, _command('load', config=parsed.Str(default=None))])
+
+
+class TestShortFlags:
+    def test_a_short_says_its_flag(self, shorts):
+        assert shorts.read('run -c c.toml') == service.Run(config=Path('c.toml'))
+        assert shorts.walk('run -c c.toml').given['config'].by == Flag(name='config', field='config', arity='value')
+
+    def test_h_is_help_s(self, shorts):
+        assert shorts.walk('run -h').own == {'help'}
+        assert shorts.walk('fleet f1 mine -h --dry-run').own == {'help', 'dry-run'}
+
+    def test_any_other_is_a_word(self, tree):
+        assert tree.read('say -x now').message == '-x now'
+        assert tree.read('say "-h"').message == '-h'  # quoted, a value
+
+    @pytest.mark.parametrize(
+        ('line', 'says'),
+        [
+            ('run -c', r'-c needs a value `-c <config>`'),
+            ('run -c a -c b', r'-c is given twice'),
+            ('run -c a --config b', r'--config is given twice'),
+            ('run -h -h', r'-h is given twice'),
+            ('fleet f1 mine -c x', r'fleet f1 mine takes no -c'),
+            ('load -c x', r'load takes no -c'),  # a --config, but no short for it
+        ],
+    )
+    def test_refusals_name_it_as_given(self, shorts, line, says):
+        with pytest.raises(ReadError, match=says):
+            shorts.read(line)
+
+    def test_a_short_s_value_is_never_a_cut(self):
+        @parsed.parsed
+        class Step(Command):
+            STEPS = True
+            SHORTS: ClassVar[dict[str, str]] = {'by': 'b'}
+
+            by: str = parsed.Str(default='')
+
+        @parsed.parsed
+        class Go(Step):
+            PHRASE = 'go'
+
+        reading = Tree([Go]).walk('go -b then')
+        assert (reading.data(), reading.then) == ({'by': 'then'}, ())
 
 
 class TestReading:

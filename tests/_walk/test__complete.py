@@ -163,6 +163,23 @@ class TestFlagsAfterTheRest:
         assert say.complete('say hello --l') == Completion(words=['--loud'], replace=3)
 
 
+@parsed.parsed
+class Send(Command):
+    """Send on or not, by someone: a slot after a flag that has a short form."""
+
+    PHRASE = 'send {on}'
+    SHORTS: ClassVar[dict[str, str]] = {'by': 'b'}
+
+    on: bool = parsed.Bool(required=True)
+    by: str = parsed.Str(default='')
+
+
+class TestShortFlags:
+    def test_a_short_s_value_is_its_flag_s_not_a_slot_s(self):
+        send = Tree([Send])
+        assert _words(send, 'send -b ann ') == _words(send, 'send --by ann ') == ['true', 'false']
+
+
 class TestFarlandiasCases:
     """farlandia's own completion cases (``tests/client/test_tree.py``), on this fixture's commands.
 
