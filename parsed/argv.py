@@ -11,8 +11,9 @@
 - **After the first word, every flag is the line's,** never the program's: ``prog relay run --config c.toml`` gives
   the line its ``--config``.
 - **The arguments are the line's words,** each as the shell gave it: one with a space quoted (``fleet f1 dock "Vesta
-  Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``. A
-  single argument is the whole line, so a caller quotes once: ``prog "look log --n 40"``.
+  Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``,
+  and one given as ``--name=value`` the flag, whatever its value holds (``--args='{"a": 1}'``). A single argument is
+  the whole line, so a caller quotes once: ``prog "look log --n 40"``.
 - **A line back to its arguments:** ``args_of(line)`` gives each word as given, the inverse of ``line_of``, for a
   handler that runs a line passed on as a process.
 """
@@ -231,11 +232,20 @@ def line_of(args: Sequence[str]) -> str:
     r"""The line a program's arguments say: a single one as it is; several each a word, as given.
 
     Each of several is written so the line reads it back as given (:func:`parsed._walk._words.word`): quoted where it
-    holds a space or is empty, each double quote in it written ``\"``.
+    holds a space or is empty, each double quote in it written ``\"``. One given as ``--name=value`` is the flag
+    whatever its value holds: ``--name=``, then the value as a word (``--args="{\"a\": 1}"``).
     """
     if len(args) == 1:
         return args[0]
-    return ' '.join(word(arg) for arg in args)
+    return ' '.join(_word(arg) for arg in args)
+
+
+def _word(arg: str) -> str:
+    """An argument as a line's word: one shaped ``--name=value`` as the flag, its value a word of its own."""
+    head, eq, value = arg.partition('=')
+    if eq and head.startswith('--') and len(head) > len('--') and not any(ch.isspace() or ch == '"' for ch in head):
+        return f'{head}={word(value)}'  # the walk reads `--args="a b"` as the flag, its value `a b`
+    return word(arg)
 
 
 def args_of(line: str) -> list[str]:

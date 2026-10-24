@@ -187,6 +187,13 @@ class TestAnAgentsTooling:
         _, said = self._read(tooled, capsys, 'query', 'Prices', 'station=s1', '--request', '{"good": "iron"}')
         assert (said['request'], said['slots']) == ('{"good": "iron"}', ['station=s1'])
 
+    def test_a_flag_given_with_its_value_as_the_shell_gives_it(self, tooled, capsys):
+        # `tooled call t --args='{"a": 1}'`: the shell gives one argument, the flag and its value.
+        _, said = self._read(tooled, capsys, 'call', 'dock', '--args={"a": 1}')
+        assert json.loads(said['args']) == {'a': 1}
+        _, said = self._read(tooled, capsys, 'query', 'Prices', '--param=k=v w', '--select=a b')
+        assert (said['param'], said['select'], said['slots']) == (['k=v w'], 'a b', [])
+
     def test_a_condition_on_a_string_that_reads_as_a_number(self, tooled, capsys):
         # `--until 'name="40"'`: the string "40", where `name=40` would be the number.
         _, said = self._read(tooled, capsys, 'wait', 'FleetState', '--until', 'name="40"')

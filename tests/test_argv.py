@@ -177,6 +177,25 @@ class TestTheLine:
         assert line_of(['call', 't', '--args', '{"station": "s1"}']) == r'call t --args "{\"station\": \"s1\"}"'
         assert line_of(['say', 'a"b']) == r'say a\"b'
 
+    @pytest.mark.parametrize(
+        ('arg', 'said'),
+        [
+            ('--args={"a": 1}', r'--args="{\"a\": 1}"'),
+            ('--param=k=v w', '--param="k=v w"'),
+            ('--config=C:\\My Dir\\', '--config="C:\\My Dir"\\'),
+            ('--args=x', '--args=x'),
+            ('--args=', '--args=""'),
+        ],
+    )
+    def test_a_flag_given_with_its_value_the_flag_whatever_it_holds(self, arg, said):
+        assert line_of(['call', arg]) == f'call {said}'
+
+    @pytest.mark.parametrize(
+        ('arg', 'said'), [('--a b=c', '"--a b=c"'), ('--"x"=y', r'--\"x\"=y'), ('-c=x y', '"-c=x y"')]
+    )
+    def test_no_long_flag_s_head_a_word_as_before(self, arg, said):
+        assert line_of(['call', arg]) == f'call {said}'
+
 
 class TestALineBackToItsArguments:
     @pytest.mark.parametrize(
@@ -191,6 +210,7 @@ class TestALineBackToItsArguments:
             ['fleet', 'f1', 'jump', 'sol', 'then', 'mine', '--', '-h', '--yes', '--x=a b'],
             ['tab\there', 'a\nnew line', ' padded '],
             ["Vruba'a Belt 1", 'é', '='],
+            ['call', 't', '--args={"a": 1}', '--param=k=v w', '--x=', '--y=C:\\My Dir\\', '--', '--z=a b'],
         ],
     )
     def test_the_inverse_of_line_of(self, args):

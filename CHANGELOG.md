@@ -9,7 +9,7 @@ lines as it lands, and the entry is dated when that version is released.
 
 ## 0.2.2 — unreleased
 
-**A line back to its arguments.**
+**A command line's arguments, to a line and back.**
 
 ### Added
 
@@ -17,6 +17,19 @@ lines as it lands, and the entry is dated when that version is released.
   and escapes taken off, the inverse of `line_of` for several arguments (a single one is the whole line, and comes
   back as its words). A handler that runs a line passed on as a process gives it `args_of(command.line)`. A quote
   left open is refused with a `ReadError`.
+
+### Changed
+
+- **Breaking: an argument shaped `--name=value` is the flag, whatever its value holds.** One whose value held
+  whitespace was a value word, so `say '--x=a b'` gave `say` the message `--x=a b`; it's now the flag `--x`, refused
+  as `say hi --x=ab` always was (`no command takes --x`). Say it after `--` to give it as a value:
+  `say -- '--x=a b'`.
+
+### Fixed
+
+- **A flag given with `=` reads, its value holding whitespace:** `call t --args='{"a": 1}'` and `--param='k=v w'`
+  were refused as left over or read as the wrong slot, since `line_of` quoted the whole argument. It now writes the
+  flag, then its value as a word (`--args="{\"a\": 1}"`), as the walk reads a typed `--label="north dock"`.
 
 ## 0.2.1 — 2026-10-24
 
