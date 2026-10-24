@@ -44,6 +44,9 @@ class TestUsage:
         cls = _command('tag', stop=parsed.Bool(default=True), tags=parsed.Str(many=True, default_factory=list))
         assert _usage(cls) == 'tag [--no-stop] [--tags <tags> …]'
 
+    def test_a_required_list_s_flag_unbracketed(self):
+        assert _usage(_command('wait', until=parsed.Str(many=True, required=True))) == 'wait --until <until> …'
+
     def test_an_optional_list_and_rest(self):
         assert _usage(_command('note {words**}', words=parsed.Str(default=''))) == 'note [<words …>]'
         assert _usage(_command('sell {goods}', goods=parsed.Str(many=True, default_factory=list))) == (

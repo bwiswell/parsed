@@ -4,8 +4,9 @@
 command:
 
 - **the tree builds:** every phrase reads and binds, no two read a line two ways, and every flag means one thing;
-- **round trips:** two instances made from its fields' types and constraints, one with only its required fields
-  and one with every field it can give a value, each render to a line that reads back to it;
+- **round trips:** two instances made from its fields' types and constraints (or a kind's own example,
+  :meth:`parsed.kinds.Kind.example`), one with only its required fields and one with every field it can give a
+  value, each render to a line that reads back to it;
 - **its examples:** each line of its ``EXAMPLES`` reads to it, a ``<name>`` placeholder standing for any value. A
   line with no placeholder loads too;
 - **its schema:** ``json_schema`` builds and takes its example: the instance's wire form has only keys it names,
@@ -43,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 from seared import FieldKind, SearedError, field_kind
 
+from parsed.command import declaration
 from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.kinds import Choice
 from parsed.tree import Tree
@@ -384,8 +386,9 @@ def _instances(cls: type[Command]) -> tuple[list[Command], list[str]]:
     required: dict[str, object] = {}
     every: dict[str, object] = {}
     unmade: list[str] = []
+    kinds = declaration(cls).field_kinds
     for spec in cls.__seared_fields__:
-        value = _example(spec.field)
+        value = _example(spec.field, kinds[spec.attr].example(spec.field))
         if value is _UNMADE:
             if spec.field.required:
                 unmade.append(spec.attr)
@@ -401,9 +404,12 @@ def _instances(cls: type[Command]) -> tuple[list[Command], list[str]]:
     return found, []
 
 
-def _example(field: Field) -> object:
-    """A value for ``field`` from its type and constraints, or ``_UNMADE``: a list of one, a dict of one pair."""
-    value = _scalar(field)
+def _example(field: Field, own: object = None) -> object:
+    """A value for ``field``, or ``_UNMADE``: a list of one, a dict of one pair.
+
+    Its kind's own example (``own``), where it gives one; else one made from its type and constraints.
+    """
+    value = _scalar(field) if own is None else own
     if value is _UNMADE:
         return _UNMADE
     if field.keyed:

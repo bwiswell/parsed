@@ -107,6 +107,13 @@ then its literal words (`a number, % after it or not, or off`):
 
 A kind of an app's own overrides `what` (`a hex number, such as ff`); its literal words follow, as they do for any.
 
+## An example
+
+`kind.example(field)` is a value the field may hold, as an instance holds it, for `parsed check` to make its
+instances with ([`doc/check.md`](doc/check.md)). It's `None` by default, which leaves the value to the field's type
+and constraints. A kind of an app's own with a form of its own gives one its form reads, since a value made from the
+type alone may not: a `slot=value` kind gives `'fleet=f1'`, where a string's `example` would be refused.
+
 ## What a kind offers
 
 Completion offers a kind's literal words, then `kind.offers(field)`: a `Choice`'s values, `true` and `false` for a

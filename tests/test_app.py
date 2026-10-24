@@ -1862,8 +1862,11 @@ class TestMain:
             'status [--config <config>]',
             'look log [--n <n>]',
         ]
-        code, out, _ = self._main(relay, capsys, '--help', 'look')
-        assert (code, _column(out)) == (0, ['look log [--n <n>]'])
+        code, out, _ = self._main(relay, capsys, '--help', 'look')  # one command beneath: its own help
+        assert (code, out.split('\n\n')[:2]) == (
+            0,
+            ['look log [--n <n>]', "Look at the log's last lines: its --n, after the first word, the line's."],
+        )
 
     def test_parsed_s_own_before_the_first_word_are_the_line_s(self, relay, capsys):
         relay.on(service.ValidateConfig, lambda command, ctx: f'dry run: {ctx.dry_run}')
@@ -1895,10 +1898,7 @@ class TestMain:
 
     def test_json_help_s_envelope_alone(self, relay, capsys):
         code, out, _ = self._main(relay, capsys, '--json', '--help', 'look')
-        assert (code, json.loads(out)['text']) == (
-            0,
-            "look log [--n <n>]  Look at the log's last lines: its --n, after the first word, the line's.",
-        )
+        assert (code, json.loads(out)['text'].splitlines()[0]) == (0, 'look log [--n <n>]')
 
     def test_json_a_watch_s_a_line_each(self, app, capsys):
         app.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet='f1', docked=ctx.state.flipped))
@@ -1994,13 +1994,19 @@ class TestHelpAtAnyDepth:
             ),
             ('fleet f1 jump --help', ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']),
             ('-h fleet f1 jump', ['fleet <fleet> jump nearest <ore>', 'fleet <fleet> jump <system>']),
-            ('fleet f1 mine --for soon --help', ['fleet <fleet> mine [--for <for>]']),  # its value isn't read
         ],
     )
     async def test_short_of_a_command_what_it_may_still_say(self, app, line, usages):
         found = await self._run(app, line)
         assert (found.ok, found.done, found.command, found.code) == (True, False, None, 0)
         assert _column(found.text) == usages
+
+    async def test_one_command_alone_beneath_its_own_help(self, app):
+        found = await self._run(app, 'fleet f1 mine --for soon --help')  # its value isn't read
+        assert (found.command, found.text.split('\n\n')[:2]) == (
+            None,
+            ['fleet <fleet> mine [--for <for>]', 'Mine until the hold is full.'],
+        )
 
     async def test_each_with_its_summary_in_a_column(self, app):
         assert (await self._run(app, 'relay --help')).text.splitlines() == [

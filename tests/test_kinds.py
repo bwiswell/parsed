@@ -311,6 +311,9 @@ class TestDescribing:
         assert share.describe(seared.Float(nullable=True)) == 'a number, % after it or not, or off'
         assert Word(words={'here': 'h', 'there': 't'}).describe(seared.Str()) == 'a word, or here or there'
 
+    def test_no_example_of_its_own_by_default(self):
+        assert all(kind.example(seared.Str()) is None for kind in (Word(), Number(), Duration(), Name('fleet')))
+
     def test_a_kind_of_an_app_s_own_says_what_it_is(self):
         class Hex(Kind):
             def what(self, field):

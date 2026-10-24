@@ -597,9 +597,10 @@ class App:
 
         Each mount beneath where its words go: a mount whose prefix they stop short of as its namespace's line, its
         prefix and its summary; any other by each command beneath, its usage and its summary. In the order they're
-        mounted and declared. An ``INTERACTIVE`` command is left out when no one is at a terminal, or the line gives
-        ``--json``; where that leaves nothing, each one's refusal is said instead. ``None`` for a line that doesn't
-        ask, or whose words go nowhere.
+        mounted and declared. Where one command alone is beneath (``wait --help``, short of its slot), its own help.
+        An ``INTERACTIVE`` command is left out when no one is at a terminal, or the line gives ``--json``; where that
+        leaves nothing, each one's refusal is said instead. ``None`` for a line that doesn't ask, or whose words go
+        nowhere.
         """
         said = self._said(line, subjects)
         try:
@@ -610,17 +611,25 @@ class App:
         if not any(_flag(token) == (HELP, None) for token in flags):
             return None
         everything = terminal and not any(_flag(token) == (JSON, None) for token in flags)
-        entries, refused = self._entries(_routing(flags), tokens, said, everything=everything)
+        entries, refused, ends = self._entries(_routing(flags), tokens, said, everything=everything)
+        one = {(id(mount), end.declaration.cls) for mount, end in ends}
+        if len(one) == 1 and len(entries) == len(ends):  # one command beneath, and no namespace: its own help
+            mount, end = ends[0]
+            return self._help_of(mount, end)
         if entries:
             return listing(entries)
         return '\n'.join(dict.fromkeys(refused)) or None
 
     def _entries(
         self, routing: list[Token], tokens: list[Token], said: str, *, everything: bool
-    ) -> tuple[list[Entry], list[str]]:
-        """A listing's entries, and the refusals of the interactive commands it left out (see :meth:`_listing`)."""
+    ) -> tuple[list[Entry], list[str], list[tuple[Mount, End]]]:
+        """A listing's entries, the refusals of the interactive commands it left out, and each command's phrase listed.
+
+        See :meth:`_listing`.
+        """
         entries: dict[str, Entry] = {}
         refused: list[str] = []
+        ends: list[tuple[Mount, End]] = []
         for mount in self._routes.beneath(routing):
             if len(routing) < len(mount.under.split()):  # its prefix not yet said: its namespace's line
                 if everything or any(not found.interactive for found in mount.tree.commands):
@@ -631,15 +640,20 @@ class App:
                     refused.append(_for_a_person(mount, end, said).message)
                     continue
                 usage = mount.tree.usage(end)
-                entries.setdefault(usage, Entry(usage, summary(end.declaration.cls)))
-        return list(entries.values()), refused
+                if usage not in entries:
+                    entries[usage] = Entry(usage, summary(end.declaration.cls))
+                    ends.append((mount, end))
+        return list(entries.values()), refused, ends
 
     def _help(self, routed: Routed) -> str:
         """The help a line that gives ``--help`` says, where it says a command: the command's, by the phrase it said."""
-        end = routed.reading.end
+        return self._help_of(routed.mount, routed.reading.end)
+
+    def _help_of(self, mount: Mount, end: End) -> str:
+        """A command's help, by the phrase it ends at, naming its ``INSTEAD`` as the mount says it."""
         found = end.declaration
-        instead = None if found.instead is None else _saying(routed.mount, found.instead).usage_of(found.instead)
-        return command_help(routed.mount.tree, found.cls, phrase=found.phrases.index(end.bound), instead=instead)
+        instead = None if found.instead is None else _saying(mount, found.instead).usage_of(found.instead)
+        return command_help(mount.tree, found.cls, phrase=found.phrases.index(end.bound), instead=instead)
 
     def _said(self, line: str, subjects: tuple[str, ...], *, partial: bool = False) -> str:
         """The line to read: ``line``, after the subject it reads under, if one."""

@@ -45,14 +45,23 @@ lines as it lands, and the entry is dated when that version is released.
 - **Listings with summaries and namespaces:** help short of a command gives each entry's summary, its docstring's
   first line, in a column. A mount whose prefix the line hasn't said is one line, its prefix and its `doc`
   (`app.mount(…, doc=…)`, by default its module's docstring). An `INTERACTIVE` command is left out where no one is
-  at a terminal, or the line gives `--json`; where that leaves nothing, its refusal is the answer. `prog --help`
-  writes the program's own help, a row for each root option, above the listing.
+  at a terminal, or the line gives `--json`; where that leaves nothing, its refusal is the answer. Where one command
+  alone is beneath a line (`wait --help`, short of its operation), its help is the answer. `prog --help` writes the
+  program's own help, a row for each root option, above the listing.
 - **What a kind's words are:** `kind.describe(field)`, `a span of time, such as 90s, 10m or 1h30m` then any literal
   words, from `kind.what(field)`, which a kind of an app's own overrides.
+- **A kind's own example:** `kind.example(field)`, a value the field may hold, which `parsed check` makes its
+  instances with where a kind gives one. A kind with a form of its own (`slot=value`) gives one its form reads,
+  since a value made from the field's type alone may not.
 - **Reference pages:** `parsed.doc.render_command`, `document` and `build_docs`, a package's command reference in
   Markdown over seared's pipeline. A command's page has its phrases, usage, arguments and examples above seared's
   fields, and any other class gets seared's page. `python -m parsed.doc <package>` writes them, with `--check` for
   CI. `FlagDoc.short` gives a flag's short form, and `tree.usage_of(cls, phrase)` says a command by any phrase.
+
+### Fixed
+
+- **A required list flag's usage** is written as it's said, `--until <until> …`, no longer in brackets as an
+  optional one is.
 
 ## 0.1.7 — 2026-10-23
 
