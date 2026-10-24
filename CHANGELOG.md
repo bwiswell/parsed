@@ -7,9 +7,13 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.2.1 — unreleased
+## 0.2.1 — 2026-10-24
 
-**Arguments as given, lines passed on whole, and help for any line.**
+**Arguments as given, lines passed on whole, and help for any line.** A front end built on parsed takes what a shell
+gives it: an argument holding a double quote reads as given, JSON among them; a command that passes a line on to
+another app gets it whole, its flags among it; and any line's help, partial or whole, is had without a session. One
+sequence reads differently, marked **Breaking** below: a backslash right before a double quote escapes it, where it
+was a plain backslash.
 
 ### Added
 
