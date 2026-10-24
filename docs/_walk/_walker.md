@@ -45,11 +45,12 @@ say ([`names.md`](../names.md#a-chains-place)). A placeholder is a place the lin
 
 ## Placeholders
 
-`walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes
-for a command (`fleet <fleet> mine --for <span>`), read by no kind and no resolver, so `data()` holds `'<fleet>'` as
-typed. A literal word still reads as one, and a quoted `"<fleet>"` is a value, as any quoted word is. Such a reading
-isn't one to load: [`parsed check`](../doc/check.md) walks a command's `EXAMPLES` so, to see that each ends at its
-command. Without `placeholders`, a `<name>` is a word like any other.
+`walk(tree, line, names, placeholders=True)` reads an unquoted `<name>` word as any value: the words help writes for
+a command (`fleet <fleet> mine --for <span>`), read by no kind and no resolver, so `data()` holds `'<fleet>'` as
+typed. A number's suffix may follow one, where its kind has one: `fleet <fleet> retreat <share>%` reads, its share
+`'<share>%'`, and `log <n>%` doesn't. A literal word still reads as one, and a quoted `"<fleet>"` is a value, as any
+quoted word is. Such a reading isn't one to load: [`parsed check`](../doc/check.md) walks a command's `EXAMPLES` so,
+to see that each ends at its command. Without `placeholders`, a `<name>` is a word like any other.
 
 ## `Reading`
 
@@ -123,9 +124,10 @@ brackets: `log <n>`, `fleet f1 sell <goods> …`. A name in a scope is quoted by
 off: `for fleet 'Hauler'`.
 
 A name no name answers to is refused by its kind's term, its label or else its category
-([`kinds.md`](../kinds.md#name)): `no ore 'lab'`, where its category is `good_in_deposit`. A resolver that says why,
-by a `ValueError` from its `lookup` ([`names.md`](../names.md#saying-why)), is refused with its reason, the usage as
-its hint and no suggestions.
+([`kinds.md`](../kinds.md#name)): `no ore 'lab'`, where its category is `good_in_deposit`. Its did-you-mean is the
+resolver's suggestions, never the word itself, case aside: a resolver may suggest across scopes, where the word is a
+name out of this one's reach. A resolver that says why, by a `ValueError` from its `lookup`
+([`names.md`](../names.md#saying-why)), is refused with its reason, the usage as its hint and no suggestions.
 
 A hint is a usage ([`_hints.md`](_hints.md)): the command's; or, at a slot left empty, the line so far, then the
 rest of the one command's usage past it (flags and all), or the slot's `<…>` where several lie past it.

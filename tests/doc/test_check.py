@@ -27,7 +27,7 @@ class TestTheFixtures:
         report = check(['_support_farlandia', '_support_protocol'])
         assert report.ok, report.problems
         assert (report.commands, report.schemas) == (17, 17)
-        assert report.examples == 11
+        assert report.examples == 13  # a placeholder before a suffix among them: `<share>%`
         assert report.round_trips > report.commands  # an instance with every field, where it isn't the other
         assert report.chains == 1  # the fleet's orders
         assert report.skipped == {}

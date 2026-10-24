@@ -52,7 +52,7 @@ from seared import ValidationError
 
 from parsed._phrase import Place, Slot, Word
 from parsed.errors import ReadError
-from parsed.kinds import NOT_LITERAL, Name, Named, Pairs, span
+from parsed.kinds import NOT_LITERAL, Name, Named, Number, Pairs, span
 from parsed.wait import FLAGS as WAIT_FLAGS
 from parsed.wait import TIMEOUT, Condition, Wait, problem
 
@@ -697,9 +697,9 @@ class _Walker:
 
     def _read(self, found: _Field, word: Token, scope: _Scope | None) -> object:
         """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
-        if self.placeholders and _placeholder(word):
-            return word.text
         kind = found.kind
+        if self.placeholders and _placeholder(word, kind):
+            return word.text
         resolver = self.names.get(kind.category) if self.names and isinstance(kind, Name) else None
         if not isinstance(kind, Name) or resolver is None:
             try:
@@ -750,7 +750,8 @@ class _Walker:
             raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end)) from None
         if key is not None:
             return key
-        near = list(resolver.suggest(word.text, given))
+        # Never the word itself, case aside: a resolver may suggest across scopes, where the word is a name elsewhere.
+        near = [name for name in resolver.suggest(word.text, given) if name.lower() != word.text.lower()]
         within = '' if scope is None else _within(scope)
         msg = f'{found.where}: no {what} {word.text!r}{within}'  # its text: a name may be quoted for its spaces
         raise self.refuse(msg, word=word, field=found.by.field, hint=self._usage(found.end), near=near)
@@ -938,9 +939,17 @@ def _ends(node: Node) -> list[End]:
     return found
 
 
-def _placeholder(word: Token) -> bool:
-    """Whether a word is a placeholder, ``<name>``, unquoted: one standing for any value."""
-    return not word.quoted and _PLACEHOLDER.fullmatch(word.text) is not None
+def _placeholder(word: Token, kind: Kind | None = None) -> bool:
+    """Whether a word is a placeholder, ``<name>``, unquoted: one standing for any value.
+
+    A number's suffix may follow it, where ``kind`` has one: ``<share>%``.
+    """
+    if word.quoted:
+        return False
+    text = word.text
+    if isinstance(kind, Number) and kind.suffix:
+        text = text.removesuffix(kind.suffix)
+    return _PLACEHOLDER.fullmatch(text) is not None
 
 
 def _literal(node: Node, word: Token) -> Node | None:

@@ -49,6 +49,14 @@ lines as it lands, and the entry is dated when that version is released.
 - **A name is described by its term:** `an ore`, `an item`, with `an` before a vowel's sound (`a unit`), where it
   said `a` before any category.
 
+### Fixed
+
+- **A placeholder before a number's suffix** is one: `fleet <fleet> retreat <share>%`, in an example or a line read
+  with placeholders, reads, where `<share>%` was refused as no number.
+- **A did-you-mean is never the word typed:** a resolver's suggestion equal to the word, case aside, is left out
+  (`no station 'vesta' for fleet 'Hauler'`, where it went on `did you mean Vesta?`), as a resolver that suggests
+  across scopes may give it.
+
 ## 0.1.8 — 2026-10-23
 
 **The command line and help.** `app.main(argv)` runs a program's arguments as its command line: its root options

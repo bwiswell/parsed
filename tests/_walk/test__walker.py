@@ -267,6 +267,19 @@ class TestNames:
         assert found.hint == 'fleet <fleet> dock [<station>]'
         assert tree.read('fleet Hauler dock ceres', names={**farlandia.NAMES, 'station': stations}).station == 'ceres'
 
+    def test_a_did_you_mean_never_the_word_itself(self, tree):
+        class Across(_Recording):  # suggests from every scope, as an app's may
+            def suggest(self, word, scope):
+                return self.inner.suggest(word, None)
+
+        names = {**farlandia.NAMES, 'station': Across(farlandia.STATIONS)}
+        found = _refusal(tree, 'fleet Hauler dock vesta', names=names)
+        assert found.suggestions == ()  # Vesta, the word itself case aside, is out of Hauler's reach
+        assert str(found) == (
+            "fleet Hauler dock <station>: no station 'vesta' for fleet 'Hauler' `fleet <fleet> dock [<station>]`"
+        )
+        assert _refusal(tree, 'fleet Hauler dock vest', names=names).suggestions == ('Vesta',)  # another word
+
     def test_a_flag_s_resolver_that_says_why(self, tree):
         fleets = farlandia.Saying(farlandia.NAMES['fleet'], 'no fleet {word!r}: fleets list names them')
         found = _refusal(tree, 'fleets merge Prospector --into Haulr', names={**farlandia.NAMES, 'fleet': fleets})
@@ -413,6 +426,16 @@ class TestPlaceholders:
 
     def test_a_literal_still_reads_as_one(self, tree):
         assert tree.walk('fleet <fleet> dock nearest', placeholders=True).data() == {'fleet': '<fleet>'}
+
+    def test_one_before_its_number_s_suffix(self, tree):
+        reading = tree.walk('fleet <fleet> retreat <share>%', placeholders=True)
+        assert reading.data() == {'fleet': '<fleet>', 'share': '<share>%'}
+
+    def test_a_suffix_only_its_kind_s(self, tree):
+        with pytest.raises(ReadError, match=r"log <n>: '<n>%' is not a whole number"):
+            tree.walk('log <n>%', placeholders=True)  # no suffix of its own
+        with pytest.raises(ReadError, match=r"fleet <fleet> retreat <share>: '<share>x' is not a number"):
+            tree.walk('fleet <fleet> retreat <share>x', placeholders=True)
 
     def test_never_a_literal_word(self, tree):
         with pytest.raises(ReadError, match=r"no command 'fleet <fleet> <verb>'"):
@@ -835,6 +858,7 @@ class TestRefusals:
             ('fleet f1 jump', r'fleet f1 jump: which system\?'),
             ('fleet f1 jump nearest', r'fleet f1 jump nearest: which ore\?'),
             ('fleet f1 progrms', r"no command 'fleet f1 progrms'"),
+            ('fleet f1 "mine"', r'no command \'fleet f1 "mine"\'; did you mean mine\?'),  # quoted, so not the word
             ('log 40 50', r"log 40: '50' is left over"),
             ('fleet f1 dock nearest now', r"fleet f1 dock nearest: 'now' is left over"),
             ('--into f2 log', r'--into comes before a command: a flag follows the first word'),
