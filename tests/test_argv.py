@@ -8,7 +8,7 @@ from typing import ClassVar
 import pytest
 
 import parsed
-from parsed.argv import Options, line_of, options_of, read
+from parsed.argv import Options, args_of, line_of, options_of, read
 from parsed.errors import DeclarationError, ReadError
 
 
@@ -176,3 +176,35 @@ class TestTheLine:
     def test_a_double_quote_among_several_escaped(self):
         assert line_of(['call', 't', '--args', '{"station": "s1"}']) == r'call t --args "{\"station\": \"s1\"}"'
         assert line_of(['say', 'a"b']) == r'say a\"b'
+
+
+class TestALineBackToItsArguments:
+    @pytest.mark.parametrize(
+        'args',
+        [
+            [],
+            ['fleet', 'f1', 'dock', 'Vesta Ring'],
+            ['say', '', 'x'],
+            ['call', 't', '--args', '{"station": "s1"}'],
+            ['say', 'a"b', '"', '""', 'a\\"b'],
+            ['cd', 'C:\\dir\\', 'C:\\My Dir\\', '\\'],
+            ['fleet', 'f1', 'jump', 'sol', 'then', 'mine', '--', '-h', '--yes', '--x=a b'],
+            ['tab\there', 'a\nnew line', ' padded '],
+            ["Vruba'a Belt 1", 'é', '='],
+        ],
+    )
+    def test_the_inverse_of_line_of(self, args):
+        assert args_of(line_of(args)) == args
+
+    def test_a_single_argument_the_line_s_words(self):
+        assert args_of(line_of(['look log --n 40'])) == ['look', 'log', '--n', '40']
+        assert args_of(line_of(['look'])) == ['look']
+
+    def test_a_line_as_typed(self):
+        line = r'fleet f1 dock "Vesta Ring" --until name=\"40\" --x="a b" then'
+        assert args_of(line) == ['fleet', 'f1', 'dock', 'Vesta Ring', '--until', 'name="40"', '--x=a b', 'then']
+
+    def test_a_quote_left_open_refused(self):
+        with pytest.raises(ReadError, match='never closed') as caught:
+            args_of('fleet "f1')
+        assert (caught.value.line, caught.value.column) == ('fleet "f1', 6)

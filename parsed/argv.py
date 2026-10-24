@@ -13,6 +13,8 @@
 - **The arguments are the line's words,** each as the shell gave it: one with a space quoted (``fleet f1 dock "Vesta
   Ring"``), a double quote in one escaped, so ``--args '{"station": "s1"}'`` gives the field ``{"station": "s1"}``. A
   single argument is the whole line, so a caller quotes once: ``prog "look log --n 40"``.
+- **A line back to its arguments:** ``args_of(line)`` gives each word as given, the inverse of ``line_of``, for a
+  handler that runs a line passed on as a process.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from seared.doc import is_seared_class
 from ._walk._hints import close, label
 from ._walk._terms import RESERVED, Arity
 from ._walk._walker import _flag, _given, _is_short, _text
-from ._walk._words import Token, word
+from ._walk._words import Token, split, word
 from .command import _kinds, _shorts
 from .errors import DeclarationError, ReadError
 from .help import rows
@@ -234,6 +236,20 @@ def line_of(args: Sequence[str]) -> str:
     if len(args) == 1:
         return args[0]
     return ' '.join(word(arg) for arg in args)
+
+
+def args_of(line: str) -> list[str]:
+    """The arguments a line says: each of its words as given, its quotes and escapes taken off.
+
+    The inverse of :func:`line_of` for several arguments: ``args_of(line_of(args)) == args``. A single argument is
+    the whole line, so it comes back as the line's words. ``then``, ``--`` and flags are words like any other, as no
+    tree reads the line. A line passed on (a ``Line`` slot's) is a line too, so its handler gives a process the
+    arguments it was given: ``args_of(command.line)``.
+
+    Raises:
+        ReadError: A quote is left open.
+    """
+    return [token.text for token in split(line)]
 
 
 def _tokens(args: Sequence[str]) -> list[Token]:
