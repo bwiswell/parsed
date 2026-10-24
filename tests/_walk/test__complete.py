@@ -195,8 +195,8 @@ class TestFarlandiasCases:
     """farlandia's own completion cases (``tests/client/test_tree.py``), on this fixture's commands.
 
     Lifted: the first words, a node's words, a command's flags, a span's values, a literal beside a slot, ``--yes``
-    for a command asked first, and a flag being typed; and, from the first spike, a routine's flags after its pairs.
-    Later: ``then``, with chains.
+    for a command asked first, and a flag being typed; and, from a port of farlandia's tree, a routine's flags after
+    its pairs. ``then`` is :class:`TestChains`'.
     """
 
     def test_completion_offers_words_slots_and_flags(self, tree):

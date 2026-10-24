@@ -177,3 +177,18 @@ Each is a `DeclarationError` naming the commands and the phrases:
 
 A command whose own declaration doesn't check is refused as `declaration` refuses it
 ([`command.md`](command.md#declarationcls)).
+
+## In this module
+
+- `Tree(commands, under='')` and `Tree.collect(*targets, under='')`, as above.
+- `Flag`, a command's flag, as `tree.flags_of(cls)` gives it and a reading's `given[...].by` holds one: its `name`,
+  its `field`, its `arity`, whether it's `negated`, and its `label`. One made without a label takes its name.
+- `End`, where a phrase ends, as `reading.end` holds it: its `declaration`, its `bound` phrase, and the `places` its
+  slots were read at on the way, an optional slot left out not among them.
+- `Node`, a point in the trie (`tree.root`, `tree.top`): its literal children by word (`words`), its `slot`, an
+  `Edge`, and the `end` of the phrase that ends there, if one does. An `Edge` is what the slot takes (its `kind`, a
+  `SlotKind`), the `node` after it, and the slot, phrase and command that made it, for messages.
+- `flag_name(wire, negated=False)` is a field's flag, from its wire name: `max_bytes` as `max-bytes`, and
+  `no-stop` for a negated `stop`.
+- The walk's terms, given here: `RESERVED`, `THEN`, `SlotKind` and `Arity` ([`_walk/_terms.md`](_walk/_terms.md)),
+  and `Reading` and `Completion`.

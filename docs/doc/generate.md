@@ -18,4 +18,5 @@ python -m parsed.doc farm.commands -o docs/commands --check
 
 It writes the pages under `-o` (`docs` by default), each only where it changed. `--check` writes nothing and exits
 1 when a page is missing or stale, for an app's CI. `--require-docs` exits 1 first when a field has no `doc=`,
-naming each one. They're seared's options, as `python -m seared.doc` takes them.
+naming each one. They're seared's options, as `python -m seared.doc` takes them. `main(argv=None)` runs it and
+gives its exit code, for a script of an app's own.

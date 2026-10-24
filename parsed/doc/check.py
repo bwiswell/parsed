@@ -49,7 +49,7 @@ from parsed.errors import DeclarationError, ReadError, RenderError
 from parsed.kinds import Choice
 from parsed.tree import Tree
 
-from .chains import TAG, chain_schema, dump_chain, head_text, load_chain
+from .chains import TAG, _head_text, chain_schema, dump_chain, load_chain
 from .json_schema import json_schema
 
 if TYPE_CHECKING:
@@ -257,7 +257,7 @@ class _Checking:
         self.chains += 1
         groups: dict[str, list[Declaration]] = {}
         for step in steps:
-            groups.setdefault(head_text(step), []).append(step)
+            groups.setdefault(_head_text(step), []).append(step)
         chains: list[list[Command]] = []
         for group in groups.values():
             made = [instances for instances, unmade in (_instances(step.cls) for step in group) if not unmade]

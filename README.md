@@ -43,23 +43,73 @@ must pin the same seared tag: uv refuses two sources for one package.
 
 ## Quick start
 
-`import parsed` is enough to declare a seared class: every field type, the errors, the base class as
-`parsed.Parsed` and the decorator as `parsed.parsed`.
+A command is a seared class: its `PHRASE` says how a line says it, and its fields are the values the line gives. An
+app mounts the commands, binds each one's handler, and runs a program's arguments as its command line:
 
 ```python
+import sys
+from datetime import timedelta
+
 import parsed
 
 
 @parsed.parsed
-class Mined(parsed.Parsed):
-    fleet: str = parsed.Str(required=True, doc='the fleet that mined')
-    tonnes: float = parsed.Float(ge=0, default=0.0, doc='what it brought up')
+class FleetMine(parsed.Command):
+    """Mine until the hold is full, or for as long as it's told."""
+
+    PHRASE = 'fleet {fleet} mine'
+    EFFECT = parsed.Effect.ACTION
+    EXAMPLES = ('fleet prospector mine --for 1h30m',)
+
+    fleet: str = parsed.Str(required=True, doc='the fleet that mines')
+    for_: timedelta | None = parsed.TimeDelta(data_key='for', default=None, doc='stop after this long')
 
 
-Mined.load({'fleet': 'prospector', 'tonnes': 12.5})
+def mine(command: FleetMine, ctx: parsed.Context) -> str:
+    return f'{command.fleet} mines' + (f' for {command.for_}' if command.for_ else '')
+
+
+app = parsed.App('fleets')
+app.mount(parsed.Tree([FleetMine]))
+app.on(FleetMine, mine)
+
+if __name__ == '__main__':
+    sys.exit(app.main())
 ```
 
-Command modules keep to `import parsed`, unaliased, so a field can be named anything without shadowing the module.
+```
+$ fleets fleet prospector mine --for 1h30m
+prospector mines for 1:30:00
+$ fleets fleet prospector mine --for soon
+--for: 'soon' is not a span of time: say 90s, 10m, 2h or 1h30m
+$ fleets fleet prospector mien
+no command 'fleet prospector mien'; did you mean mine?
+$ fleets fleet prospector mine --help
+fleet <fleet> mine [--for <span>]
+
+Mine until the hold is full, or for as long as it's told.
+
+  <fleet>       the fleet that mines
+  --for <span>  stop after this long
+
+Examples:
+  fleet prospector mine --for 1h30m
+```
+
+A refusal exits `2`. The same declaration reads a line to its instance, writes one back, and describes itself for a
+tool:
+
+```python
+import parsed.doc
+
+app.read('fleet prospector mine --for 1h30m')    # FleetMine(fleet='prospector', for_=timedelta(seconds=5400))
+app.render(FleetMine(fleet='prospector', for_=timedelta(minutes=90)))    # 'fleet prospector mine --for 1h30m'
+parsed.doc.json_schema(FleetMine)                # a closed JSON Schema, its x-phrase and x-effect beside
+```
+
+`import parsed` is enough to declare commands: every seared field type, the errors, `parsed.Parsed` and
+`parsed.parsed` for a plain seared class, and parsed's own. Command modules keep to `import parsed`, unaliased, so a
+field can be named anything without shadowing the module.
 
 ## Docs
 

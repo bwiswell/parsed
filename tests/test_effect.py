@@ -45,7 +45,7 @@ class TestEffect:
     @pytest.mark.parametrize('other', ['banana', 'READ', 3, None])
     def test_other_operands_raise(self, other):
         with pytest.raises(TypeError, match='cannot order an Effect'):
-            _ = Effect.READ < other  # noqa: SIM300
+            _ = Effect.READ < other  # noqa: SIM300 -- the Effect first, as the operands' order is the point
 
     def test_equality_and_hash_stay_strs(self):
         assert Effect.READ == 'read'

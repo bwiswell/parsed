@@ -13,20 +13,20 @@ lines as it lands, and the entry is dated when that version is released.
 
 ### Added
 
-- **`Reading.words` and `Reading.said`:** the words the command is said in, its flags aside, and the command as the
-  line says it (`fleets show f1`), for a message to name it.
 - **A name's label:** `Name(category, scope=None, *, follows=False, label=None)`, and `Pairs` alike: `label` is what
   a person calls one where the category isn't (`Name('good_in_deposit', scope='fleet', label='ore')`). `kind.term`,
   the label or else the category, is what refusals, usages and help say: `no ore 'lab'`, `--ore <ore>`, `an ore`.
   The category stays the key resolvers are given by, and the schema's `x-kind`.
+- **`Kind.usage_label(field)`:** what a usage writes a flag's value as, which a kind of an app's own may override;
+  `Flag.label`, each flag's, set as the tree is built (a `Flag` made without one takes its name); `Tree.labels`, the
+  tree-wide table, for a refusal before the command is known; and `parsed.wait.LABELS`, a wait's.
 - **A resolver may say why:** a `lookup` that raises a `ValueError` is refused with its message as the reason, at
   the word, with the usage and no suggestions:
   `fleet f1 acquire <blueprint>: no blueprint 'shield-9' here: inquire blueprints, docked`. A `PairsResolver`'s keys
   and values alike; completion and rendering take it as a word that names nothing. A resolver that never raises
   reads as before.
-- **`Kind.usage_label(field)`:** what a usage writes a flag's value as, which a kind of an app's own may override;
-  `Flag.label`, each flag's, set as the tree is built (a `Flag` made without one takes its name); `Tree.labels`, the
-  tree-wide table, for a refusal before the command is known; and `parsed.wait.LABELS`, a wait's.
+- **`Reading.words` and `Reading.said`:** the words the command is said in, its flags aside, and the command as the
+  line says it (`fleets show f1`), for a message to name it.
 
 ### Changed
 
@@ -36,18 +36,22 @@ lines as it lands, and the entry is dated when that version is released.
   `fleet {fleet} retreat {share}: …`. A wait past its bound and a command for a person at a terminal are named as
   the line says them (`fleets show f1: docked=true not met within 30s`). A name's scope is quoted by its text, a
   quoted name's quotes left off.
-- **An asking command's usage ends with `[--yes]`:** a command that declares `ASKS` shows `[--yes]` last wherever
-  its usage is written (a refusal's hint, `tree.usage` and `usage_of`, help's first line, a reference page's Usage),
-  and help gives `--yes` a row of its own: `fleets merge <fleet> --into <into> [--quiet] [--yes]`. Any other
-  command's usage leaves it out, though every command still takes it. Help's note for one now reads
-  `It asks before it acts, and --yes answers it.`
 - **A flag's value is written by its kind:** `--for <span>`, `--into <fleet>`, `--config <path>`, `[--port <n>]`, an
   `Enum`'s `<visual|text|auto>`, a literal word after a `|` (`<n|off>`), where each was written by the flag's name
   (`--for <for>`). A kind with no word for it keeps the name (`--label <label>`), and a slot keeps its own
   (`<fleet>`). It's in every usage and hint, help's rows, the root options' usage and help, and a reference page's
   Usage and Arguments.
+- **An asking command's usage ends with `[--yes]`:** a command that declares `ASKS` shows `[--yes]` last wherever
+  its usage is written (a refusal's hint, `tree.usage` and `usage_of`, help's first line, a reference page's Usage),
+  and help gives `--yes` a row of its own: `fleets merge <fleet> --into <fleet> [--quiet] [--yes]`. Any other
+  command's usage leaves it out, though every command still takes it. Help's note for one now reads
+  `It asks before it acts, and --yes answers it.`
 - **A name is described by its term:** `an ore`, `an item`, with `an` before a vowel's sound (`a unit`), where it
   said `a` before any category.
+- **Breaking: the public surface is settled.** Two names not meant for users are private, `parsed.argv.VERSION` and
+  `parsed.doc.chains.head_text`; every other name the public modules give is documented, and stays until a minor
+  version. A `Flag`'s equality holds its label, so one made by hand equals a tree's only with the label the tree
+  gave it.
 
 ### Fixed
 

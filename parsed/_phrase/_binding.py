@@ -88,7 +88,7 @@ class Binding:
     flags: tuple[str, ...]
 
 
-def bind(  # noqa: PLR0913 — a command's phrases, and what it declares about them
+def bind(  # noqa: PLR0913 -- a command's phrases, and what it declares about them
     fields: Mapping[str, Field],
     name: str,
     *,

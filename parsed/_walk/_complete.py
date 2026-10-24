@@ -114,7 +114,7 @@ def beneath(tree: Tree, tokens: list[Token]) -> list[End] | None:
     """
     completer = _Completer(tree, {}, flagging=False)
     words, _, _ = completer._flags(tokens)  # noqa: SLF001 -- the walk is this module's
-    walked = completer._walk(words)  # noqa: SLF001
+    walked = completer._walk(words)  # noqa: SLF001 -- the walk is this module's
     return None if walked is None else _ends(walked[0])
 
 

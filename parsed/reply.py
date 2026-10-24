@@ -41,6 +41,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+# At runtime: tooling evaluates a class's annotations (`typing.get_type_hints`), the result's reply among them.
 from seared import Seared  # noqa: TC002
 
 #: The exit code for each kind of error; ``0`` for none.
