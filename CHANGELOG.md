@@ -7,9 +7,13 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-10-24
 
-**The first real version.**
+**The first real version.** Its public surface is settled: a breaking change waits for a minor version from here.
+It was tried against a port of farlandia's whole command tree, read, checked, completed and run beside farlandia's
+own, and what that showed is in: a refusal says the line's words, never a phrase with braces; a usage writes each
+flag's value by its kind, and ends an asking command's with `[--yes]`; a name is said by its label, what a person
+calls it; a resolver may say why a word names nothing; and a did-you-mean never offers the word typed.
 
 ### Added
 
