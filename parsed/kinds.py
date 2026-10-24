@@ -26,6 +26,9 @@ its own gives, since one made from the field's type alone may not read. ``None``
 ``>``, ``span`` in ``--for <span>``; ``None`` leaves it to the flag's name. A usage adds the literal words after it
 (``<n|off>``).
 
+**A line passed on** (:class:`Line`) is the rest of a line as typed, from its first word: its flags, parsed's own,
+``--`` and ``then`` among it, quotes kept, so a command that passes a line to another reads it there as it was said.
+
 **A named kind** (:class:`Named`) is read through the app: a :class:`Name` by the resolver the app gives for its
 category, and :class:`Pairs`, a keyed field's ``key value`` pairs, by one that reads each key and gives its values
 their own (:mod:`parsed.names`). Its ``label`` is what a person calls one, where its category isn't: refusals, usages
@@ -440,6 +443,24 @@ class Pairs(Named):
     def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
         """``variable and value pairs``, by its :attr:`~Named.term`."""
         return f'{self.term} and value pairs'
+
+
+@dataclass(frozen=True, slots=True)
+class Line(Kind):
+    """The rest of a line as typed, from its first word, its flags among it: a line passed on to another.
+
+    A ``Str`` field, said as its phrase's rest (``{line**}``), and on no chain's step. Its flags, parsed's own among
+    them, ``--`` and ``then`` are the line's, its quotes kept, so ``see fleet f1 buy ship hauler --yes`` gives
+    ``'fleet f1 buy ship hauler --yes'``. A flag before its first word is the command's own (``see --pretty …``).
+    """
+
+    def what(self, field: Field) -> str:  # noqa: ARG002 -- every kind describes alike
+        """``a line, as typed: its flags are its own``."""
+        return 'a line, as typed: its flags are its own'
+
+    def example(self, field: Field) -> object:  # noqa: ARG002 -- every kind gives alike
+        """A line with a flag of its own, for ``parsed check`` to write back and read: ``'word --flag'``."""
+        return 'word --flag'
 
 
 _DEFAULTS: dict[FieldKind, Kind] = {

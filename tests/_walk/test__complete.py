@@ -159,6 +159,20 @@ class Run(Command):
     at: int | None = parsed.Int(default=None, ge=1)
 
 
+@pytest.fixture(scope='module')
+def verbs() -> Tree:
+    return Tree.collect('_support_tooled')
+
+
+class TestALinePassedOn:
+    @pytest.mark.parametrize('text', ['see fle', 'see fleet f1 ', 'see fleet f1 --', 'see -- fleet '])
+    def test_nothing_inside_it(self, verbs, text):
+        assert verbs.complete(text).words == []
+
+    def test_the_command_s_flags_before_it(self, verbs):
+        assert verbs.complete('see --pr').words == ['--pretty']
+
+
 class TestFlagsAfterTheRest:
     # Flags may stand anywhere after the first word, so the rest of the line offers its command's too.
     def test_beside_a_pair_s_keys_and_values(self):

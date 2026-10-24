@@ -9,6 +9,7 @@ from typing import ClassVar
 import _support_farlandia as farlandia
 import _support_protocol as protocol
 import _support_service as service
+import _support_tooled as tooled
 import pytest
 
 import parsed
@@ -190,6 +191,21 @@ class TestAmbiguity:
         )
         with pytest.raises(DeclarationError, match=message):
             Tree([say, shout])
+
+    def test_a_line_passed_on_and_the_rest_of_the_line_at_one_node(self):
+        say = _command('see {message**}', message=parsed.Str(required=True))
+        message = (
+            r"after 'see', 'see \{line\*\*\}' \(.*See\) takes the rest of the line as typed and 'see \{message\*\*\}' "
+            r'\(.*\) takes the rest of the line'
+        )
+        with pytest.raises(DeclarationError, match=message):
+            Tree([tooled.See, say])
+
+    def test_a_line_passed_on_is_an_edge_of_its_own(self):
+        found = Tree([tooled.See])
+        assert (found.root.words['see'].slot.kind, found.lines) == (SlotKind.LINE, True)
+        assert Tree([farlandia.Say]).lines is False
+        assert found.usage_of(tooled.See) == 'see [--policy <path>] [--pretty] [--select <select>] <line …>'
 
     def test_a_literal_beats_a_slot_so_both_build(self):
         system = _command('jump {system}', system=parsed.Str(required=True))

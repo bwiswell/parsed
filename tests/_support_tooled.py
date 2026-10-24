@@ -2,7 +2,8 @@
 
 Its command line reads by hand what parsed reads here: spans of time (`--timeout 2m`), counts (`--count 3`), and
 `slot=value` words, read by a kind of the fixture's own (`Assignment`), as an app's kind is. Every verb takes the
-policy, `--pretty` and `--select`, from its base.
+policy, `--pretty` and `--select`, from its base. `see`, `do` and `session run` pass a line of the app's on whole,
+its flags among it (`parsed.kinds.Line`).
 """
 
 # At runtime: tooling evaluates a command's annotations (`typing.get_type_hints`).
@@ -197,3 +198,40 @@ class Call(Verb):
 
     tool: str = parsed.Str(required=True, doc="the tool, by its name in tools' output")
     args: str | None = parsed.Str(default=None, doc="the call's arguments, as JSON")
+
+
+#: A line of the app's, passed on whole: its flags, parsed's own among them, are its own.
+LINE: dict[str, parsed.Kind] = {'line': parsed.kinds.Line()}
+
+
+@parsed.parsed
+class See(Verb):
+    """Read the app by a line of its own, as a user would say it."""
+
+    PHRASE = 'see {line**}'
+    EFFECT = parsed.Effect.READ
+    KINDS = LINE
+
+    line: str = parsed.Str(required=True, doc="the app's line, its flags among it")
+
+
+@parsed.parsed
+class Do(Verb):
+    """Run a line of the app's that acts, as a user would say it."""
+
+    PHRASE = 'do {line**}'
+    EFFECT = parsed.Effect.ACTION
+    KINDS = LINE
+
+    line: str = parsed.Str(required=True, doc="the app's line, its flags among it")
+
+
+@parsed.parsed
+class SessionRun(Verb):
+    """Run a command in the session, as given after --."""
+
+    PHRASE = 'session run {command**}'
+    EFFECT = parsed.Effect.ACTION
+    KINDS: ClassVar[dict[str, parsed.Kind]] = {'command': parsed.kinds.Line()}
+
+    command: str = parsed.Str(required=True, doc='the command, and its arguments')

@@ -10,6 +10,7 @@ from typing import ClassVar
 import _support_farlandia as farlandia
 import _support_protocol as protocol
 import _support_service as service
+import _support_tooled as tooled
 import pytest
 
 import parsed
@@ -404,6 +405,50 @@ class TestPairs:
         names = {**farlandia.NAMES, 'variable': farlandia.Table({'ore': 'ore'})}
         with pytest.raises(TypeError, match=r'the resolver for variable reads pairs, so it gives values'):
             tree.read('fleet f1 run mining ore iron', names=names)
+
+
+@pytest.fixture(scope='module')
+def verbs() -> Tree:
+    return Tree.collect('_support_tooled')
+
+
+class TestALinePassedOn:
+    # A Line slot takes the rest of the line as typed, from its first word: its flags, parsed's own among them.
+    def test_the_rest_as_typed_its_flags_among_it(self, verbs):
+        reading = verbs.walk('see fleet f1 buy ship hauler --yes --until docked=true --json')
+        assert reading.data() == {'line': 'fleet f1 buy ship hauler --yes --until docked=true --json'}
+        assert reading.own == frozenset()
+
+    def test_a_flag_before_its_first_word_the_command_s(self, verbs):
+        found = verbs.read('see --pretty --policy p.toml fleet f1 show --pretty')
+        assert found == tooled.See(line='fleet f1 show --pretty', pretty=True, policy=Path('p.toml'))
+        reading = verbs.walk('--yes do fleet f1 buy --help')
+        assert (reading.data()['line'], reading.own) == ('fleet f1 buy --help', frozenset({'yes'}))
+
+    def test_dashes_before_it_end_the_command_s_flags(self, verbs):
+        assert verbs.read('session run -- fleet f1 --x').command == 'fleet f1 --x'
+        assert verbs.read('see -- --weird --x').line == '--weird --x'
+
+    def test_its_quotes_and_escapes_kept(self, verbs):
+        line = r'fleet "Vesta Ring" dock --label "a \"b\"" "--"'
+        assert verbs.read(f'see {line}').line == line
+
+    def test_then_among_it(self):
+        mixed = Tree([tooled.See, farlandia.FleetMine, farlandia.FleetJump, farlandia.FleetDock])
+        assert mixed.read('see fleet f1 jump sol then dock').line == 'fleet f1 jump sol then dock'
+        assert len(mixed.walk('fleet f1 jump sol then dock').steps) == 2  # a chain's line is still cut
+
+    def test_left_out(self, verbs):
+        found = _refusal(verbs, 'see')
+        assert str(found) == 'see: which line? `see [--policy <path>] [--pretty] [--select <select>] <line …>`'
+
+    def test_a_flag_before_it_no_command_takes(self, verbs):
+        with pytest.raises(ReadError, match=r'no command takes --bogus'):
+            verbs.walk('see --bogus fleet f1')
+
+    def test_a_tree_without_one_reads_as_ever(self, tree, verbs):
+        assert (tree.lines, verbs.lines) == (False, True)
+        assert tree.walk('fleet f1 mine --for 10m').data() == {'fleet': 'f1', 'for': 600.0}
 
 
 class TestPlaceholders:

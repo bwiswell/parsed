@@ -56,7 +56,7 @@ from parsed.kinds import NOT_LITERAL, Name, Named, Number, Pairs, span
 from parsed.wait import FLAGS as WAIT_FLAGS
 from parsed.wait import TIMEOUT, Condition, Wait, problem
 
-from ._hints import close, either, plain_slot, usage
+from ._hints import close, either, passes, plain_slot, usage
 from ._terms import HELP, HELP_SHORT, RESERVED, THEN, Arity, SlotKind
 from ._words import Token, split
 
@@ -239,6 +239,8 @@ class _Walker:
 
     def walk(self) -> Reading:
         tokens = split(self.line)
+        if self.tree.lines:
+            tokens = cut(self.tree, self.line, tokens)
         first = _flag(tokens[0], self.tree.shorts) if tokens else None
         if first is not None and first[0] not in RESERVED:
             msg = f'{tokens[0].raw} comes before a command: a flag follows the first word'
@@ -476,7 +478,8 @@ class _Walker:
             start = next(at for at, part in enumerate(parts) if isinstance(part, Slot) and part.name == name)
             fields = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
             flags = self.tree.flags_of(end.declaration.cls).values()
-            rest = [usage(end.bound, flags, fields, start=start, asks=end.declaration.asks)]
+            passing = passes(end.declaration, end.bound)
+            rest = [usage(end.bound, flags, fields, start=start, asks=end.declaration.asks, passing=passing)]
         else:
             rest = [f'<{edge.slot}>', *([] if edge.node.end else ['…'])]
         hint = ' '.join([*(token.raw for token in said), *rest])
@@ -765,6 +768,57 @@ def _key(resolver: Resolver, word: str, scope: str | None) -> str | None:
         return None
 
 
+class _Passed(Token):
+    """A line passed on whole, as one word (:func:`cut`): a value, never a literal, a flag or ``then``."""
+
+    __slots__ = ()
+
+    @property
+    def quoted(self) -> bool:
+        """Always: the line is the slot's, as typed."""
+        return True
+
+
+def cut(tree: Tree, line: str, tokens: list[Token]) -> list[Token]:
+    """``tokens``, a line passed on (a ``Line`` slot's) as one word: from the first word it takes to the end, as typed.
+
+    The words are followed through the tree as a walk would, flags passed over (a value flag's value with it, ``--``
+    ending them), to see whether they enter a ``Line`` slot; there the line is cut, so what follows, flags and ``then``
+    among it, is the slot's. ``tokens`` as they are where they enter none; a flag no command takes is the walk's to
+    refuse.
+    """
+    words: list[tuple[int, Token]] = []  # each word, where it stands among the tokens
+    at, flagging = 0, True
+    while at < len(tokens):
+        token = tokens[at]
+        at += 1
+        if flagging and token.raw == '--':
+            flagging = False
+            continue
+        found = _flag(token, tree.shorts) if flagging else None
+        if found is None:
+            words.append((at - 1, token))
+        elif found[1] is None and found[0] not in RESERVED and tree.flags.get(found[0]) is Arity.VALUE:
+            at += 1  # its value
+    said = [token for _, token in words]
+    node, at = tree.root, 0
+    while at < len(said):
+        child = _literal(node, said[at])
+        if child is not None:
+            node, at = child, at + 1
+            continue
+        edge = node.slot
+        if edge is None:
+            break
+        if edge.kind is SlotKind.LINE:
+            start = said[at].start
+            passed = line[start:].rstrip()
+            return [*tokens[: words[at][0]], _Passed(text=passed, start=start, raw=passed)]
+        taken = _taken(edge.kind, edge.node, said, at)
+        node, at = edge.node, at + len(taken)
+    return tokens
+
+
 def _within(scope: _Scope) -> str:
     """Where a refusal says a name was looked for: ``for fleet 'Prospector'``, and ``once at 'sol'`` for a place."""
     field, _, said, at = scope
@@ -961,7 +1015,7 @@ def _taken(kind: SlotKind, after: Node, words: list[Token], at: int) -> tuple[To
     """The words a slot takes, from ``at``: one, those up to a literal of the node after it, or the rest."""
     if kind is SlotKind.ONE:
         return (words[at],)
-    if kind is SlotKind.REST:
+    if kind is SlotKind.REST or kind is SlotKind.LINE:
         return tuple(words[at:])
     stop = at
     while stop < len(words) and _literal(after, words[stop]) is None:

@@ -19,6 +19,7 @@ takes one kind:
 | `ONE` | one word: `{fleet}` |
 | `MANY` | one word or more, until a literal after them or the end: `{goods}`, a list's field |
 | `REST` | the rest of the line: `{message**}` |
+| `LINE` | the rest of the line as typed, its flags among it: `{line**}`, read by a [`Line`](../kinds.md#line) |
 
 **`Arity`**, a `StrEnum`, is whether a flag takes a value, as `Tree.flags` says it across a tree, since the walk
 splits flags off before it knows the command:

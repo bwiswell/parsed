@@ -501,7 +501,7 @@ class App:
         if said.version:
             _write(f'{self.prog} {self.version}', ok=True)
             return 0
-        as_json = JSON in said.own or JSON in _own_given(said.line)
+        as_json = JSON in said.own or JSON in self._own_of(said.line, self._subjects(subjects))
         if HELP in said.own and not said.line.strip() and not as_json:
             _write(self._options.help() + '\n', ok=True)  # the program's, above what it may say
         terminal = _at_terminal()
@@ -546,6 +546,17 @@ class App:
         said = self._said(line, subjects)
         mount = self._routes.route(said)
         return Routed(mount, mount.tree.walk(said, mount.resolvers, placeholders=placeholders))
+
+    def _own_of(self, line: str, subjects: tuple[str, ...]) -> frozenset[str]:
+        """The flags of parsed's own a line gives, by name, as its mount's tree reads it loose, no names looked up.
+
+        So a line passed on (a ``Line`` slot's) keeps its own. A line that doesn't read gives them as its words do.
+        """
+        said = self._said(line, subjects)
+        try:
+            return self._routes.route(said).tree.walk(said).own
+        except ReadError:
+            return _own_given(line)
 
     def read(self, line: str, *, subjects: Sequence[str] = ()) -> Command:
         """The command ``line`` says, loaded by seared, as :meth:`walk` routes and reads it.

@@ -52,6 +52,10 @@ split off. Then it's read from the root, a word at a time:
 - **else the node's slot** takes it: one word, several (up to a word that's a literal after them, or the end), or
   the rest of the line. A node has one slot at most.
 
+A slot read by a [`Line`](kinds.md#line) takes the rest of the line as typed, its flags among it: the walk looks for
+one before it splits a line's flags, on a tree that has one (`tree.lines`), and every word from the slot's first on
+is the slot's.
+
 An optional slot is compiled both with it and without it, so `log {n}` ends at `log` (its `n` left at its
 default) and at `log 40`. Where a walk ends, one phrase ends at most (`node.end`): the command, the phrase, and the
 slots read on the way.
@@ -166,7 +170,7 @@ Each is a `DeclarationError` naming the commands and the phrases:
 | Refused | Because |
 |---|---|
 | two phrases that end at one node | they read the same lines; an optional slot left out counts |
-| two kinds of slot at one node: one word, several, the rest of the line | a line would read two ways |
+| two kinds of slot at one node: one word, several, the rest of the line, or a line passed on (a `Line`'s) | a line would read two ways |
 | a flag that's a switch in one command and takes a value in another | flags are read before the command is |
 | two flags of one command with one name (`n`, and a field with `data_key='n'`) | |
 | a flag name that isn't lowercase words (`--Count`) | give the field a `data_key` |
