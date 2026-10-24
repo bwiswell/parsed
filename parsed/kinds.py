@@ -16,6 +16,9 @@ kind's own form (:meth:`Kind.form`), which a kind of an app's own overrides.
 literal word first (``None`` back to ``off``), else the kind's own spelling (:meth:`Kind.spell`), which reads back to
 the same value.
 
+**An example** (:meth:`Kind.example`), for ``parsed check``: a value the field may hold, which a kind with a form of
+its own gives, since one made from the field's type alone may not read. ``None`` by default.
+
 **Describing its words** (:meth:`Kind.describe`), for help and pages: the kind's own description (:meth:`Kind.what`,
 ``a span of time, such as 90s or 1h30m``), then its literal words (``, or off``).
 
@@ -141,6 +144,14 @@ class Kind:
     def spell(self, value: object, field: Field) -> list[str]:  # noqa: ARG002 -- every kind spells alike
         """The kind's own words for a wire value, which :meth:`form` reads back to it: here, the value as a word."""
         return [str(value)]
+
+    def example(self, field: Field) -> object:  # noqa: ARG002 -- every kind gives alike
+        """A value the field may hold, as an instance holds it, for ``parsed check`` to make its examples with.
+
+        ``None``, by default, leaves it to the field's type and constraints; a kind with a form of its own gives one
+        its form reads (``'fleet=f1'``), since a value made from the type alone may not be.
+        """
+        return None
 
     def describe(self, field: Field) -> str:
         """What the field's words are, for help and pages: :meth:`what`'s, then the literal words: ``…, or off``."""

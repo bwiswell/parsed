@@ -53,7 +53,8 @@ relay status [--config <config>]           Say whether the service is up.
 
 An app gives the entries ([`app.md`](app.md#sessions)): a mount whose prefix the line hasn't said yet as its
 namespace's line (`relay …`, and its `doc`), and the commands beneath where the line's words go as their usages and
-summaries. `rows(pairs)` writes a help's indented rows the same way.
+summaries. Where one command alone is beneath, its help is given instead of a listing of one. `rows(pairs)` writes
+a help's indented rows the same way.
 
 ## Docstrings
 

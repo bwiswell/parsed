@@ -9,7 +9,7 @@ slot, then its flags. A refusal gives it as its hint.
 | an optional slot | `[<n>]` |
 | a slot of several words | `<goods> …` |
 | the rest of the line | `<message …>` |
-| a required flag | `--into <into>` |
+| a required flag | `--into <into>`; a list's `--until <until> …` |
 | any other flag | `[--for <for>]`; a list's `[--tags <tags> …]` |
 | a switch | `[--quiet]`, or `[--no-stop]` for one negated |
 

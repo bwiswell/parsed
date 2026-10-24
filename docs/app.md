@@ -202,7 +202,9 @@ under way isn't missed.
   - **any other** by each command beneath where the line's words go: a mount's for its prefix (`relay --help`), a
     phrase's for its words so far (`fleet f1 jump --help`).
 
-  The result has no `command`, and exits 0. A word that goes nowhere (`rela --help`) is still refused.
+  Where one command alone is beneath, short of a slot it needs (`wait --help`, before its operation), the answer is
+  that command's help. The result has no `command`, and exits 0. A word that goes nowhere (`rela --help`) is still
+  refused.
 - **An `INTERACTIVE` command is left out of a listing** when no one is at a terminal
   ([a person at a terminal](#a-person-at-a-terminal)), or the line gives `--json`, as a tool would: it's not theirs
   to run. Where that leaves nothing (`ship s1 --help`), each one's refusal is the answer, naming its `INSTEAD`. Its
