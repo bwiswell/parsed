@@ -7,9 +7,12 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
-## 0.2.2 — unreleased
+## 0.2.2 — 2026-10-24
 
-**A command line's arguments, to a line and back.**
+**A command line's arguments, to a line and back.** A flag given as `--name=value` is the flag whatever its value
+holds, so `--args='{"a": 1}'` reads at a shell, and `parsed.argv.args_of` gives a line back as its arguments, so a
+command that passes a line on can run it as a process. One reading changes, marked **Breaking** below: an argument
+shaped `--name=value`, its value holding whitespace, given where a value goes, is now the flag.
 
 ### Added
 
