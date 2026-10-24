@@ -55,7 +55,7 @@ from parsed.kinds import NOT_LITERAL, Name, Named, Pairs, span
 from parsed.wait import FLAGS as WAIT_FLAGS
 from parsed.wait import TIMEOUT, Condition, Wait, problem
 
-from ._hints import close, either, usage
+from ._hints import close, either, plain_slot, usage
 from ._terms import HELP, HELP_SHORT, RESERVED, THEN, Arity, SlotKind
 from ._words import Token, split
 
@@ -105,6 +105,8 @@ class Reading:
         wait: Its wait, when it gives ``--until`` on a command that can wait: the conditions and the bound.
         then: A chain's steps after this one, each a reading of its own, in the line's order; none for a line of
             one command. Each holds the chain's shared fields too, as its first step gave them.
+        words: The words the command is said in, as the line gives them, its flags aside; a chain's later step's
+            with the line before it.
     """
 
     end: End
@@ -113,6 +115,12 @@ class Reading:
     line: str
     wait: Wait | None = None
     then: tuple[Reading, ...] = ()
+    words: tuple[Token, ...] = ()
+
+    @property
+    def said(self) -> str:
+        """The command as the line says it, its flags aside, for a message to name it: ``fleets show f1``."""
+        return _said(self.words)
 
     @property
     def command(self) -> type[Command]:
@@ -199,8 +207,8 @@ class _Field(NamedTuple):  # a tuple: one is made for each field of each line, a
             the line, for a field that isn't a list, is one word.
         kind: The kind they're read by.
         field: The seared field.
-        where: The phrase, or the flag, for a refusal to name.
         end: Where the walk ended, for a refusal's usage.
+        said: A slot's step's words, for a refusal to say those before it (``where``); none for a flag.
     """
 
     by: Place | Flag
@@ -208,8 +216,15 @@ class _Field(NamedTuple):  # a tuple: one is made for each field of each line, a
     values: tuple[Token, ...]
     kind: Kind
     field: Field
-    where: str
     end: End
+    said: tuple[Token, ...] = ()
+
+    @property
+    def where(self) -> str:
+        """How a refusal names it: the line's words up to its slot, then the slot; or the flag. Made when asked."""
+        if isinstance(self.by, Place):
+            return _slot_said(self.said, self.words, self.by)
+        return f'--{self.by.name}'
 
 
 @dataclass(slots=True)
@@ -250,18 +265,26 @@ class _Walker:
             msg = 'no command: the line has no words'
             raise self.refuse(msg, suggestions=list(self.tree.root.words))
         shared = shared or {}
+        step_words = (*said, *words)
         end, slots = self._walk_words(words, said=said, later=later)
         flags, wait = self._wait(end, flags)
         specs = {spec.attr: spec.field for spec in end.declaration.cls.__seared_fields__}
         skip = 0 if not shared else _head(end, set(shared))[1]
         fields = {
             **shared,
-            **self._slot_fields(end, slots, specs, skip=skip),
+            **self._slot_fields(end, slots, specs, said=step_words, skip=skip),
             **self._flag_fields(end, flags, words, specs, have=set(shared)),
         }
         values = self._values(fields, None if later is None else later.moved)
         given = {attr: Given(by=found.by, words=found.words, value=values[attr]) for attr, found in fields.items()}
-        reading = Reading(end=end, given=MappingProxyType(given), own=frozenset(own), line=self.line, wait=wait)
+        reading = Reading(
+            end=end,
+            given=MappingProxyType(given),
+            own=frozenset(own),
+            line=self.line,
+            wait=wait,
+            words=step_words,
+        )
         return reading, fields
 
     # --- a chain ----------------------------------------------------------------------------------------------
@@ -464,11 +487,19 @@ class _Walker:
     # --- the values --------------------------------------------------------------------------------------------
 
     def _slot_fields(
-        self, end: End, slots: list[tuple[Token, ...]], fields: Mapping[str, Field], *, skip: int = 0
+        self,
+        end: End,
+        slots: list[tuple[Token, ...]],
+        fields: Mapping[str, Field],
+        *,
+        said: tuple[Token, ...],
+        skip: int = 0,
     ) -> dict[str, _Field]:
         """Each slot's words, as its field's: one word, several, or the rest of the line, joined.
 
-        ``skip`` passes over the first slots of the phrase, a chain's that its first step read.
+        ``said`` is the line's words, its flags aside, for a refusal to say those before a slot, then the slot:
+        ``fleet frigate jump <system>``. ``skip`` passes over the first slots of the phrase, a chain's that its first
+        step read.
         """
         found = end.declaration
         out: dict[str, _Field] = {}
@@ -481,8 +512,8 @@ class _Walker:
                 values=(_joined(self.line, words),) if joined else words,
                 kind=kind,
                 field=fields[place.field],
-                where=end.bound.phrase.text,
                 end=end,
+                said=said,
             )
         return out
 
@@ -522,7 +553,6 @@ class _Walker:
                 values=tuple(value for _, _, value in saids if value is not None),
                 kind=found.field_kinds[flag.field],
                 field=field,
-                where=f'--{name}',
                 end=end,
             )
         for flag in takes.values():
@@ -662,7 +692,7 @@ class _Walker:
         value = values.get(scope) if scope is not None else None
         if scope is None or value is None or isinstance(value, list):
             return None
-        return scope, str(value), _said(fields[scope].values), None
+        return scope, str(value), _text_of(fields[scope].values), None
 
     def _read(self, found: _Field, word: Token, scope: _Scope | None) -> object:
         """A word, read by its field's kind, or a name by the resolver for its category; refused where it can't be."""
@@ -807,7 +837,7 @@ def _at(scope: str, fields: Mapping[str, _Field], moved: _Moved) -> _Scope | Non
     """A scope that follows its chain, once the chain has moved: the place as its value; ``None`` where it's unsaid."""
     if moved.key is None:
         return None
-    return scope, moved.key, _said(fields[scope].values) if scope in fields else '', moved.said
+    return scope, moved.key, _text_of(fields[scope].values) if scope in fields else '', moved.said
 
 
 def _onward(node: Node, later: _Later | None) -> list[str]:
@@ -924,6 +954,16 @@ def _said(words: Sequence[Token]) -> str:
     return ' '.join(word.raw for word in words)
 
 
+def _slot_said(said: Sequence[Token], words: Sequence[Token], place: Place) -> str:
+    """A slot as a refusal names it: the step's words before it, as typed, then the slot as a usage writes it."""
+    return ' '.join([*(word.raw for word in said if word.start < words[0].start), plain_slot(place)])
+
+
+def _text_of(words: Sequence[Token]) -> str:
+    """Words as a refusal quotes them: their text, a quoted name's quotes left off."""
+    return ' '.join(word.text for word in words)
+
+
 def _text(what: str, *, near: Sequence[str] = (), hint: str | None = None) -> str:
     """A refusal's text for people: what's wrong, then any did-you-mean, then the hint."""
     if near:
@@ -932,16 +972,16 @@ def _text(what: str, *, near: Sequence[str] = (), hint: str | None = None) -> st
 
 
 def _refused(reading: Reading, error: ValidationError) -> ReadError:
-    """A value seared refused, as the word that gave it: its slot's phrase or its flag, and seared's reason."""
+    """A value seared refused, as the word that gave it: its slot, said as the line's words up to it, or its flag."""
     wires = {spec.wire: spec.attr for spec in reading.command.__seared_fields__}
     head = error.path[0] if error.path else None
     attr = wires.get(head) if isinstance(head, str) else None
     given = reading.given.get(attr) if attr is not None else None
-    if given is None:
-        message = f'{reading.end.bound.phrase.text}: {error.reason}'
+    if given is None:  # no word gave it: the instance as a whole
+        message = f'{reading.line.strip()}: {error.reason}'
         return ReadError(message, kind='validation', line=reading.line, column=len(reading.line), field=attr)
     if isinstance(given.by, Place):
-        where = reading.end.bound.phrase.text
+        where = _slot_said(reading.words, given.words, given.by)
         words = (_joined(reading.line, given.words),) if given.by.rest and not given.by.many else given.words
     else:
         where = f'--{given.by.name}'

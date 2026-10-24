@@ -52,7 +52,7 @@ class TestSeededFaults:
         assert found == [
             ('example', '_support_check.examples.Mine', 'mien <fleet>', "no command 'mien'; did you mean mine?"),
             ('example', '_support_check.examples.Mine', 'dig <site>', 'it reads as Dig, not Mine'),
-            ('example', '_support_check.examples.Log', 'log 0', 'log {n}: must be >= 1, got 0'),
+            ('example', '_support_check.examples.Log', 'log 0', 'log <n>: must be >= 1, got 0'),
             (
                 'example',
                 '_support_check.examples.Look',

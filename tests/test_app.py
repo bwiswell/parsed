@@ -1024,7 +1024,7 @@ class TestWaiting:
         fleet = _Fleet()
         async with shows.open(fleet, interval=0.01) as session:
             found = await session.run('fleets show f1 --until docked=true --timeout 0.05s')
-        message = 'fleets show {fleet}: docked=true not met within 0.05s'
+        message = 'fleets show f1: docked=true not met within 0.05s'
         assert (found.ok, found.done, found.met, found.code) == (False, True, False, 7)
         assert (found.reply, found.text) == (farlandia.FleetView(fleet='f1'), message)
         assert found.error == {'error': 'timeout', 'message': message}
@@ -1035,7 +1035,7 @@ class TestWaiting:
     async def test_every_condition_named(self, shows):
         async with shows.open(_Fleet()) as session:
             found = await session.run('fleets show f1 --until docked=true --until fleet=f1 --timeout 0s')
-        assert found.text == 'fleets show {fleet}: docked=true and fleet=f1 not met within 0s'
+        assert found.text == 'fleets show f1: docked=true and fleet=f1 not met within 0s'
 
     async def test_no_interval_no_change_one_read(self, shows):
         fleet = _Fleet()
@@ -1361,7 +1361,10 @@ class TestChains:
         assert found.ok
         assert (refused.code, refused.error and refused.error['message']) == (
             2,
-            "fleet {fleet} move {to}: no site 'Vesta' for fleet 'Prospector', once at 'sol' `fleet <fleet> move <to>`",
+            (
+                "fleet Prospector jump sol then move <to>: no site 'Vesta' for fleet 'Prospector', once at 'sol' "
+                '`fleet <fleet> move <to>`'
+            ),
         )
 
     async def test_a_chain_called_as_a_tool(self, game):
@@ -1636,7 +1639,7 @@ class CraftView(Craft):
     INTERACTIVE = True
 
 
-_FIT_REFUSED = 'ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+_FIT_REFUSED = 'ship s1 fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
 
 
 class TestATerminal:
@@ -1687,14 +1690,14 @@ class TestATerminal:
         sketches.before(log.hook('before'))
         sketches.on_error(log.hook('on error'))
         found = await self._run(sketches, 'sketch 0')
-        assert (found.code, found.text) == (3, 'sketch {n} is for a person at a terminal')  # nothing in its place
+        assert (found.code, found.text) == (3, 'sketch 0 is for a person at a terminal')  # nothing in its place
         assert 'instead' not in found.error
         assert log.lines == []
         assert (await self._run(sketches, 'sketch 0', terminal=True)).code == 4  # at one, its value is refused
 
     async def test_call_raises_it(self, app, fits):
         async with app.open() as session:
-            with pytest.raises(RefusedError, match=r'ship \{ship\} fit is for a person at a terminal: say'):
+            with pytest.raises(RefusedError, match=r'ship s1 fit is for a person at a terminal: say'):
                 await session.call('ship s1 fit')
         assert fits.calls == []
 
@@ -1715,7 +1718,7 @@ class TestATerminal:
         alone.mount(Tree([farlandia.ShipFit]), under='game')
         found = await self._run(alone, 'game ship s1 fit')
         assert found.text == (
-            'game ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
+            'game ship s1 fit is for a person at a terminal: say `ships make <ship> add <part>` instead'
         )
         assert found.error['instead'] == 'ships make {ship} add {part}'
 
@@ -1724,7 +1727,7 @@ class TestATerminal:
         crafts.mount(Tree([CraftGo, CraftView]))
         crafts.on_chain(Craft, lambda steps, ctx: ' then '.join(type(step).__name__ for step in steps))
         found = await self._run(crafts, 'craft c1 go then view')
-        assert (found.code, found.text) == (3, 'craft {craft} view is for a person at a terminal')
+        assert (found.code, found.text) == (3, 'craft c1 go then view is for a person at a terminal')
         assert found.error['line'] == 'craft c1 go then view'
         assert (await self._run(crafts, 'craft c1 go then view', terminal=True)).text == 'CraftGo then CraftView'
         assert (await self._run(crafts, 'craft c1 go then go')).ok
@@ -1926,7 +1929,7 @@ class TestMain:
         app.on(farlandia.ShipFit, lambda command, ctx: 'fitted')
         code, out, err = self._main(app, capsys, 'ship', 's1', 'fit')
         assert (code, out) == (3, '')
-        assert err.startswith('ship {ship} fit is for a person at a terminal')
+        assert err.startswith('ship s1 fit is for a person at a terminal')
 
     def test_at_one_it_runs_and_a_question_is_put_to_them(self, app, capsys, monkeypatch):
         monkeypatch.setattr('parsed.app._at_terminal', lambda: True)
@@ -2054,7 +2057,7 @@ class TestHelpAtAnyDepth:
         found = await self._run(app, 'ship s1 --help')
         assert (found.ok, found.text) == (
             True,
-            'ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead',
+            'ship <ship> fit is for a person at a terminal: say `ships make <ship> add <part>` instead',  # no line
         )
 
     @pytest.mark.parametrize('line', ['rela --help', 'fleet f1 progrms --help', 'relay'])

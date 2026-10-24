@@ -241,7 +241,7 @@ tooling does, needn't say so. `session.terminal` holds it. `app.main` says it fr
   - A chain is refused where any of its steps is for a person.
 
 ```
-ship {ship} fit is for a person at a terminal: say `ships make <ship> add <part>` instead
+ship s1 fit is for a person at a terminal: say `ships make <ship> add <part>` instead
 ```
 
 What's said in its place is said as the mount the line went to says it, else as the first mount that holds it does,
