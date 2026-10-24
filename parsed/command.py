@@ -18,6 +18,8 @@ Constant           Default                      What it says
 ``KINDS``          empty                        how each field's words are read, by field name
 ``ALIASES``        empty                        other names a phrase's slot may fill a field by
                                                 (``{'detachment': 'fleet'}``)
+``SHORTS``         empty                        a flag's short form, one letter, by field name
+                                                (``{'config': 'c'}`` says ``--config`` as ``-c``)
 ``EXAMPLES``       ``()``                       lines that say it, for help and for ``parsed check`` to read;
                                                 ``<name>`` stands for any value
 ``STEPS``          ``False``                    on a chain's base: its commands are steps, which ``then`` joins
@@ -27,8 +29,9 @@ Constant           Default                      What it says
 =================  ===========================  ==============================================================
 
 Every constant but ``PHRASE`` is optional, and none is inferred. Each is inherited like any class attribute, so a base
-can declare one for every command beneath it. ``KINDS`` and ``ALIASES`` are merged along the MRO instead: a base's
-entries and its subclasses' all count, a subclass's winning where they name the same key.
+can declare one for every command beneath it. ``KINDS``, ``ALIASES`` and ``SHORTS`` are merged along the MRO instead: a
+base's entries and its subclasses' all count, a subclass's winning where they name the same key. No flag has a short
+form unless ``SHORTS`` gives it one, and ``-h`` is ``--help``'s.
 
 :func:`declaration` reads a class's constants once, checks each, and returns its :class:`Declaration`, with each
 phrase bound to the fields it fills (:mod:`parsed._phrase`): a field a slot of ``PHRASE`` fills is a positional, and
@@ -47,6 +50,7 @@ from seared import Field, Seared, field_kind
 from seared.doc import is_seared_class
 
 from ._phrase import Binding, Bound, Place, bind
+from ._walk._terms import HELP_SHORT
 from .effect import Effect, EffectName, effect_of
 from .errors import DeclarationError
 from .kinds import Kind, Named, Pairs, default_kind
@@ -72,6 +76,7 @@ class Command(Seared):
     REPLY: ClassVar[type[Seared] | None] = None
     KINDS: ClassVar[Mapping[str, Kind]] = MappingProxyType({})
     ALIASES: ClassVar[Mapping[str, str]] = MappingProxyType({})
+    SHORTS: ClassVar[Mapping[str, str]] = MappingProxyType({})
     EXAMPLES: ClassVar[tuple[str, ...]] = ()
     STEPS: ClassVar[bool] = False
     MOVES: ClassVar[str | bool] = False
@@ -98,6 +103,7 @@ class Declaration:
             or ``False`` when it stays where it is.
         kinds: ``KINDS``, merged along the MRO, a subclass's entries over its bases'.
         aliases: ``ALIASES``, merged likewise: a slot's name, to the field it fills.
+        shorts: ``SHORTS``, merged likewise: a flag's field, to the letter that says it short (``'c'`` for ``-c``).
         field_kinds: Each field's kind, by attribute name: its ``KINDS`` entry, or its type's default; empty for a
             base.
         phrases: ``PHRASE`` and then each of ``EXTRA_PHRASES``, bound to the fields they fill; empty for a base.
@@ -118,6 +124,7 @@ class Declaration:
     moves: str | bool
     kinds: Mapping[str, Kind]
     aliases: Mapping[str, str]
+    shorts: Mapping[str, str]
     field_kinds: Mapping[str, Kind]
     phrases: tuple[Bound, ...]
     flags: tuple[str, ...]
@@ -186,6 +193,7 @@ def _read(cls: type) -> Declaration:
         moves=_moves(cls, name, chain) if phrase is not None else False,
         kinds=kinds,
         aliases=aliases,
+        shorts=_shorts(cls, name, binding.flags if phrase is not None else None),
         field_kinds=field_kinds,
         phrases=binding.phrases,
         flags=binding.flags,
@@ -558,6 +566,54 @@ def _aliases(cls: type[Command]) -> Mapping[str, str]:
                 raise DeclarationError(msg)
             merged[alias] = field
     return MappingProxyType(merged)
+
+
+def _shorts(cls: type[Command], name: str, flags: tuple[str, ...] | None) -> Mapping[str, str]:
+    """``SHORTS``, merged along the MRO; on a command (``flags`` given), each checked against its flags."""
+    merged: dict[str, str] = {}
+    for base in reversed(cls.__mro__):
+        own = vars(base).get('SHORTS')
+        if own is None:
+            continue
+        where = f'{base.__qualname__}.SHORTS'
+        if not isinstance(own, Mapping):
+            msg = f"{where} = {own!r}: a mapping of field names to short flags, such as {{'config': 'c'}}"
+            raise DeclarationError(msg)
+        for key, short in own.items():
+            if not isinstance(key, str) or not key.isidentifier():
+                msg = f'{where}: {key!r} is not a field name'
+                raise DeclarationError(msg)
+            if not (isinstance(short, str) and len(short) == 1 and short.isascii() and short.isalpha()):
+                msg = f"{where}[{key!r}] = {short!r}: a short flag is one letter, such as 'c' for -c"
+                raise DeclarationError(msg)
+            if short == HELP_SHORT:
+                msg = f"{where}[{key!r}]: -h is --help's, on every command"
+                raise DeclarationError(msg)
+            merged[key] = short
+    return MappingProxyType(merged if flags is None else _used_shorts(cls, name, merged, flags))
+
+
+def _used_shorts(cls: type[Command], name: str, shorts: Mapping[str, str], flags: tuple[str, ...]) -> dict[str, str]:
+    """A command's shorts for its flags; a base's for none go unused, and one of its own for none is refused."""
+    own = vars(cls).get('SHORTS') or {}
+    fields = {spec.attr for spec in cls.__seared_fields__}
+    used: dict[str, str] = {}
+    letters: dict[str, str] = {}
+    for key, short in shorts.items():
+        if key not in flags and key not in own:
+            continue  # a base's, for a field this command says otherwise or hasn't
+        if key not in fields:
+            msg = f'{name}.SHORTS: {key!r} is no field of {name}'
+            raise DeclarationError(msg)
+        if key not in flags:
+            msg = f'{name}.SHORTS: {key} is said by a slot of its phrase, so it has no flag for -{short}'
+            raise DeclarationError(msg)
+        if short in letters:
+            msg = f'{name}.SHORTS: {letters[short]} and {key} are both -{short}'
+            raise DeclarationError(msg)
+        used[key] = short
+        letters[short] = key
+    return used
 
 
 def _kinds(cls: type[Command]) -> Mapping[str, Kind]:

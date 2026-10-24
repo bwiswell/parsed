@@ -1,11 +1,12 @@
 """A service's skeleton group, as each service of a family carries one: mounted by many apps, each with its settings.
 
-- `run`, `validate-config` and `status`, each reading `--config`;
+- `run`, `validate-config` and `status`, each reading `--config`, or `-c`;
 - two settings classes, for two services that mount it, each its mount's parameters.
 """
 
 # At runtime: tooling evaluates a command's annotations (`typing.get_type_hints`).
 from pathlib import Path  # noqa: TC003
+from typing import ClassVar
 
 import parsed
 
@@ -13,6 +14,8 @@ import parsed
 @parsed.parsed
 class ServiceCommand(parsed.Command):
     """A base: the config file every command of the skeleton reads."""
+
+    SHORTS: ClassVar[dict[str, str]] = {'config': 'c'}
 
     config: Path | None = parsed.Path(default=None, doc='the config file; left out, the service default')
 

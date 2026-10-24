@@ -1715,3 +1715,184 @@ class TestATerminal:
     def test_true_or_false(self, app, terminal):
         with pytest.raises(TypeError, match=r'terminal=.*: whether a person is at a terminal, True or False'):
             app.open(terminal=terminal)
+
+
+@parsed.parsed
+class Root(parsed.Parsed):
+    """A program's root options: a config file, said -c too, and a count of its own."""
+
+    SHORTS: ClassVar[dict[str, str]] = {'config': 'c'}
+
+    config: Path | None = parsed.Path(default=None)
+    n: int = parsed.Int(default=1)
+
+
+@parsed.parsed
+class LookLog(parsed.Command):
+    """Look at the log's last lines: its --n, after the first word, the line's."""
+
+    PHRASE = 'look log'
+    EFFECT = parsed.Effect.READ
+
+    n: int = parsed.Int(default=10)
+
+
+class TestRootOptions:
+    @pytest.fixture
+    def relay(self) -> App:
+        found = App('relayctl', options=Root, version='1.2.3')
+        found.mount('_support_service')
+        return found
+
+    def test_the_app_s(self, relay):
+        assert (relay.options, relay.version) == (Root, '1.2.3')
+        assert (App('farlandia').options, App('farlandia').version) == (None, None)
+
+    def test_refused_as_declared(self):
+        with pytest.raises(DeclarationError, match=r'a root option may be left out, so give it a default'):
+
+            @parsed.parsed
+            class Required(parsed.Parsed):
+                config: str = parsed.Str(required=True)
+
+            App('p', options=Required)
+
+    async def test_given_to_handlers(self, relay):
+        relay.on(service.Run, lambda command, ctx: repr(ctx.options))
+        async with relay.open(options=Root(n=3)) as session:
+            assert (await session.run('run')).text == 'Root(config=None, n=3)'
+            assert session.options == Root(n=3)
+
+    async def test_each_field_s_default_where_none_are_given(self, relay):
+        async with relay.open() as first, relay.open() as second:
+            assert first.options == second.options == Root()
+            assert first.options is not second.options  # each session its own
+
+    def test_none_for_an_app_without(self, app):
+        app.on(service.Run, lambda command, ctx: repr(ctx.options))
+        assert app.run('relay run').text == 'None'
+
+    @pytest.mark.parametrize(
+        ('given', 'message'),
+        [
+            ({'config': 'r.toml'}, r"options=\{'config': 'r\.toml'\}: an instance of Root, the app's root options"),
+            (service.RelaySettings(), r'options=RelaySettings\(port=5085\): an instance of Root'),
+        ],
+    )
+    def test_refused_unless_the_app_s(self, relay, given, message):
+        with pytest.raises(TypeError, match=message):
+            relay.open(options=given)
+
+    def test_refused_where_the_app_has_none(self, app):
+        with pytest.raises(TypeError, match=r'options=Root\(.*\): the app has no root options: App\(prog, options=…\)'):
+            app.open(options=Root())
+
+
+class _Flipping:
+    """A fake state: a fleet that docks and leaves in turn, each time it's read."""
+
+    def __init__(self) -> None:
+        self.docked = True
+        self.reads = 0
+
+    @property
+    def flipped(self) -> bool:
+        self.docked = not self.docked
+        return self.docked
+
+
+class TestMain:
+    @pytest.fixture
+    def relay(self) -> App:
+        found = App('relayctl', options=Root, version='1.2.3')
+        found.mount('_support_service')
+        found.mount(Tree([LookLog]))
+        found.on(service.Run, lambda command, ctx: f'run {command.config} under {ctx.options.config}')
+        found.on(service.Status, lambda command, ctx: 'up')
+        found.on(LookLog, lambda command, ctx: f'the last {command.n}, root n {ctx.options.n}')
+        return found
+
+    def _main(self, app: App, capsys, *args: str) -> tuple[int, str, str]:
+        code = app.main(list(args))
+        out, err = capsys.readouterr()
+        return code, out, err
+
+    def test_the_line_s_text_on_stdout(self, relay, capsys):
+        assert self._main(relay, capsys, 'status') == (0, 'up\n', '')
+
+    def test_root_options_before_the_first_word_then_the_line_s(self, relay, capsys):
+        said = self._main(relay, capsys, '-c', 'r.toml', 'run', '-c', 'own.toml')
+        assert said == (0, 'run own.toml under r.toml\n', '')
+
+    @pytest.mark.parametrize('args', [('look', 'log', '--n', '40'), ('look log --n 40',)])
+    def test_after_the_first_word_every_flag_is_the_line_s(self, relay, capsys, args):
+        assert self._main(relay, capsys, *args) == (0, 'the last 40, root n 1\n', '')
+
+    def test_version_and_help(self, relay, capsys):
+        assert self._main(relay, capsys, '--version', 'status') == (0, 'relayctl 1.2.3\n', '')
+        code, out, _ = self._main(relay, capsys, '-h')
+        assert (code, out) == (0, 'relayctl [--config <config>] [--n <n>] [--version] <command> …\n')
+
+    @pytest.mark.parametrize(
+        ('args', 'code', 'says'),
+        [
+            (('rn',), 2, "no command 'rn'; did you mean run?"),
+            (('--confg', 'r.toml', 'run'), 2, 'relayctl takes no --confg; did you mean --config?'),
+            (('--n', 'x', 'status'), 2, "--n: 'x' is not a whole number"),
+            ((), 2, 'no command: the line has no words'),
+        ],
+    )
+    def test_a_refusal_on_stderr_with_its_code(self, relay, capsys, args, code, says):
+        assert self._main(relay, capsys, *args) == (code, '', f'{says}\n')
+
+    def test_a_handler_s_failure_exits_1(self, relay, capsys):
+        relay.on(service.ValidateConfig, lambda command, ctx: {}['missing'])
+        assert self._main(relay, capsys, 'validate-config') == (1, '', "KeyError: 'missing'\n")
+
+    def test_no_terminal_so_a_command_for_a_person_is_refused(self, app, capsys):
+        app.on(farlandia.ShipFit, lambda command, ctx: 'fitted')
+        code, out, err = self._main(app, capsys, 'ship', 's1', 'fit')
+        assert (code, out) == (3, '')
+        assert err.startswith('ship {ship} fit is for a person at a terminal')
+
+    def test_at_one_it_runs_and_a_question_is_put_to_them(self, app, capsys, monkeypatch):
+        monkeypatch.setattr('parsed.app._at_terminal', lambda: True)
+        monkeypatch.setattr('builtins.input', lambda question: 'y')
+        hangar = _Hangar()
+        app.on(farlandia.ShipFit, lambda command, ctx: f'fitted, at a terminal: {ctx.terminal}')
+        app.on(farlandia.FleetBuyShip, _buy)
+        assert self._main(app, capsys, 'ship', 's1', 'fit') == (0, 'fitted, at a terminal: True\n', '')
+        assert app.main(['fleet', 'f1', 'buy', 'ship', 'hauler'], hangar) == 0
+        assert hangar.ships == ['hauler']
+
+    def test_without_one_a_question_is_left_unanswered(self, app, capsys):
+        hangar = _Hangar()
+        app.on(farlandia.FleetBuyShip, _buy)
+        code = app.main(['fleet', 'f1', 'buy', 'ship', 'hauler'], hangar)
+        assert (code, capsys.readouterr().out, hangar.ships) == (0, 'Buy a hauler for 1,200 credits?\n', [])
+
+    def test_a_watch_s_each_change_as_it_comes(self, app, capsys):
+        app.on(farlandia.FleetsShow, lambda command, ctx: farlandia.FleetView(fleet='f1', docked=ctx.state.flipped))
+        code = app.main(['fleets', 'show', 'f1', '--watch', '--count', '3'], _Flipping(), interval=0.01)
+        assert code == 0
+        assert capsys.readouterr().out.splitlines() == [
+            "FleetView(fleet='f1', docked=False)",
+            "FleetView(fleet='f1', docked=True)",
+            "FleetView(fleet='f1', docked=False)",
+        ]
+
+    def test_an_interrupt_exits_130(self, relay, capsys):
+        def interrupted(command, ctx):
+            raise KeyboardInterrupt
+
+        relay.on(service.ValidateConfig, interrupted)
+        assert self._main(relay, capsys, 'validate-config') == (130, '', '')
+
+    def test_the_program_s_arguments_by_default(self, relay, capsys, monkeypatch):
+        monkeypatch.setattr('sys.argv', ['relayctl', 'status'])
+        assert relay.main() == 0
+        assert capsys.readouterr().out == 'up\n'
+
+    async def test_not_inside_a_running_loop(self, relay):
+        with pytest.raises(RuntimeError, match=r'app\.main\(\) runs an event loop of its own'):
+            relay.main(['status'])

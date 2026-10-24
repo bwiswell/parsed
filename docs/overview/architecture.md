@@ -43,6 +43,10 @@ seared  <-  zeared
   it as one envelope, with its exit code ([`../reply.md`](../reply.md)); a handler that asks first, answered by
   `--yes`, the session's answer, or left undone with its question; hooks before and after each command, and on its
   error, in a stated order; and a session's subjects, the words tried before a bare line.
+- **The command line** ([`../argv.md`](../argv.md)): `app.main(argv)`, a program's arguments run as its command
+  line: its root options before the first word, read from a seared class and given to handlers, `--version` and
+  `--help` there; then the line, every flag after the first word its own; a person at a terminal when stdin and
+  stdout are one; each result's text written as it comes, and its exit code.
 - **Waits** ([`../wait.md`](../wait.md)): a read with a `REPLY` takes `--until` conditions on its reply and a
   `--timeout`, each condition's path checked against the reply's schema before anything runs; a session reads it
   again on the app's change signal, or on an interval, until they're met or the bound passes. `--watch` streams each
@@ -52,8 +56,8 @@ seared  <-  zeared
   tagged by their words; and `python -m parsed check`, a package's commands and chains checked in its CI.
 - **Effects** ([`../effect.md`](../effect.md)): what running a command does, on zeared's scale.
 - **Errors** ([`../errors.md`](../errors.md)): `ParsedError`, `DeclarationError`; `ReadError`, one error for a line
-  that doesn't read, with where it stands, a hint and what may have been meant; and `RenderError`, for an instance
-  no line can say.
+  that doesn't read, with where it stands, a hint and what may have been meant; `RefusedError`, for a command for a
+  person at a terminal run with none; and `RenderError`, for an instance no line can say.
 
-Argv and help arrive in the release that follows, adding their part here. What each part costs is in
+Help arrives next, adding its part here. What each part costs is in
 [`benchmarks.md`](benchmarks.md).

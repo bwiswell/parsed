@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
+from typing import ClassVar
 
 import _support_farlandia as farlandia
 import _support_rio as rio
+import _support_service as service
 import pytest
 
 import parsed
@@ -293,6 +295,21 @@ class TestReading:
     def test_usage_of_a_command_says_it_by_its_phrase(self, fixtures):
         assert fixtures.usage_of(farlandia.FleetDock) == 'fleet <fleet> dock [<station>]'  # not its extra phrase
         assert fixtures.usage_of(farlandia.Log) == 'log [<n>]'
+
+    def test_its_shorts_each_to_the_flag_it_says(self):
+        assert dict(Tree.collect('_support_service').shorts) == {'c': 'config'}
+        assert dict(Tree.collect('_support_farlandia').shorts) == {}
+
+    def test_a_short_saying_two_flags_is_refused(self):
+        @parsed.parsed
+        class Count(Command):
+            PHRASE = 'count'
+            SHORTS: ClassVar[dict[str, str]] = {'count': 'c'}
+
+            count: int = parsed.Int(default=1)
+
+        with pytest.raises(DeclarationError, match=r'-c is --config in Run and --count in .*Count: a short says one'):
+            Tree([service.Run, Count])
 
     def test_usage_of_another_tree_s_command(self):
         with pytest.raises(KeyError):

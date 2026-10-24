@@ -8,6 +8,7 @@ from typing import ClassVar
 
 import _support_farlandia as farlandia
 import _support_rio as rio
+import _support_service as service
 import pytest
 import seared
 
@@ -29,6 +30,7 @@ class TestDefaults:
         assert Command.INSTEAD is None
         assert Command.REPLY is None
         assert dict(Command.KINDS) == {}
+        assert dict(Command.SHORTS) == {}
         assert Command.EXAMPLES == ()
         assert Command.STEPS is False
         assert Command.MOVES is False
@@ -50,6 +52,7 @@ class TestDefaults:
             moves=False,
             kinds=MappingProxyType({}),
             aliases=MappingProxyType({}),
+            shorts=MappingProxyType({}),
             field_kinds=MappingProxyType({}),
             phrases=(),
             flags=(),
@@ -183,6 +186,56 @@ class TestKinds:
 
         with pytest.raises(TypeError):
             declaration(Leaf).kinds['ship'] = self.SHIP  # ty: ignore[invalid-assignment]
+
+
+class TestShorts:
+    def test_merged_along_the_mro_by_field(self):
+        assert dict(declaration(service.Run).shorts) == {'config': 'c'}  # from its base
+        assert dict(declaration(service.ServiceCommand).shorts) == {'config': 'c'}
+
+    def test_a_subclass_s_wins(self):
+        @parsed.parsed
+        class Loud(service.ServiceCommand):
+            PHRASE = 'loud'
+            SHORTS: ClassVar[dict[str, str]] = {'config': 'C'}
+
+        assert dict(declaration(Loud).shorts) == {'config': 'C'}
+
+    def test_a_base_s_for_a_field_said_by_a_slot_goes_unused(self):
+        @parsed.parsed
+        class Show(service.ServiceCommand):
+            PHRASE = 'show {config}'
+
+        assert dict(declaration(Show).shorts) == {}
+
+    def test_none_unless_given(self):
+        assert dict(declaration(farlandia.FleetMine).shorts) == {}
+
+    @pytest.mark.parametrize(
+        ('shorts', 'message'),
+        [
+            (['c'], r"Declared\.SHORTS = \['c'\]: a mapping of field names to short flags"),
+            ({'a config': 'c'}, r"Declared\.SHORTS: 'a config' is not a field name"),
+            ({'loud': 'cc'}, r"Declared\.SHORTS\['loud'\] = 'cc': a short flag is one letter, such as 'c' for -c"),
+            ({'loud': '3'}, r"SHORTS\['loud'\] = '3': a short flag is one letter"),
+            ({'loud': 'é'}, r"SHORTS\['loud'\] = 'é': a short flag is one letter"),
+            ({'loud': 'h'}, r"Declared\.SHORTS\['loud'\]: -h is --help's, on every command"),
+            ({'quiet': 'q'}, r"Declared\.SHORTS: 'quiet' is no field of Declared"),
+            ({'who': 'w'}, r'Declared\.SHORTS: who is said by a slot of its phrase, so it has no flag for -w'),
+            ({'loud': 'l', 'soft': 'l'}, r'Declared\.SHORTS: loud and soft are both -l'),
+        ],
+    )
+    def test_refused(self, shorts, message):
+        cls = _declared(
+            PHRASE='hail {who}',
+            SHORTS=shorts,
+            __annotations__={'who': str, 'loud': bool, 'soft': bool},
+            who=parsed.Str(required=True),
+            loud=parsed.Bool(default=False),
+            soft=parsed.Bool(default=False),
+        )
+        with pytest.raises(DeclarationError, match=message):
+            declaration(cls)
 
 
 class TestDecoration:

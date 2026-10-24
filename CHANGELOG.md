@@ -19,6 +19,18 @@ lines as it lands, and the entry is dated when that version is released.
   command, a chain's step among them, is refused before its values are loaded or any hook runs: a `refused` error,
   exit 3, naming its `INSTEAD` (``say `ships make <ship> add <part>` instead``), and `parsed.RefusedError` from
   `session.call`. `--help` is still answered. `tree.usage_of(cls)` says a command by its `PHRASE`.
+- **The command line:** `app.main(argv)` runs a program's arguments as its command line and gives its exit code,
+  for `sys.exit(app.main())`. After the first word every flag is the line's, and a single argument is the whole
+  line (`prog "look log --n 40"`). A person is at a terminal when stdin and stdout both are, and there a question a
+  line asks is put to them. Each result's text is written as it comes, to stdout, or to stderr when it went wrong.
+  `parsed.argv` reads the arguments.
+- **Root options:** `App(prog, options=Options, version='1.2.3')`. The options class is a seared class whose fields,
+  each optional, are the flags before a command line's first word, given to handlers as `ctx.options` (each field's
+  default where none was given; `app.open` and `app.run` take `options=`). `--version` and `-h` or `--help` stand
+  there too.
+- **Short flags:** `SHORTS = {'config': 'c'}` on a command, merged along the MRO as `KINDS` is, says `--config` as
+  `-c`. None is automatic, and `-h` is `--help`'s on every command. A short says one flag throughout a tree
+  (`tree.shorts`), refused at build otherwise, and only on the commands that declare it; any other `-x` is a word.
 
 ## 0.1.7 — 2026-10-23
 

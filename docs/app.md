@@ -25,6 +25,7 @@ async with app.open(Link(galaxy)) as session:                # the link is opene
     result.text, result.code                                 # 'f1 mines', 0
 
 app.run('relay run', settings)                               # one line, in a session of its own
+sys.exit(app.main())                                         # the program's arguments, as its command line
 ```
 
 ## Mounting
@@ -135,8 +136,8 @@ later.
 
 ## Sessions
 
-`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=(), terminal=False)` gives a `Session`, used
-once, as `async with app.open(state) as session`:
+`app.open(state=None, verbosity=0, answer=None, interval=1.0, subjects=(), terminal=False, options=None)` gives a
+`Session`, used once, as `async with app.open(state) as session`:
 
 - **`state`** is the app's own (a link, a mirror), given to handlers as `ctx.state`. A context manager, sync or
   async, is entered when the session opens, and handlers see what entering it gave, as `async with x as y` does;
@@ -151,6 +152,9 @@ once, as `async with app.open(state) as session`:
 - **`terminal`** is whether a person is at a terminal (`ctx.terminal`): `False` by default, and anything but
   `True` or `False` is a `TypeError`. Without one, a command for a person is refused
   ([a person at a terminal](#a-person-at-a-terminal)).
+- **`options`** are the program's root options (`ctx.options`), an instance of the app's options class
+  ([the command line](#the-command-line)): by default, each field's default, or `None` for an app with none. An
+  instance of another class, or any for an app with no options class, is a `TypeError`.
 
 `await session.run(line)` runs the command a line says: the line goes to its mount and is loaded there, then its
 handler (the mount's, else the app's) is called with a fresh context and awaited if it's async. It gives what came
@@ -186,9 +190,9 @@ under way isn't missed.
 **A line that gives `--help` runs nothing.** It's answered with its command's usage
 ([`tree.usage`](tree.md#reading-a-line)), as `run`'s text and `call`'s result, its values not loaded.
 
-**`app.run(line, state=None, verbosity=0, yes=False, answer=None, interval=1.0, subjects=(), terminal=False)`**
-runs one line in a session of its own, opened around it and closed after, and gives its `Result`: for a program that
-runs one line and exits. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there,
+**`app.run(line, state=None, …)`** runs one line in a session of its own, opened around it and closed after, and
+gives its `Result`: for a program that runs one line and exits. It takes `yes=False`, as `run` does, and the rest as
+`app.open` does. It runs an event loop of its own, so it's refused inside one with a `RuntimeError`; there,
 open a session.
 
 `session.state` is the state, `session.is_open` whether it's open, and `session.context(routed)` the context a
@@ -201,7 +205,8 @@ them; neither needs it open.
 
 Whether a person is at a terminal is the front end's to say, as the session opens: `app.open(state, terminal=True)`,
 or `app.run(line, terminal=True)`. It's `False` by default, so a program that runs lines in-process, as an agent's
-tooling does, needn't say so. `session.terminal` holds it.
+tooling does, needn't say so. `session.terminal` holds it. `app.main` says it from stdin and stdout
+([the command line](#the-command-line)).
 
 - **A handler reads it** as `ctx.terminal`, so a viewer gives text where it would draw.
 - **Without one, a command for a person is refused** (`INTERACTIVE = True`: [`command.md`](command.md)). It's
@@ -221,7 +226,36 @@ else by its phrase alone. The error's `instead` is that phrase after its mount's
 `'ships make {ship} add {part}'`, as a result's `command` is.
 
 Nothing is inferred from it: a terminal doesn't make `parsed.reply.terminal` the session's `answer`. A front end at
-one gives both.
+one gives both, as `app.main` does.
+
+## The command line
+
+`app.main(argv=None, state=None, verbosity=0, interval=1.0, subjects=())` runs a program's arguments as its command
+line and gives its exit code, so a program's entry point is one line:
+
+```python
+app = parsed.App('relayctl', options=Options, version='1.2.3')
+app.mount('relay.cli')
+
+
+def main() -> None:
+    sys.exit(app.main())                                     # relayctl -c relay.toml run
+```
+
+- **The arguments** (`sys.argv[1:]` by default) are the root options, then a line ([`argv.md`](argv.md)). After
+  the first word, every flag is the line's, and a single argument is the whole line:
+  `relayctl "run --config own.toml"`.
+- **Root options** are the fields of `App(prog, options=Options)`, a seared class whose fields are each optional:
+  read once and given to handlers as `ctx.options`. `App(prog, version='1.2.3')` gives `--version`, and `-h` or
+  `--help` before the first word writes the program's usage; each exits 0.
+- **A person is at a terminal** when stdin and stdout both are one. There, a line's `INTERACTIVE` command runs and
+  a question a line asks is put to them (`parsed.reply.terminal`); elsewhere, under a pipe or a tool, the command is
+  refused and the question left unanswered.
+- **What it writes:** each result's text as it comes, a watch's at each change: to stdout when it went well, else to
+  stderr. Its exit code is the last result's ([`reply.md`](reply.md#errors-and-exit-codes)), or 130 when it's
+  interrupted (Ctrl-C).
+
+It runs an event loop of its own, as `app.run` does, so it's refused inside one with a `RuntimeError`.
 
 ## Subjects
 
@@ -282,5 +316,6 @@ Each is a `DeclarationError`, made when the app is put together:
 | `mount.on` of a command the mount doesn't hold | bind it on the app, or on the mount that has it |
 | a second handler for a command, or a second resolver for a category, on the app or on one mount | bind each once |
 | `names` of a category that isn't a name, or a resolver without `lookup`, `suggest` and `options` | |
+| `App(prog, options=…)` of root options it can't read, or a `version` that isn't a string | each named in [`argv.md`](argv.md#root-options) |
 
 A module named that doesn't import raises its `ImportError`.

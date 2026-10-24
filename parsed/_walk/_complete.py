@@ -204,7 +204,7 @@ class _Completer:
             if token.raw == '--':
                 words += tokens[at:]
                 break
-            found = _flag(token)
+            found = _flag(token, self.tree.shorts)
             if found is None:
                 words.append(token)
                 continue
