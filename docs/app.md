@@ -65,6 +65,7 @@ A line goes to its mount by its first words, then the mount's tree reads the who
 | `app.walk(line, subjects=(), placeholders=False)` | a `Routed`: its `mount`, its `reading` ([`Reading`](_walk/_walker.md#reading)), its `command` class, and `load()` |
 | `app.read(line, subjects=())` | the command, loaded |
 | `app.complete(text, subjects=())` | what may come next on a line being typed: its mount's tree's offers, or, short of a mount, the words that may follow |
+| `app.help(line, subjects=(), terminal=False)` | the text `<line> --help` gives, without a session ([sessions](#sessions)) |
 | `app.subject_of(line, subjects)` | the subject a line reads under, or `None` where it's read as typed ([subjects](#subjects)) |
 | `app.render(command, mount=None)` | the line that says an instance, by its mount's tree, prefix and all; or a chain's steps, in its first step's mount |
 
@@ -209,6 +210,14 @@ under way isn't missed.
   ([a person at a terminal](#a-person-at-a-terminal)), or the line gives `--json`, as a tool would: it's not theirs
   to run. Where that leaves nothing (`ship s1 --help`), each one's refusal is the answer, naming its `INSTEAD`. Its
   own help, asked by its whole line, is answered whoever asks.
+
+**`app.help(line, subjects=(), terminal=False)`** gives the same text without a session, for a front end that shows
+help before it opens one (`tooled fetch --help`): `app.help('fetch')` is `fetch`'s help, and
+`app.help('fleet f1 jump')` what that line may still say. The line needn't give `--help`; where it doesn't, it's
+read with `--help` before its first word, so a command that passes a line on gives its own help
+(`app.help('see fleet f1')` is `see`'s). `subjects` and `terminal` are as `app.open` takes them. A line whose words
+go nowhere raises the `ReadError` it reads to as it was given, its line and column the caller's: `app.help('rela')`
+raises `no command 'rela'; did you mean relay?`.
 
 parsed's own flags (`--help` or `-h`, `--json`, `--yes`, `--dry-run`) may stand anywhere on a line, the first word's
 place among them: `--yes fleet f1 buy ship hauler`.

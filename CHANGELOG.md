@@ -9,7 +9,7 @@ lines as it lands, and the entry is dated when that version is released.
 
 ## 0.2.1 — unreleased
 
-**Arguments as given, and lines passed on whole.**
+**Arguments as given, lines passed on whole, and help for any line.**
 
 ### Added
 
@@ -26,6 +26,11 @@ lines as it lands, and the entry is dated when that version is released.
   `app.main` writes JSON only for a `--json` the line doesn't pass on. `SlotKind.LINE` and `Tree.lines` say where
   one is; a tree without one reads as before. A `Line` is a `Str` of one value, said as the rest of each phrase, on
   no chain's step.
+- **Help for any line, without a session:** `app.help(line, subjects=(), terminal=False)` gives the text
+  `<line> --help` gives: a command's help by the phrase the line said, or what a partial line may still say, so
+  `app.help('fetch')` is `fetch`'s help. A line that doesn't give `--help` is read with it before its first word, so
+  a command that passes a line on gives its own. A line whose words go nowhere raises its `ReadError`, its line and
+  column as given.
 
 ### Changed
 
