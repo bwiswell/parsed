@@ -71,6 +71,13 @@ hold.
 
 At a shell, single quotes give the program such an argument whole: `servicectl call t --args '{"station": "s1"}'`.
 
+**A line back to its arguments:** `args_of(line)` gives each of a line's words as given, its quotes and escapes
+taken off, so `args_of(line_of(args)) == args` for several arguments; a single one is the whole line, and comes back
+as its words. `then`, `--` and flags are words like any other, as no tree reads the line. It's for a handler that
+runs a line passed on ([`kinds.md`](kinds.md#line)) as a process: `session run -- prog do "fleet f1"` gives its
+command, and `args_of(command.line)` is `['prog', 'do', 'fleet f1']`. A quote left open is refused with a
+`ReadError`.
+
 ## In this module
 
 - `options_of(prog, cls, version)` declares and checks an app's root options, giving `Options`: their flags, shorts
@@ -81,3 +88,4 @@ At a shell, single quotes give the program such an argument whole: `servicectl c
   among them (`own`), whether `--version` stood there, the `line` the words after them say, and `run`, that line
   with the own flags first.
 - `line_of(args)` is the line the arguments after the root options say.
+- `args_of(line)` is the arguments a line says, `line_of`'s inverse.

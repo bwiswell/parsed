@@ -7,6 +7,17 @@ A **Breaking** line means code written for the version before may fail, or behav
 The top entry, while it reads *unreleased*, collects what has merged for the next version; each change adds its own
 lines as it lands, and the entry is dated when that version is released.
 
+## 0.2.2 — unreleased
+
+**A line back to its arguments.**
+
+### Added
+
+- **A line back to its arguments:** `parsed.argv.args_of(line)` gives each of a line's words as given, its quotes
+  and escapes taken off, the inverse of `line_of` for several arguments (a single one is the whole line, and comes
+  back as its words). A handler that runs a line passed on as a process gives it `args_of(command.line)`. A quote
+  left open is refused with a `ReadError`.
+
 ## 0.2.1 — 2026-10-24
 
 **Arguments as given, lines passed on whole, and help for any line.** A front end built on parsed takes what a shell

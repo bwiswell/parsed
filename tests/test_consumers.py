@@ -13,6 +13,7 @@ import re
 import _support_apps as apps
 import pytest
 
+from parsed.argv import args_of
 from parsed.doc import build_docs, check
 from parsed.doc.generate import main as doc_main
 
@@ -200,6 +201,12 @@ class TestAnAgentsTooling:
         assert (said['line'], said['pretty']) == ('fleet f1 dock "Vesta Ring"', True)
         _, said = self._read(tooled, capsys, 'session', 'run', '--', 'fleet', 'f1', '--x')
         assert said['command'] == 'fleet f1 --x'
+
+    def test_a_line_passed_on_back_to_its_arguments(self, tooled, capsys):
+        # `tooled session run -- COMMAND` runs its command as a process: the arguments it was given.
+        command = ['farlandia', 'do', 'fleet f1 dock "Vesta Ring"', '--until', 'name="40"', '--', '-x', '']
+        _, said = self._read(tooled, capsys, 'session', 'run', '--', *command)
+        assert args_of(said['command']) == command
 
     def test_a_line_passed_on_keeps_its_json(self, tooled, capsys):
         code, out, _ = _main(tooled, capsys, 'see', 'fleet', 'f1', '--json')
